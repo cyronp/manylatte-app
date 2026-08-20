@@ -1,0 +1,26 @@
+{
+  "name": "manylatte-app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@11.18.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "eslint": "^10.8.1",
+    "prettier": "^3.9.6",
+    "turbo": "^2.10.11",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.67.0"
+  }
+}

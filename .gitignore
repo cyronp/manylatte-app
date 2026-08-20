@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.turbo/
+
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+packages/db/src/generated/prisma/
+
+.DS_Store
+*.log
+
