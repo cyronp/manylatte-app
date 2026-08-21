@@ -1,12 +1,12 @@
-export { z } from 'zod';
-export type { ZodType } from 'zod';
-
 export {
   CURSOR_CLICK_DURATION_MS,
   CURSOR_EVENTS,
   CURSOR_IDLE_TIMEOUT_MS,
   CURSOR_MOVE_FPS,
   CURSOR_MOVE_INTERVAL_MS,
+  DEFAULT_CURSOR_ROOM_ID,
+} from './constants.js';
+export {
   cursorBatchSchema,
   type CursorBatch,
   cursorInputSchema,
@@ -23,10 +23,7 @@ export {
   type CursorSocketAuth,
   cursorUserSchema,
   type CursorUser,
-  ClientToServerEvents,
-  ServerToClientEvents,
-  DEFAULT_CURSOR_ROOM_ID,
   remoteCursorSchema,
   type RemoteCursor,
-} from './cursor/index.js';
-export { hexColorSchema, type HexColor } from './schemas/color.js';
+} from './schemas.js';
+export type { ClientToServerEvents, ServerToClientEvents } from './socket.js';
