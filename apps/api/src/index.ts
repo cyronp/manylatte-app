@@ -1,10 +1,15 @@
-import Fastify from 'fastify';
+import 'dotenv/config';
 
-const app = Fastify({ logger: true });
+import { createApp } from './app.js';
 
-app.get('/health', async () => ({ status: 'ok' }));
+const port = Number(process.env.PORT ?? 3000);
+const webUrl = process.env.WEB_URL ?? 'http://localhost:5173';
+const redisUrl = process.env.REDIS_URL;
+const app = await createApp({ redisUrl, webUrl });
 
-await app.listen({
-  host: '0.0.0.0',
-  port: Number(process.env.PORT ?? 3000),
-});
+try {
+  await app.listen({ host: '0.0.0.0', port });
+} catch (error) {
+  app.log.error(error);
+  process.exit(1);
+}

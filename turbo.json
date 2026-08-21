@@ -1,6 +1,12 @@
 {
   "$schema": "https://turborepo.com/schema.json",
-  "globalPassThroughEnv": ["DATABASE_URL", "PORT", "WEB_URL", "VITE_API_URL"],
+  "globalPassThroughEnv": [
+    "DATABASE_URL",
+    "PORT",
+    "REDIS_URL",
+    "WEB_URL",
+    "VITE_API_URL"
+  ],
   "tasks": {
     "dev": {
       "cache": false,
@@ -12,6 +18,9 @@
     },
     "lint": {
       "dependsOn": ["^lint"]
+    },
+    "test": {
+      "outputs": []
     }
   }
 }
