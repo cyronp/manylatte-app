@@ -11,8 +11,13 @@ export const cursorRoomIdSchema = z
 
 export type CursorRoomId = z.infer<typeof cursorRoomIdSchema>;
 
+export const cursorUsernameSchema = z.string().trim().min(1).max(32);
+
+export type CursorUsername = z.infer<typeof cursorUsernameSchema>;
+
 export const cursorSocketAuthSchema = z.object({
   roomId: cursorRoomIdSchema,
+  username: cursorUsernameSchema,
 });
 
 export type CursorSocketAuth = z.infer<typeof cursorSocketAuthSchema>;
@@ -32,6 +37,7 @@ export type CursorInput = z.infer<typeof cursorInputSchema>;
 
 export const cursorUserSchema = z.object({
   color: hexColorSchema,
+  username: cursorUsernameSchema,
   userId: z.uuidv4(),
 });
 
@@ -39,6 +45,7 @@ export type CursorUser = z.infer<typeof cursorUserSchema>;
 
 export const remoteCursorSchema = cursorInputSchema.extend({
   color: hexColorSchema,
+  username: cursorUsernameSchema,
   updatedAt: z.number().int().nonnegative(),
   userId: z.uuidv4(),
 });

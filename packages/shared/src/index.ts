@@ -21,6 +21,8 @@ export {
   type CursorSession,
   cursorSocketAuthSchema,
   type CursorSocketAuth,
+  cursorUsernameSchema,
+  type CursorUsername,
   cursorUserSchema,
   type CursorUser,
   ClientToServerEvents,

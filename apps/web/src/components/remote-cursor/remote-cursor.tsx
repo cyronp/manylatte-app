@@ -76,12 +76,19 @@ export const RemoteCursor = memo(function RemoteCursor({
   return (
     <div
       ref={nodeRef}
-      className="absolute left-0 top-0 will-change-transform"
+      className="flex absolute flex-col left-0 top-0 will-change-transform justify-center gap-0.5"
       style={{
         transform: `translate3d(${currentPositionRef.current.x}px, ${currentPositionRef.current.y}px, 0)`,
       }}
     >
       <Icon color={cursor.color} size={28} weight="duotone" />
+      <div
+        className="flex h-fit max-w-48 justify-center rounded-full px-1.5 text-white truncate"
+        role="tooltip"
+        style={{ backgroundColor: cursor.color }}
+      >
+        <span className="truncate text-xs font-medium">{cursor.username}</span>
+      </div>
     </div>
   );
 });
