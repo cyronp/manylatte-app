@@ -66,6 +66,7 @@ export type CursorBatch = z.infer<typeof cursorBatchSchema>;
 export const cursorSessionSchema = z.object({
   cursors: z.array(remoteCursorSchema),
   self: cursorUserSchema,
+  users: z.array(cursorUserSchema),
 });
 
 export type CursorSession = z.infer<typeof cursorSessionSchema>;

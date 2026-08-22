@@ -117,6 +117,7 @@ describe('cursor socket server', () => {
     const secondPresence = waitForPresence(first.socket);
     const second = await connect(url);
     expect(await secondPresence).toEqual(second.session.self);
+    expect(second.session.users).toContainEqual(first.session.self);
     const firstBatch = waitForBatch(second.socket);
 
     first.socket.emit(CURSOR_EVENTS.move, {

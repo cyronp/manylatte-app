@@ -89,9 +89,8 @@ export const useRemoteCursors = (surfaceRef: RefObject<HTMLElement | null>) => {
       clickTimers.clear();
       cursorMap.clear();
       userMap.clear();
-      userMap.set(session.self.userId, session.self);
+      session.users.forEach((user) => userMap.set(user.userId, user));
       session.cursors.forEach((cursor) => {
-        userMap.set(cursor.userId, cursor);
         applyCursor(cursor);
       });
       scheduleRender();

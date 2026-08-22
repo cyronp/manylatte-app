@@ -175,6 +175,17 @@ export const registerCursorServer = (
         username: participant.username,
         userId: participant.userId,
       };
+      const users = roomSockets.flatMap(({ data }) =>
+        data.cursorColor && data.cursorUserId
+          ? [
+              {
+                color: data.cursorColor,
+                username: data.cursorUsername,
+                userId: data.cursorUserId,
+              },
+            ]
+          : [],
+      );
       socket.to(roomId).emit(CURSOR_EVENTS.presence, user);
 
       socket.emit(CURSOR_EVENTS.session, {
@@ -182,6 +193,7 @@ export const registerCursorServer = (
           .map(({ data }) => data.cursorLastPosition)
           .filter((cursor): cursor is RemoteCursor => cursor !== undefined),
         self: user,
+        users,
       });
     });
 
