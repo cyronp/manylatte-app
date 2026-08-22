@@ -4,7 +4,7 @@ import { cursorUsernameSchema } from '@app/shared';
 
 import { SocketProvider } from '../components/socket-provider';
 import { Button } from '@/components/ui/button';
-import { Field, FieldLabel } from '@/components/ui/field';
+import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 
 export const Route = createRootRoute({
@@ -12,6 +12,7 @@ export const Route = createRootRoute({
 });
 
 const USERNAME_STORAGE_KEY = 'manylatte:username';
+const USERNAME_ERROR_ID = 'username-error';
 
 const getStoredUsername = () => {
   try {
@@ -78,8 +79,13 @@ function UsernamePrompt({ onSubmit }: UsernamePromptProps) {
           <FieldLabel className="flex flex-col items-start">
             Username
             <Input
+              aria-describedby={hasError ? USERNAME_ERROR_ID : undefined}
+              aria-invalid={hasError}
               autoFocus
+              autoComplete="nickname"
+              id="username"
               maxLength={32}
+              name="username"
               onChange={(event) => {
                 setDraft(event.target.value);
                 setHasError(false);
@@ -90,11 +96,11 @@ function UsernamePrompt({ onSubmit }: UsernamePromptProps) {
           </FieldLabel>
         </Field>
 
-        {hasError && (
-          <p className="text-sm text-rose-600" role="alert">
-            Enter a username with 1–32 characters.
-          </p>
-        )}
+        <FieldError id={USERNAME_ERROR_ID}>
+          {hasError
+            ? 'Enter a username with 1–32 characters, including at least one non-space character.'
+            : undefined}
+        </FieldError>
 
         <Button type="submit">Join the board</Button>
       </form>

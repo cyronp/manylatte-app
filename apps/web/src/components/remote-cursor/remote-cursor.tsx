@@ -1,8 +1,9 @@
 import { CursorClickIcon, CursorIcon } from '@phosphor-icons/react';
 import { memo, useLayoutEffect, useRef } from 'react';
 
-import type { RemoteCursorView } from '../../features/cursors/use-remote-cursors';
+import { getCursorLabelTextColor } from '../../features/cursors/cursor-label-color';
 import { getCursorLabelPosition } from '../../features/cursors/cursor-label-position';
+import type { RemoteCursorView } from '../../features/cursors/use-remote-cursors';
 
 export interface SurfaceSize {
   height: number;
@@ -109,10 +110,10 @@ export const RemoteCursor = memo(function RemoteCursor({
       <Icon color={cursor.color} size={28} weight="duotone" />
       <div
         ref={labelRef}
-        className="absolute left-0 top-0 flex h-fit max-w-48 justify-center truncate rounded-full px-1.5 text-white will-change-transform"
-        role="tooltip"
+        className="absolute left-0 top-0 flex h-fit max-w-48 justify-center truncate rounded-full px-1.5 will-change-transform"
         style={{
           backgroundColor: cursor.color,
+          color: getCursorLabelTextColor(cursor.color),
           maxWidth: Math.min(192, surfaceSize.width),
         }}
       >
