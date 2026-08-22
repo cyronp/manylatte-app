@@ -6,36 +6,25 @@ import { SocketProvider } from '../components/socket-provider';
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import {
+  readStoredCursorUsername,
+  writeStoredCursorUsername,
+} from '@/lib/username-storage';
 
 export const Route = createRootRoute({
   component: RootLayout,
 });
 
-const USERNAME_STORAGE_KEY = 'manylatte:username';
 const USERNAME_ERROR_ID = 'username-error';
 
-const getStoredUsername = () => {
-  try {
-    const storedUsername = window.localStorage.getItem(USERNAME_STORAGE_KEY);
-    const result = storedUsername
-      ? cursorUsernameSchema.safeParse(storedUsername)
-      : undefined;
-    return result?.success ? result.data : '';
-  } catch {
-    return '';
-  }
-};
-
 function RootLayout() {
-  const [username, setUsername] = useState(getStoredUsername);
+  const [username, setUsername] = useState(readStoredCursorUsername);
 
   if (!username) {
     return (
       <UsernamePrompt
         onSubmit={(nextUsername) => {
-          try {
-            window.localStorage.setItem(USERNAME_STORAGE_KEY, nextUsername);
-          } catch {}
+          writeStoredCursorUsername(nextUsername);
           setUsername(nextUsername);
         }}
       />

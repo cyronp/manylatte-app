@@ -41,5 +41,6 @@ describe('cursor contract', () => {
     );
     expect(cursorUsernameSchema.safeParse('   ').success).toBe(false);
     expect(cursorUsernameSchema.safeParse('x'.repeat(33)).success).toBe(false);
+    expect(cursorUsernameSchema.parse('  Alex  ')).toBe('Alex');
   });
 });

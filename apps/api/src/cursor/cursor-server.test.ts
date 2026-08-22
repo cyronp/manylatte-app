@@ -215,6 +215,29 @@ describe('cursor socket server', () => {
     );
   });
 
+  it.each(['   ', 'x'.repeat(33)])(
+    'rejects the invalid username %j',
+    async (username) => {
+      const url = await startServer();
+      const socket: TestSocket = createClient(url, {
+        auth: { roomId: DEFAULT_CURSOR_ROOM_ID, username },
+        autoConnect: false,
+        forceNew: true,
+        reconnection: false,
+      });
+      sockets.push(socket);
+      const errorPromise = withTimeout(
+        new Promise<Error>((resolve) => socket.once('connect_error', resolve)),
+        'connect_error',
+      );
+      socket.connect();
+
+      await expect(errorPromise).resolves.toMatchObject({
+        message: 'Invalid cursor connection',
+      });
+    },
+  );
+
   it('expires an idle cursor without disconnecting its socket', async () => {
     const url = await startServer(75);
     const first = await connect(url);
