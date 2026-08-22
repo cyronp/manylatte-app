@@ -36,6 +36,10 @@ describe('cursor contract', () => {
       cursorSocketAuthSchema.safeParse({ roomId: 'lobby', username: 'Alex' })
         .success,
     ).toBe(true);
+    expect(cursorSocketAuthSchema.safeParse({ roomId: 'lobby' }).success).toBe(
+      true,
+    );
     expect(cursorUsernameSchema.safeParse('   ').success).toBe(false);
+    expect(cursorUsernameSchema.safeParse('x'.repeat(33)).success).toBe(false);
   });
 });

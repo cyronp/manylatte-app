@@ -17,7 +17,7 @@ export type CursorUsername = z.infer<typeof cursorUsernameSchema>;
 
 export const cursorSocketAuthSchema = z.object({
   roomId: cursorRoomIdSchema,
-  username: cursorUsernameSchema,
+  username: cursorUsernameSchema.optional(),
 });
 
 export type CursorSocketAuth = z.infer<typeof cursorSocketAuthSchema>;

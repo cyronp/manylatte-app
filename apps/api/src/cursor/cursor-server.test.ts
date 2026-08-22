@@ -87,10 +87,10 @@ describe('cursor socket server', () => {
   const connect = async (
     url: string,
     roomId = DEFAULT_CURSOR_ROOM_ID,
-    username = `Player ${sockets.length + 1}`,
+    username: string | null = `Player ${sockets.length + 1}`,
   ) => {
     const socket: TestSocket = createClient(url, {
-      auth: { roomId, username },
+      auth: username === null ? { roomId } : { roomId, username },
       autoConnect: false,
       forceNew: true,
       reconnection: false,
@@ -188,6 +188,15 @@ describe('cursor socket server', () => {
     await expect(errorPromise).resolves.toMatchObject({
       message: 'Cursor room access denied',
     });
+  });
+
+  it('assigns a coffee guest name to legacy clients', async () => {
+    const url = await startServer();
+    const legacyClient = await connect(url, DEFAULT_CURSOR_ROOM_ID, null);
+
+    expect(legacyClient.session.self.username).toMatch(
+      /^(Affogato|Americano|Cappuccino|Cortado|Espresso|Latte|Macchiato|Mocha)-\d{4}$/,
+    );
   });
 
   it('expires an idle cursor without disconnecting its socket', async () => {

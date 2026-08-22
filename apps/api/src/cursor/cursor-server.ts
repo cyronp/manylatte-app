@@ -15,6 +15,7 @@ import {
 } from '@app/shared';
 import type { Server, Socket } from 'socket.io';
 
+import { createCoffeeGuestUsername } from './guest-username.js';
 import { selectCursorColor } from './palette.js';
 import { TokenBucket } from './token-bucket.js';
 
@@ -99,7 +100,7 @@ export const registerCursorServer = (
     const authResult = cursorSocketAuthSchema.safeParse(socket.handshake.auth);
 
     if (!authResult.success) {
-      next(new Error('Invalid cursor room'));
+      next(new Error('Invalid cursor connection'));
       return;
     }
 
@@ -109,7 +110,8 @@ export const registerCursorServer = (
     }
 
     socket.data.cursorRoomId = authResult.data.roomId;
-    socket.data.cursorUsername = authResult.data.username;
+    socket.data.cursorUsername =
+      authResult.data.username ?? createCoffeeGuestUsername();
     next();
   });
 
