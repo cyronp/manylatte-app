@@ -43,17 +43,22 @@ export const cursorUserSchema = z.object({
 
 export type CursorUser = z.infer<typeof cursorUserSchema>;
 
-export const remoteCursorSchema = cursorInputSchema.extend({
+export const cursorUpdateSchema = cursorInputSchema.extend({
   color: hexColorSchema,
-  username: cursorUsernameSchema,
   updatedAt: z.number().int().nonnegative(),
   userId: z.uuidv4(),
+});
+
+export type CursorUpdate = z.infer<typeof cursorUpdateSchema>;
+
+export const remoteCursorSchema = cursorUpdateSchema.extend({
+  username: cursorUsernameSchema,
 });
 
 export type RemoteCursor = z.infer<typeof remoteCursorSchema>;
 
 export const cursorBatchSchema = z.object({
-  cursors: z.array(remoteCursorSchema),
+  cursors: z.array(cursorUpdateSchema),
 });
 
 export type CursorBatch = z.infer<typeof cursorBatchSchema>;

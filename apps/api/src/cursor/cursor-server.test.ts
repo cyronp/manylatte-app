@@ -7,7 +7,8 @@ import {
   type CursorBatch,
   type CursorRemoval,
   type CursorSession,
-  type RemoteCursor,
+  type CursorUpdate,
+  type CursorUser,
   type ServerToClientEvents,
 } from '@app/shared';
 import { io as createClient, type Socket } from 'socket.io-client';
@@ -49,10 +50,18 @@ const waitForBatch = (socket: TestSocket) =>
 
 const waitForClick = (socket: TestSocket) =>
   withTimeout(
-    new Promise<RemoteCursor>((resolve) => {
+    new Promise<CursorUpdate>((resolve) => {
       socket.once(CURSOR_EVENTS.click, resolve);
     }),
     CURSOR_EVENTS.click,
+  );
+
+const waitForPresence = (socket: TestSocket) =>
+  withTimeout(
+    new Promise<CursorUser>((resolve) => {
+      socket.once(CURSOR_EVENTS.presence, resolve);
+    }),
+    CURSOR_EVENTS.presence,
   );
 
 const waitForRemoval = (socket: TestSocket) =>
@@ -105,7 +114,9 @@ describe('cursor socket server', () => {
   it('batches movement, snapshots presence, relays clicks, and removes users', async () => {
     const url = await startServer();
     const first = await connect(url);
+    const secondPresence = waitForPresence(first.socket);
     const second = await connect(url);
+    expect(await secondPresence).toEqual(second.session.self);
     const firstBatch = waitForBatch(second.socket);
 
     first.socket.emit(CURSOR_EVENTS.move, {
@@ -119,13 +130,16 @@ describe('cursor socket server', () => {
     );
     expect(movedCursor).toMatchObject({
       sequence: 0,
-      username: 'Player 1',
       x: 0.25,
       y: 0.75,
     });
+    expect(movedCursor).not.toHaveProperty('username');
 
     const third = await connect(url);
-    expect(third.session.cursors).toContainEqual(movedCursor);
+    expect(third.session.cursors).toContainEqual({
+      ...movedCursor,
+      username: 'Player 1',
+    });
 
     const clickPromise = waitForClick(second.socket);
     first.socket.emit(CURSOR_EVENTS.click, {
@@ -133,12 +147,14 @@ describe('cursor socket server', () => {
       x: 0.3,
       y: 0.7,
     });
-    expect(await clickPromise).toMatchObject({
+    const click = await clickPromise;
+    expect(click).toMatchObject({
       sequence: 1,
       userId: first.session.self.userId,
       x: 0.3,
       y: 0.7,
     });
+    expect(click).not.toHaveProperty('username');
 
     const validBatch = waitForBatch(second.socket);
     first.socket.emit(CURSOR_EVENTS.move, {

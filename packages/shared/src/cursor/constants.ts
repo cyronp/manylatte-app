@@ -11,6 +11,7 @@ export const CURSOR_EVENTS = {
   batch: 'cursor:batch',
   click: 'cursor:click',
   move: 'cursor:move',
+  presence: 'cursor:presence',
   remove: 'cursor:remove',
   session: 'cursor:session',
 } as const;

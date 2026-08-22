@@ -23,6 +23,8 @@ export {
   type CursorSocketAuth,
   cursorUsernameSchema,
   type CursorUsername,
+  cursorUpdateSchema,
+  type CursorUpdate,
   cursorUserSchema,
   type CursorUser,
   ClientToServerEvents,
