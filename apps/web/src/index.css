@@ -1,13 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@300..900&display=swap');
 @import 'tailwindcss';
-@import 'tw-animate-css';
-@import 'shadcn/tailwind.css';
 @import '@fontsource-variable/figtree';
 
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  font-family: 'Figtree', sans-serif;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
