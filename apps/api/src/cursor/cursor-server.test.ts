@@ -7,7 +7,8 @@ import {
   type CursorBatch,
   type CursorRemoval,
   type CursorSession,
-  type RemoteCursor,
+  type CursorUpdate,
+  type CursorUser,
   type ServerToClientEvents,
 } from '@app/shared';
 import { io as createClient, type Socket } from 'socket.io-client';
@@ -49,10 +50,18 @@ const waitForBatch = (socket: TestSocket) =>
 
 const waitForClick = (socket: TestSocket) =>
   withTimeout(
-    new Promise<RemoteCursor>((resolve) => {
+    new Promise<CursorUpdate>((resolve) => {
       socket.once(CURSOR_EVENTS.click, resolve);
     }),
     CURSOR_EVENTS.click,
+  );
+
+const waitForPresence = (socket: TestSocket) =>
+  withTimeout(
+    new Promise<CursorUser>((resolve) => {
+      socket.once(CURSOR_EVENTS.presence, resolve);
+    }),
+    CURSOR_EVENTS.presence,
   );
 
 const waitForRemoval = (socket: TestSocket) =>
@@ -84,9 +93,13 @@ describe('cursor socket server', () => {
     return `http://127.0.0.1:${address.port}`;
   };
 
-  const connect = async (url: string, roomId = DEFAULT_CURSOR_ROOM_ID) => {
+  const connect = async (
+    url: string,
+    roomId = DEFAULT_CURSOR_ROOM_ID,
+    username: string | null = `Player ${sockets.length + 1}`,
+  ) => {
     const socket: TestSocket = createClient(url, {
-      auth: { roomId },
+      auth: username === null ? { roomId } : { roomId, username },
       autoConnect: false,
       forceNew: true,
       reconnection: false,
@@ -101,7 +114,10 @@ describe('cursor socket server', () => {
   it('batches movement, snapshots presence, relays clicks, and removes users', async () => {
     const url = await startServer();
     const first = await connect(url);
+    const secondPresence = waitForPresence(first.socket);
     const second = await connect(url);
+    expect(await secondPresence).toEqual(second.session.self);
+    expect(second.session.users).toContainEqual(first.session.self);
     const firstBatch = waitForBatch(second.socket);
 
     first.socket.emit(CURSOR_EVENTS.move, {
@@ -113,10 +129,18 @@ describe('cursor socket server', () => {
     const movedCursor = (await firstBatch).cursors.find(
       ({ userId }) => userId === first.session.self.userId,
     );
-    expect(movedCursor).toMatchObject({ sequence: 0, x: 0.25, y: 0.75 });
+    expect(movedCursor).toMatchObject({
+      sequence: 0,
+      x: 0.25,
+      y: 0.75,
+    });
+    expect(movedCursor).not.toHaveProperty('username');
 
     const third = await connect(url);
-    expect(third.session.cursors).toContainEqual(movedCursor);
+    expect(third.session.cursors).toContainEqual({
+      ...movedCursor,
+      username: 'Player 1',
+    });
 
     const clickPromise = waitForClick(second.socket);
     first.socket.emit(CURSOR_EVENTS.click, {
@@ -124,12 +148,14 @@ describe('cursor socket server', () => {
       x: 0.3,
       y: 0.7,
     });
-    expect(await clickPromise).toMatchObject({
+    const click = await clickPromise;
+    expect(click).toMatchObject({
       sequence: 1,
       userId: first.session.self.userId,
       x: 0.3,
       y: 0.7,
     });
+    expect(click).not.toHaveProperty('username');
 
     const validBatch = waitForBatch(second.socket);
     first.socket.emit(CURSOR_EVENTS.move, {
@@ -164,7 +190,7 @@ describe('cursor socket server', () => {
   it('rejects rooms that have not been authorized by the server', async () => {
     const url = await startServer();
     const socket: TestSocket = createClient(url, {
-      auth: { roomId: 'private-room' },
+      auth: { roomId: 'private-room', username: 'Player' },
       autoConnect: false,
       forceNew: true,
       reconnection: false,
@@ -180,6 +206,38 @@ describe('cursor socket server', () => {
       message: 'Cursor room access denied',
     });
   });
+
+  it('assigns a coffee guest name to legacy clients', async () => {
+    const url = await startServer();
+    const legacyClient = await connect(url, DEFAULT_CURSOR_ROOM_ID, null);
+
+    expect(legacyClient.session.self.username).toMatch(
+      /^(Affogato|Americano|Cappuccino|Cortado|Espresso|Latte|Macchiato|Mocha)-\d{4}$/,
+    );
+  });
+
+  it.each(['   ', 'x'.repeat(33)])(
+    'rejects the invalid username %j',
+    async (username) => {
+      const url = await startServer();
+      const socket: TestSocket = createClient(url, {
+        auth: { roomId: DEFAULT_CURSOR_ROOM_ID, username },
+        autoConnect: false,
+        forceNew: true,
+        reconnection: false,
+      });
+      sockets.push(socket);
+      const errorPromise = withTimeout(
+        new Promise<Error>((resolve) => socket.once('connect_error', resolve)),
+        'connect_error',
+      );
+      socket.connect();
+
+      await expect(errorPromise).resolves.toMatchObject({
+        message: 'Invalid cursor connection',
+      });
+    },
+  );
 
   it('expires an idle cursor without disconnecting its socket', async () => {
     const url = await startServer(75);

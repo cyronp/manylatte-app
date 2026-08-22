@@ -26,7 +26,7 @@ function HomePage() {
       {status !== 'connected' && (
         <div
           aria-live="polite"
-          className="absolute right-4 top-4 rounded-full bg-slate-900 px-3 py-1.5 text-sm text-white shadow"
+          className="absolute right-4 bottom-4 rounded-full bg-slate-900 px-3 py-1.5 text-sm text-white shadow"
           title={error}
         >
           {status === 'connecting' ? 'Connecting…' : 'Reconnecting…'}

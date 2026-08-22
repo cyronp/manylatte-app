@@ -3,7 +3,8 @@ import type {
   CursorInput,
   CursorRemoval,
   CursorSession,
-  RemoteCursor,
+  CursorUpdate,
+  CursorUser,
 } from './schemas.js';
 
 export interface ClientToServerEvents {
@@ -13,7 +14,8 @@ export interface ClientToServerEvents {
 
 export interface ServerToClientEvents {
   'cursor:batch': (batch: CursorBatch) => void;
-  'cursor:click': (cursor: RemoteCursor) => void;
+  'cursor:click': (cursor: CursorUpdate) => void;
+  'cursor:presence': (user: CursorUser) => void;
   'cursor:remove': (removal: CursorRemoval) => void;
   'cursor:session': (session: CursorSession) => void;
 }

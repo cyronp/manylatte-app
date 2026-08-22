@@ -11,8 +11,13 @@ export const cursorRoomIdSchema = z
 
 export type CursorRoomId = z.infer<typeof cursorRoomIdSchema>;
 
+export const cursorUsernameSchema = z.string().trim().min(1).max(32);
+
+export type CursorUsername = z.infer<typeof cursorUsernameSchema>;
+
 export const cursorSocketAuthSchema = z.object({
   roomId: cursorRoomIdSchema,
+  username: cursorUsernameSchema.optional(),
 });
 
 export type CursorSocketAuth = z.infer<typeof cursorSocketAuthSchema>;
@@ -32,21 +37,28 @@ export type CursorInput = z.infer<typeof cursorInputSchema>;
 
 export const cursorUserSchema = z.object({
   color: hexColorSchema,
+  username: cursorUsernameSchema,
   userId: z.uuidv4(),
 });
 
 export type CursorUser = z.infer<typeof cursorUserSchema>;
 
-export const remoteCursorSchema = cursorInputSchema.extend({
+export const cursorUpdateSchema = cursorInputSchema.extend({
   color: hexColorSchema,
   updatedAt: z.number().int().nonnegative(),
   userId: z.uuidv4(),
 });
 
+export type CursorUpdate = z.infer<typeof cursorUpdateSchema>;
+
+export const remoteCursorSchema = cursorUpdateSchema.extend({
+  username: cursorUsernameSchema,
+});
+
 export type RemoteCursor = z.infer<typeof remoteCursorSchema>;
 
 export const cursorBatchSchema = z.object({
-  cursors: z.array(remoteCursorSchema),
+  cursors: z.array(cursorUpdateSchema),
 });
 
 export type CursorBatch = z.infer<typeof cursorBatchSchema>;
@@ -54,6 +66,7 @@ export type CursorBatch = z.infer<typeof cursorBatchSchema>;
 export const cursorSessionSchema = z.object({
   cursors: z.array(remoteCursorSchema),
   self: cursorUserSchema,
+  users: z.array(cursorUserSchema),
 });
 
 export type CursorSession = z.infer<typeof cursorSessionSchema>;

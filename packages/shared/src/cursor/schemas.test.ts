@@ -4,6 +4,7 @@ import {
   cursorInputSchema,
   cursorRoomIdSchema,
   cursorSocketAuthSchema,
+  cursorUsernameSchema,
 } from './schemas.js';
 
 describe('cursor contract', () => {
@@ -27,8 +28,19 @@ describe('cursor contract', () => {
   it('keeps room identifiers URL and adapter friendly', () => {
     expect(cursorRoomIdSchema.safeParse('team_board-42').success).toBe(true);
     expect(cursorRoomIdSchema.safeParse('team/board').success).toBe(false);
-    expect(cursorSocketAuthSchema.safeParse({ roomId: '' }).success).toBe(
-      false,
+    expect(
+      cursorSocketAuthSchema.safeParse({ roomId: '', username: 'Alex' })
+        .success,
+    ).toBe(false);
+    expect(
+      cursorSocketAuthSchema.safeParse({ roomId: 'lobby', username: 'Alex' })
+        .success,
+    ).toBe(true);
+    expect(cursorSocketAuthSchema.safeParse({ roomId: 'lobby' }).success).toBe(
+      true,
     );
+    expect(cursorUsernameSchema.safeParse('   ').success).toBe(false);
+    expect(cursorUsernameSchema.safeParse('x'.repeat(33)).success).toBe(false);
+    expect(cursorUsernameSchema.parse('  Alex  ')).toBe('Alex');
   });
 });

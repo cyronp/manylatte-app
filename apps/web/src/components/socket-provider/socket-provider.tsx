@@ -18,10 +18,16 @@ interface SocketContextValue {
   status: SocketStatus;
 }
 
+interface SocketProviderProps extends PropsWithChildren {
+  username: string;
+}
+
 const SocketContext = createContext<SocketContextValue | undefined>(undefined);
 
-export const SocketProvider = ({ children }: PropsWithChildren) => {
-  const [socket] = useState(() => createCursorSocket(DEFAULT_CURSOR_ROOM_ID));
+export const SocketProvider = ({ children, username }: SocketProviderProps) => {
+  const [socket] = useState(() =>
+    createCursorSocket(DEFAULT_CURSOR_ROOM_ID, username),
+  );
   const [status, setStatus] = useState<SocketStatus>('connecting');
   const [error, setError] = useState<string>();
 

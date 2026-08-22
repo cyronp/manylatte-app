@@ -3,6 +3,8 @@ import {
   CURSOR_EVENTS,
   CURSOR_MOVE_INTERVAL_MS,
   type CursorPosition,
+  type CursorUpdate,
+  type CursorUser,
   type RemoteCursor,
 } from '@app/shared';
 import { type RefObject, useEffect, useRef, useState } from 'react';
@@ -21,6 +23,7 @@ export const useRemoteCursors = (surfaceRef: RefObject<HTMLElement | null>) => {
 
   useEffect(() => {
     const cursorMap = new Map<string, RemoteCursorView>();
+    const userMap = new Map<string, CursorUser>();
     const clickTimers = new Map<string, number>();
     let renderFrame: number | undefined;
     let selfUserId: string | undefined;
@@ -49,20 +52,31 @@ export const useRemoteCursors = (surfaceRef: RefObject<HTMLElement | null>) => {
       }
     };
 
-    const applyCursor = (cursor: RemoteCursor, isClicking = false) => {
+    const applyCursor = (
+      cursor: CursorUpdate | RemoteCursor,
+      isClicking = false,
+    ) => {
       if (cursor.userId === selfUserId) {
         return;
       }
 
       const currentCursor = cursorMap.get(cursor.userId);
+      const username =
+        'username' in cursor
+          ? cursor.username
+          : userMap.get(cursor.userId)?.username;
 
-      if (currentCursor && cursor.sequence <= currentCursor.sequence) {
+      if (
+        !username ||
+        (currentCursor && cursor.sequence <= currentCursor.sequence)
+      ) {
         return;
       }
 
       cursorMap.set(cursor.userId, {
         ...cursor,
         isClicking: isClicking || currentCursor?.isClicking === true,
+        username,
       });
       scheduleRender();
     };
@@ -74,8 +88,18 @@ export const useRemoteCursors = (surfaceRef: RefObject<HTMLElement | null>) => {
       clickTimers.forEach((timer) => window.clearTimeout(timer));
       clickTimers.clear();
       cursorMap.clear();
-      session.cursors.forEach((cursor) => applyCursor(cursor));
+      userMap.clear();
+      session.users.forEach((user) => userMap.set(user.userId, user));
+      session.cursors.forEach((cursor) => {
+        applyCursor(cursor);
+      });
       scheduleRender();
+    };
+
+    const handlePresence: Parameters<typeof socket.on<'cursor:presence'>>[1] = (
+      user,
+    ) => {
+      userMap.set(user.userId, user);
     };
 
     const handleBatch: Parameters<typeof socket.on<'cursor:batch'>>[1] = (
@@ -116,6 +140,7 @@ export const useRemoteCursors = (surfaceRef: RefObject<HTMLElement | null>) => {
     const handleRemoval: Parameters<typeof socket.on<'cursor:remove'>>[1] = ({
       userId,
     }) => {
+      userMap.delete(userId);
       clearCursor(userId);
     };
 
@@ -124,12 +149,14 @@ export const useRemoteCursors = (surfaceRef: RefObject<HTMLElement | null>) => {
       clickTimers.forEach((timer) => window.clearTimeout(timer));
       clickTimers.clear();
       cursorMap.clear();
+      userMap.clear();
       scheduleRender();
     };
 
     socket.on(CURSOR_EVENTS.session, handleSession);
     socket.on(CURSOR_EVENTS.batch, handleBatch);
     socket.on(CURSOR_EVENTS.click, handleClick);
+    socket.on(CURSOR_EVENTS.presence, handlePresence);
     socket.on(CURSOR_EVENTS.remove, handleRemoval);
     socket.on('disconnect', resetCursors);
 
@@ -137,6 +164,7 @@ export const useRemoteCursors = (surfaceRef: RefObject<HTMLElement | null>) => {
       socket.off(CURSOR_EVENTS.session, handleSession);
       socket.off(CURSOR_EVENTS.batch, handleBatch);
       socket.off(CURSOR_EVENTS.click, handleClick);
+      socket.off(CURSOR_EVENTS.presence, handlePresence);
       socket.off(CURSOR_EVENTS.remove, handleRemoval);
       socket.off('disconnect', resetCursors);
       clickTimers.forEach((timer) => window.clearTimeout(timer));

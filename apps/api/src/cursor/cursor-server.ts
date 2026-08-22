@@ -9,12 +9,15 @@ import {
   cursorSocketAuthSchema,
   type ClientToServerEvents,
   type CursorRoomId,
+  type CursorUpdate,
+  type CursorUser,
   type HexColor,
   type RemoteCursor,
   type ServerToClientEvents,
 } from '@app/shared';
 import type { Server, Socket } from 'socket.io';
 
+import { createCoffeeGuestUsername } from './guest-username.js';
 import { selectCursorColor } from './palette.js';
 import { TokenBucket } from './token-bucket.js';
 
@@ -24,6 +27,7 @@ export interface CursorSocketData {
   cursorColor?: HexColor;
   cursorLastPosition?: RemoteCursor;
   cursorRoomId: CursorRoomId;
+  cursorUsername: string;
   cursorUserId?: string;
 }
 
@@ -52,12 +56,13 @@ interface Participant {
   lastSequence: number;
   moveLimiter: TokenBucket;
   socketId: string;
+  username: string;
   userId: string;
 }
 
 interface CursorRoom {
   participants: Map<string, Participant>;
-  pendingMoves: Map<string, RemoteCursor>;
+  pendingMoves: Map<string, CursorUpdate>;
 }
 
 export interface CursorServerOptions {
@@ -97,7 +102,7 @@ export const registerCursorServer = (
     const authResult = cursorSocketAuthSchema.safeParse(socket.handshake.auth);
 
     if (!authResult.success) {
-      next(new Error('Invalid cursor room'));
+      next(new Error('Invalid cursor connection'));
       return;
     }
 
@@ -107,6 +112,8 @@ export const registerCursorServer = (
     }
 
     socket.data.cursorRoomId = authResult.data.roomId;
+    socket.data.cursorUsername =
+      authResult.data.username ?? createCoffeeGuestUsername();
     next();
   });
 
@@ -148,11 +155,13 @@ export const registerCursorServer = (
       lastSequence: -1,
       moveLimiter: new TokenBucket(2, CURSOR_MOVE_FPS, now()),
       socketId: socket.id,
+      username: socket.data.cursorUsername,
       userId: randomUUID(),
     };
 
     room.participants.set(socket.id, participant);
     socket.data.cursorColor = participant.color;
+    socket.data.cursorUsername = participant.username;
     socket.data.cursorUserId = participant.userId;
     void Promise.resolve(socket.join(roomId)).then(async () => {
       const roomSockets = await io.in(roomId).fetchSockets();
@@ -161,14 +170,30 @@ export const registerCursorServer = (
         return;
       }
 
+      const user: CursorUser = {
+        color: participant.color,
+        username: participant.username,
+        userId: participant.userId,
+      };
+      const users = roomSockets.flatMap(({ data }) =>
+        data.cursorColor && data.cursorUserId
+          ? [
+              {
+                color: data.cursorColor,
+                username: data.cursorUsername,
+                userId: data.cursorUserId,
+              },
+            ]
+          : [],
+      );
+      socket.to(roomId).emit(CURSOR_EVENTS.presence, user);
+
       socket.emit(CURSOR_EVENTS.session, {
         cursors: roomSockets
           .map(({ data }) => data.cursorLastPosition)
           .filter((cursor): cursor is RemoteCursor => cursor !== undefined),
-        self: {
-          color: participant.color,
-          userId: participant.userId,
-        },
+        self: user,
+        users,
       });
     });
 
@@ -184,15 +209,19 @@ export const registerCursorServer = (
         return;
       }
 
-      const cursor: RemoteCursor = {
+      const update: CursorUpdate = {
         ...acceptedInput,
         color: participant.color,
         updatedAt: now(),
         userId: participant.userId,
       };
+      const cursor: RemoteCursor = {
+        ...update,
+        username: participant.username,
+      };
       participant.lastCursor = cursor;
       socket.data.cursorLastPosition = cursor;
-      room.pendingMoves.set(participant.userId, cursor);
+      room.pendingMoves.set(participant.userId, update);
     });
 
     socket.on(CURSOR_EVENTS.click, (input) => {
@@ -207,16 +236,20 @@ export const registerCursorServer = (
         return;
       }
 
-      const cursor: RemoteCursor = {
+      const update: CursorUpdate = {
         ...acceptedInput,
         color: participant.color,
         updatedAt: now(),
         userId: participant.userId,
       };
+      const cursor: RemoteCursor = {
+        ...update,
+        username: participant.username,
+      };
       participant.lastCursor = cursor;
       socket.data.cursorLastPosition = cursor;
       room.pendingMoves.delete(participant.userId);
-      socket.to(roomId).volatile.emit(CURSOR_EVENTS.click, cursor);
+      socket.to(roomId).volatile.emit(CURSOR_EVENTS.click, update);
     });
 
     socket.on('disconnect', () => {

@@ -9,10 +9,14 @@ const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
 export type CursorSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
-export const createCursorSocket = (roomId: CursorRoomId): CursorSocket =>
+export const createCursorSocket = (
+  roomId: CursorRoomId,
+  username: string,
+): CursorSocket =>
   io(apiUrl, {
     auth: {
       roomId,
+      username,
     },
     autoConnect: false,
   });
