@@ -84,9 +84,13 @@ describe('cursor socket server', () => {
     return `http://127.0.0.1:${address.port}`;
   };
 
-  const connect = async (url: string, roomId = DEFAULT_CURSOR_ROOM_ID) => {
+  const connect = async (
+    url: string,
+    roomId = DEFAULT_CURSOR_ROOM_ID,
+    username = `Player ${sockets.length + 1}`,
+  ) => {
     const socket: TestSocket = createClient(url, {
-      auth: { roomId },
+      auth: { roomId, username },
       autoConnect: false,
       forceNew: true,
       reconnection: false,
@@ -113,7 +117,12 @@ describe('cursor socket server', () => {
     const movedCursor = (await firstBatch).cursors.find(
       ({ userId }) => userId === first.session.self.userId,
     );
-    expect(movedCursor).toMatchObject({ sequence: 0, x: 0.25, y: 0.75 });
+    expect(movedCursor).toMatchObject({
+      sequence: 0,
+      username: 'Player 1',
+      x: 0.25,
+      y: 0.75,
+    });
 
     const third = await connect(url);
     expect(third.session.cursors).toContainEqual(movedCursor);
@@ -164,7 +173,7 @@ describe('cursor socket server', () => {
   it('rejects rooms that have not been authorized by the server', async () => {
     const url = await startServer();
     const socket: TestSocket = createClient(url, {
-      auth: { roomId: 'private-room' },
+      auth: { roomId: 'private-room', username: 'Player' },
       autoConnect: false,
       forceNew: true,
       reconnection: false,

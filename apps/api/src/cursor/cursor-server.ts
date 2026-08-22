@@ -24,6 +24,7 @@ export interface CursorSocketData {
   cursorColor?: HexColor;
   cursorLastPosition?: RemoteCursor;
   cursorRoomId: CursorRoomId;
+  cursorUsername: string;
   cursorUserId?: string;
 }
 
@@ -52,6 +53,7 @@ interface Participant {
   lastSequence: number;
   moveLimiter: TokenBucket;
   socketId: string;
+  username: string;
   userId: string;
 }
 
@@ -107,6 +109,7 @@ export const registerCursorServer = (
     }
 
     socket.data.cursorRoomId = authResult.data.roomId;
+    socket.data.cursorUsername = authResult.data.username;
     next();
   });
 
@@ -148,11 +151,13 @@ export const registerCursorServer = (
       lastSequence: -1,
       moveLimiter: new TokenBucket(2, CURSOR_MOVE_FPS, now()),
       socketId: socket.id,
+      username: socket.data.cursorUsername,
       userId: randomUUID(),
     };
 
     room.participants.set(socket.id, participant);
     socket.data.cursorColor = participant.color;
+    socket.data.cursorUsername = participant.username;
     socket.data.cursorUserId = participant.userId;
     void Promise.resolve(socket.join(roomId)).then(async () => {
       const roomSockets = await io.in(roomId).fetchSockets();
@@ -167,6 +172,7 @@ export const registerCursorServer = (
           .filter((cursor): cursor is RemoteCursor => cursor !== undefined),
         self: {
           color: participant.color,
+          username: participant.username,
           userId: participant.userId,
         },
       });
@@ -187,6 +193,7 @@ export const registerCursorServer = (
       const cursor: RemoteCursor = {
         ...acceptedInput,
         color: participant.color,
+        username: participant.username,
         updatedAt: now(),
         userId: participant.userId,
       };
@@ -210,6 +217,7 @@ export const registerCursorServer = (
       const cursor: RemoteCursor = {
         ...acceptedInput,
         color: participant.color,
+        username: participant.username,
         updatedAt: now(),
         userId: participant.userId,
       };
