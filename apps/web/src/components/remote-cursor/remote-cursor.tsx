@@ -2,6 +2,7 @@ import { CursorClickIcon, CursorIcon } from '@phosphor-icons/react';
 import { memo, useLayoutEffect, useRef } from 'react';
 
 import type { RemoteCursorView } from '../../features/cursors/use-remote-cursors';
+import { getCursorLabelPosition } from '../../features/cursors/cursor-label-position';
 
 export interface SurfaceSize {
   height: number;
@@ -18,6 +19,7 @@ export const RemoteCursor = memo(function RemoteCursor({
   surfaceSize,
 }: RemoteCursorProps) {
   const nodeRef = useRef<HTMLDivElement>(null);
+  const labelRef = useRef<HTMLDivElement>(null);
   const animationFrameRef = useRef<number | undefined>(undefined);
   const currentPositionRef = useRef({
     x: cursor.x * surfaceSize.width,
@@ -26,8 +28,9 @@ export const RemoteCursor = memo(function RemoteCursor({
 
   useLayoutEffect(() => {
     const node = nodeRef.current;
+    const label = labelRef.current;
 
-    if (!node) {
+    if (!node || !label) {
       return;
     }
 
@@ -37,6 +40,20 @@ export const RemoteCursor = memo(function RemoteCursor({
     };
     let previousTime = performance.now();
 
+    const positionLabel = (anchorX: number, anchorY: number) => {
+      const position = getCursorLabelPosition({
+        anchorX,
+        anchorY,
+        labelHeight: label.offsetHeight,
+        labelWidth: label.offsetWidth,
+        surfaceHeight: surfaceSize.height,
+        surfaceWidth: surfaceSize.width,
+      });
+      label.style.transform = `translate3d(${position.left}px, ${position.top}px, 0)`;
+    };
+
+    positionLabel(currentPositionRef.current.x, currentPositionRef.current.y);
+
     const animate = (currentTime: number) => {
       const elapsed = Math.min(64, currentTime - previousTime);
       const interpolation = 1 - Math.exp(-elapsed / 45);
@@ -45,6 +62,7 @@ export const RemoteCursor = memo(function RemoteCursor({
       current.y += (target.y - current.y) * interpolation;
       previousTime = currentTime;
       node.style.transform = `translate3d(${current.x}px, ${current.y}px, 0)`;
+      positionLabel(current.x, current.y);
 
       if (
         Math.abs(target.x - current.x) > 0.1 ||
@@ -56,6 +74,7 @@ export const RemoteCursor = memo(function RemoteCursor({
 
       currentPositionRef.current = target;
       node.style.transform = `translate3d(${target.x}px, ${target.y}px, 0)`;
+      positionLabel(target.x, target.y);
       animationFrameRef.current = undefined;
     };
 
@@ -69,23 +88,33 @@ export const RemoteCursor = memo(function RemoteCursor({
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [cursor.x, cursor.y, surfaceSize.height, surfaceSize.width]);
+  }, [
+    cursor.username,
+    cursor.x,
+    cursor.y,
+    surfaceSize.height,
+    surfaceSize.width,
+  ]);
 
   const Icon = cursor.isClicking ? CursorClickIcon : CursorIcon;
 
   return (
     <div
       ref={nodeRef}
-      className="flex absolute flex-col left-0 top-0 will-change-transform justify-center gap-0.5"
+      className="absolute left-0 top-0 will-change-transform"
       style={{
         transform: `translate3d(${currentPositionRef.current.x}px, ${currentPositionRef.current.y}px, 0)`,
       }}
     >
       <Icon color={cursor.color} size={28} weight="duotone" />
       <div
-        className="flex h-fit max-w-48 justify-center rounded-full px-1.5 text-white truncate"
+        ref={labelRef}
+        className="absolute left-0 top-0 flex h-fit max-w-48 justify-center truncate rounded-full px-1.5 text-white will-change-transform"
         role="tooltip"
-        style={{ backgroundColor: cursor.color }}
+        style={{
+          backgroundColor: cursor.color,
+          maxWidth: Math.min(192, surfaceSize.width),
+        }}
       >
         <span className="truncate text-xs font-medium">{cursor.username}</span>
       </div>
