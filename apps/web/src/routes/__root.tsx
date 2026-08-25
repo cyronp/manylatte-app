@@ -34,7 +34,7 @@ function RootLayout() {
 
   return (
     <SocketProvider username={username}>
-      <div className="relative min-h-screen">
+      <div className="relative min-h-screen bg-neutral-100">
         <div className="absolute top-4 right-4 z-50">
           <UserSettings username={username} />
         </div>

@@ -4,6 +4,7 @@ import {
   PaintBrushIcon,
   UserIcon,
 } from '@phosphor-icons/react';
+import { HexColorPicker } from 'react-colorful';
 
 import { Button } from '../ui/button';
 import { useSocket } from '../socket-provider';
@@ -13,6 +14,9 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
 import { LatteUserIcon } from '../icons/user-icon';
@@ -22,7 +26,7 @@ interface UserSettingsProps {
 }
 
 export default function UserSettings({ username }: UserSettingsProps) {
-  const { user } = useSocket();
+  const { setUserColor, user } = useSocket();
 
   return (
     <DropdownMenu>
@@ -49,10 +53,15 @@ export default function UserSettings({ username }: UserSettingsProps) {
             <UserIcon />
             Change Username
           </DropdownMenuItem>
-          <DropdownMenuItem>
-            <PaintBrushIcon />
-            Change Color
-          </DropdownMenuItem>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger disabled={!user}>
+              <PaintBrushIcon />
+              Change Color
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="p-2">
+              <HexColorPicker color={user?.color} onChange={setUserColor} />
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
           <DropdownMenuSeparator />
           <DropdownMenuItem>
             <GearIcon />

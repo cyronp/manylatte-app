@@ -9,6 +9,8 @@ export {
   CURSOR_MOVE_INTERVAL_MS,
   cursorBatchSchema,
   type CursorBatch,
+  cursorColorInputSchema,
+  type CursorColorInput,
   cursorInputSchema,
   type CursorInput,
   cursorPositionSchema,

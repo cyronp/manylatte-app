@@ -9,6 +9,8 @@ export {
 export {
   cursorBatchSchema,
   type CursorBatch,
+  cursorColorInputSchema,
+  type CursorColorInput,
   cursorInputSchema,
   type CursorInput,
   cursorPositionSchema,

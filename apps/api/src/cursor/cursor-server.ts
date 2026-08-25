@@ -5,6 +5,7 @@ import {
   CURSOR_IDLE_TIMEOUT_MS,
   CURSOR_MOVE_FPS,
   CURSOR_MOVE_INTERVAL_MS,
+  cursorColorInputSchema,
   cursorInputSchema,
   cursorSocketAuthSchema,
   type ClientToServerEvents,
@@ -194,6 +195,44 @@ export const registerCursorServer = (
           .filter((cursor): cursor is RemoteCursor => cursor !== undefined),
         self: user,
         users,
+      });
+    });
+
+    socket.on(CURSOR_EVENTS.color, (input) => {
+      const result = cursorColorInputSchema.safeParse(input);
+
+      if (!result.success) {
+        logger.warn(
+          { issues: result.error.issues, socketId: socket.id },
+          'Received invalid cursor color',
+        );
+        return;
+      }
+
+      participant.color = result.data.color;
+      socket.data.cursorColor = result.data.color;
+
+      if (participant.lastCursor) {
+        participant.lastCursor = {
+          ...participant.lastCursor,
+          color: result.data.color,
+        };
+        socket.data.cursorLastPosition = participant.lastCursor;
+      }
+
+      const pendingMove = room.pendingMoves.get(participant.userId);
+
+      if (pendingMove) {
+        room.pendingMoves.set(participant.userId, {
+          ...pendingMove,
+          color: result.data.color,
+        });
+      }
+
+      io.to(roomId).emit(CURSOR_EVENTS.presence, {
+        color: participant.color,
+        username: participant.username,
+        userId: participant.userId,
       });
     });
 
