@@ -15,6 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
+import { LatteUserIcon } from '../icons/user-icon';
 
 interface UserSettingsProps {
   username: string;
@@ -31,11 +32,7 @@ export default function UserSettings({ username }: UserSettingsProps) {
           variant="outline"
           className="flex flex-row gap-3 py-0.5 px-2 rounded-full border border-border"
         >
-          <span
-            aria-hidden="true"
-            className="size-6 rounded-full bg-muted"
-            style={{ backgroundColor: user?.color }}
-          />
+          <LatteUserIcon size={24} backgroundColor={user?.color} />
           <CaretDownIcon />
         </Button>
       </DropdownMenuTrigger>
@@ -43,11 +40,7 @@ export default function UserSettings({ username }: UserSettingsProps) {
         <DropdownMenuGroup>
           <DropdownMenuItem className="pointer-events-none">
             <div className="flex flex-row gap-2 items-center">
-              <div
-                aria-hidden="true"
-                className="size-6 rounded-full bg-muted"
-                style={{ backgroundColor: user?.color }}
-              />
+              <LatteUserIcon size={32} backgroundColor={user?.color} />
               <p>{username}</p>
             </div>
           </DropdownMenuItem>
