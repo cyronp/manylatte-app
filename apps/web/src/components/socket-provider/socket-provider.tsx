@@ -1,4 +1,8 @@
-import { DEFAULT_CURSOR_ROOM_ID } from '@app/shared';
+import {
+  CURSOR_EVENTS,
+  DEFAULT_CURSOR_ROOM_ID,
+  type CursorUser,
+} from '@app/shared';
 import {
   createContext,
   type PropsWithChildren,
@@ -16,6 +20,7 @@ interface SocketContextValue {
   error?: string;
   socket: CursorSocket;
   status: SocketStatus;
+  user?: CursorUser;
 }
 
 interface SocketProviderProps extends PropsWithChildren {
@@ -30,6 +35,7 @@ export const SocketProvider = ({ children, username }: SocketProviderProps) => {
   );
   const [status, setStatus] = useState<SocketStatus>('connecting');
   const [error, setError] = useState<string>();
+  const [user, setUser] = useState<CursorUser>();
 
   useEffect(() => {
     const handleConnect = () => {
@@ -37,6 +43,7 @@ export const SocketProvider = ({ children, username }: SocketProviderProps) => {
       setStatus('connected');
     };
     const handleDisconnect = () => {
+      setUser(undefined);
       setStatus('disconnected');
     };
     const handleConnectError = (connectionError: Error) => {
@@ -46,11 +53,17 @@ export const SocketProvider = ({ children, username }: SocketProviderProps) => {
     const handleReconnectAttempt = () => {
       setStatus('connecting');
     };
+    const handleSession: Parameters<typeof socket.on<'cursor:session'>>[1] = (
+      session,
+    ) => {
+      setUser(session.self);
+    };
 
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
     socket.on('connect_error', handleConnectError);
     socket.io.on('reconnect_attempt', handleReconnectAttempt);
+    socket.on(CURSOR_EVENTS.session, handleSession);
     socket.connect();
 
     return () => {
@@ -58,13 +71,14 @@ export const SocketProvider = ({ children, username }: SocketProviderProps) => {
       socket.off('disconnect', handleDisconnect);
       socket.off('connect_error', handleConnectError);
       socket.io.off('reconnect_attempt', handleReconnectAttempt);
+      socket.off(CURSOR_EVENTS.session, handleSession);
       socket.disconnect();
     };
   }, [socket]);
 
   const value = useMemo(
-    () => ({ error, socket, status }),
-    [error, socket, status],
+    () => ({ error, socket, status, user }),
+    [error, socket, status, user],
   );
 
   return (

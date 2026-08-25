@@ -3,6 +3,7 @@ import { type FormEvent, useState } from 'react';
 import { cursorUsernameSchema } from '@app/shared';
 
 import { SocketProvider } from '../components/socket-provider';
+import UserSettings from '../components/user-settings/user-settings';
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -33,7 +34,12 @@ function RootLayout() {
 
   return (
     <SocketProvider username={username}>
-      <Outlet />
+      <div className="relative min-h-screen">
+        <div className="absolute top-4 right-4 z-50">
+          <UserSettings username={username} />
+        </div>
+        <Outlet />
+      </div>
     </SocketProvider>
   );
 }

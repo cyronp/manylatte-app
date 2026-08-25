@@ -11,7 +11,6 @@
   },
   "dependencies": {
     "@app/shared": "*",
-    "@base-ui/react": "^1.7.0",
     "@fontsource-variable/figtree": "^5.3.0",
     "@hookform/resolvers": "^5.9.1",
     "@phosphor-icons/react": "^2.1.10",
@@ -19,6 +18,7 @@
     "@tanstack/react-router": "^1.170.31",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "radix-ui": "^1.6.7",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-hook-form": "^7.85.0",
