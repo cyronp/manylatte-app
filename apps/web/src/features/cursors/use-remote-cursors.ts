@@ -100,6 +100,16 @@ export const useRemoteCursors = (surfaceRef: RefObject<HTMLElement | null>) => {
       user,
     ) => {
       userMap.set(user.userId, user);
+      const currentCursor = cursorMap.get(user.userId);
+
+      if (currentCursor) {
+        cursorMap.set(user.userId, {
+          ...currentCursor,
+          color: user.color,
+          username: user.username,
+        });
+        scheduleRender();
+      }
     };
 
     const handleBatch: Parameters<typeof socket.on<'cursor:batch'>>[1] = (

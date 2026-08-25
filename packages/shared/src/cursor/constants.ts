@@ -10,6 +10,7 @@ export const CURSOR_IDLE_TIMEOUT_MS = 15_000;
 export const CURSOR_EVENTS = {
   batch: 'cursor:batch',
   click: 'cursor:click',
+  color: 'cursor:color',
   move: 'cursor:move',
   presence: 'cursor:presence',
   remove: 'cursor:remove',

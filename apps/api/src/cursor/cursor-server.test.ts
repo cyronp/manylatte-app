@@ -3,12 +3,14 @@ import type { AddressInfo } from 'node:net';
 import {
   CURSOR_EVENTS,
   DEFAULT_CURSOR_ROOM_ID,
+  hexColorSchema,
   type ClientToServerEvents,
   type CursorBatch,
   type CursorRemoval,
   type CursorSession,
   type CursorUpdate,
   type CursorUser,
+  type HexColor,
   type ServerToClientEvents,
 } from '@app/shared';
 import { io as createClient, type Socket } from 'socket.io-client';
@@ -136,9 +138,18 @@ describe('cursor socket server', () => {
     });
     expect(movedCursor).not.toHaveProperty('username');
 
+    const changedColor = hexColorSchema.parse('#c026d3');
+    const selfColorChange = waitForPresence(first.socket);
+    const peerColorChange = waitForPresence(second.socket);
+    first.socket.emit(CURSOR_EVENTS.color, { color: changedColor });
+    const expectedUser = { ...first.session.self, color: changedColor };
+    await expect(selfColorChange).resolves.toEqual(expectedUser);
+    await expect(peerColorChange).resolves.toEqual(expectedUser);
+
     const third = await connect(url);
     expect(third.session.cursors).toContainEqual({
       ...movedCursor,
+      color: changedColor,
       username: 'Player 1',
     });
 
@@ -150,6 +161,7 @@ describe('cursor socket server', () => {
     });
     const click = await clickPromise;
     expect(click).toMatchObject({
+      color: changedColor,
       sequence: 1,
       userId: first.session.self.userId,
       x: 0.3,
@@ -184,6 +196,31 @@ describe('cursor socket server', () => {
     expect(await removalPromise).toEqual({
       reason: 'disconnect',
       userId: first.session.self.userId,
+    });
+  });
+
+  it('ignores invalid cursor color changes', async () => {
+    const url = await startServer();
+    const first = await connect(url);
+    const second = await connect(url);
+    const batchPromise = waitForBatch(second.socket);
+
+    first.socket.emit(CURSOR_EVENTS.color, {
+      color: '#invalid' as HexColor,
+    });
+    first.socket.emit(CURSOR_EVENTS.move, {
+      sequence: 0,
+      x: 0.5,
+      y: 0.5,
+    });
+
+    await expect(batchPromise).resolves.toMatchObject({
+      cursors: [
+        expect.objectContaining({
+          color: first.session.self.color,
+          userId: first.session.self.userId,
+        }),
+      ],
     });
   });
 

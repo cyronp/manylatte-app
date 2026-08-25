@@ -35,6 +35,12 @@ export const cursorInputSchema = cursorPositionSchema.extend({
 
 export type CursorInput = z.infer<typeof cursorInputSchema>;
 
+export const cursorColorInputSchema = z.object({
+  color: hexColorSchema,
+});
+
+export type CursorColorInput = z.infer<typeof cursorColorInputSchema>;
+
 export const cursorUserSchema = z.object({
   color: hexColorSchema,
   username: cursorUsernameSchema,

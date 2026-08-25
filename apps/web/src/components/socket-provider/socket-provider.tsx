@@ -1,10 +1,17 @@
-import { DEFAULT_CURSOR_ROOM_ID } from '@app/shared';
+import {
+  CURSOR_EVENTS,
+  DEFAULT_CURSOR_ROOM_ID,
+  hexColorSchema,
+  type CursorUser,
+} from '@app/shared';
 import {
   createContext,
   type PropsWithChildren,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
@@ -12,10 +19,14 @@ import { createCursorSocket, type CursorSocket } from '../../lib/socket';
 
 export type SocketStatus = 'connected' | 'connecting' | 'disconnected';
 
+const USER_COLOR_UPDATE_DEBOUNCE_MS = 150;
+
 interface SocketContextValue {
   error?: string;
+  setUserColor: (color: string) => void;
   socket: CursorSocket;
   status: SocketStatus;
+  user?: CursorUser;
 }
 
 interface SocketProviderProps extends PropsWithChildren {
@@ -30,6 +41,34 @@ export const SocketProvider = ({ children, username }: SocketProviderProps) => {
   );
   const [status, setStatus] = useState<SocketStatus>('connecting');
   const [error, setError] = useState<string>();
+  const [user, setUser] = useState<CursorUser>();
+  const colorUpdateTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+
+  const setUserColor = useCallback(
+    (color: string) => {
+      const result = hexColorSchema.safeParse(color);
+
+      if (!result.success) {
+        return;
+      }
+
+      setUser((currentUser) =>
+        currentUser ? { ...currentUser, color: result.data } : currentUser,
+      );
+
+      if (colorUpdateTimer.current !== undefined) {
+        clearTimeout(colorUpdateTimer.current);
+      }
+
+      colorUpdateTimer.current = setTimeout(() => {
+        colorUpdateTimer.current = undefined;
+        socket.emit(CURSOR_EVENTS.color, { color: result.data });
+      }, USER_COLOR_UPDATE_DEBOUNCE_MS);
+    },
+    [socket],
+  );
 
   useEffect(() => {
     const handleConnect = () => {
@@ -37,6 +76,7 @@ export const SocketProvider = ({ children, username }: SocketProviderProps) => {
       setStatus('connected');
     };
     const handleDisconnect = () => {
+      setUser(undefined);
       setStatus('disconnected');
     };
     const handleConnectError = (connectionError: Error) => {
@@ -46,11 +86,25 @@ export const SocketProvider = ({ children, username }: SocketProviderProps) => {
     const handleReconnectAttempt = () => {
       setStatus('connecting');
     };
+    const handleSession: Parameters<typeof socket.on<'cursor:session'>>[1] = (
+      session,
+    ) => {
+      setUser(session.self);
+    };
+    const handlePresence: Parameters<typeof socket.on<'cursor:presence'>>[1] = (
+      nextUser,
+    ) => {
+      setUser((currentUser) =>
+        currentUser?.userId === nextUser.userId ? nextUser : currentUser,
+      );
+    };
 
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
     socket.on('connect_error', handleConnectError);
     socket.io.on('reconnect_attempt', handleReconnectAttempt);
+    socket.on(CURSOR_EVENTS.session, handleSession);
+    socket.on(CURSOR_EVENTS.presence, handlePresence);
     socket.connect();
 
     return () => {
@@ -58,13 +112,20 @@ export const SocketProvider = ({ children, username }: SocketProviderProps) => {
       socket.off('disconnect', handleDisconnect);
       socket.off('connect_error', handleConnectError);
       socket.io.off('reconnect_attempt', handleReconnectAttempt);
+      socket.off(CURSOR_EVENTS.session, handleSession);
+      socket.off(CURSOR_EVENTS.presence, handlePresence);
+
+      if (colorUpdateTimer.current !== undefined) {
+        clearTimeout(colorUpdateTimer.current);
+      }
+
       socket.disconnect();
     };
   }, [socket]);
 
   const value = useMemo(
-    () => ({ error, socket, status }),
-    [error, socket, status],
+    () => ({ error, setUserColor, socket, status, user }),
+    [error, setUserColor, socket, status, user],
   );
 
   return (

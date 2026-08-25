@@ -1,5 +1,6 @@
 import type {
   CursorBatch,
+  CursorColorInput,
   CursorInput,
   CursorRemoval,
   CursorSession,
@@ -9,6 +10,7 @@ import type {
 
 export interface ClientToServerEvents {
   'cursor:click': (input: CursorInput) => void;
+  'cursor:color': (input: CursorColorInput) => void;
   'cursor:move': (input: CursorInput) => void;
 }
 
