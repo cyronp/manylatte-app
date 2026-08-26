@@ -19,4 +19,8 @@ export default defineConfig({
       '@': path.resolve(process.cwd(), 'src'),
     },
   },
+  server: {
+    allowedHosts: true,
+    host: '0.0.0.0',
+  },
 });

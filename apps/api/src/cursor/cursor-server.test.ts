@@ -87,7 +87,6 @@ describe('cursor socket server', () => {
     const app = await createApp({
       cursorIdleTimeoutMs,
       logger: false,
-      webUrl: 'http://localhost:5173',
     });
     await app.listen({ host: '127.0.0.1', port: 0 });
     const address = app.server.address() as AddressInfo;
@@ -222,6 +221,29 @@ describe('cursor socket server', () => {
         }),
       ],
     });
+  });
+
+  it('allows HTTP and Socket.IO requests from any origin', async () => {
+    const url = await startServer();
+    const origin = 'https://unconfigured-client.example';
+    const preflightResponse = await fetch(url, {
+      headers: {
+        'Access-Control-Request-Method': 'GET',
+        Origin: origin,
+      },
+      method: 'OPTIONS',
+    });
+    const socketResponse = await fetch(
+      `${url}/socket.io/?EIO=4&transport=polling`,
+      { headers: { Origin: origin } },
+    );
+
+    expect(preflightResponse.status).toBe(204);
+    expect(preflightResponse.headers.get('access-control-allow-origin')).toBe(
+      '*',
+    );
+    expect(socketResponse.status).toBe(200);
+    expect(socketResponse.headers.get('access-control-allow-origin')).toBe('*');
   });
 
   it('rejects rooms that have not been authorized by the server', async () => {

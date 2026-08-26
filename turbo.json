@@ -4,8 +4,9 @@
     "DATABASE_URL",
     "PORT",
     "REDIS_URL",
-    "WEB_URL",
-    "VITE_API_URL"
+    "VITE_API_MODE",
+    "VITE_FORWARDED_API_URL",
+    "VITE_LOCAL_API_URL"
   ],
   "tasks": {
     "dev": {

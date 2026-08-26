@@ -4,6 +4,7 @@ import {
   type ClientToServerEvents,
   type ServerToClientEvents,
 } from '@app/shared';
+import cors from '@fastify/cors';
 import Fastify from 'fastify';
 import { Server as SocketServer } from 'socket.io';
 
@@ -20,16 +21,15 @@ export interface CreateAppOptions {
   cursorIdleTimeoutMs?: number;
   logger?: boolean;
   redisUrl?: string;
-  webUrl: string;
 }
 
 export const createApp = async ({
   cursorIdleTimeoutMs,
   logger = true,
   redisUrl,
-  webUrl,
 }: CreateAppOptions) => {
   const app = Fastify({ logger });
+  await app.register(cors, { origin: '*' });
   const io: CursorIo = new SocketServer<
     ClientToServerEvents,
     ServerToClientEvents,
@@ -37,7 +37,7 @@ export const createApp = async ({
     CursorSocketData
   >(app.server, {
     cors: {
-      origin: webUrl,
+      origin: '*',
     },
   });
   const publicRoomId = cursorRoomIdSchema.parse(DEFAULT_CURSOR_ROOM_ID);

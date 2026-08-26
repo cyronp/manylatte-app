@@ -5,7 +5,37 @@ import {
 } from '@app/shared';
 import { io, type Socket } from 'socket.io-client';
 
-const apiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
+const DEFAULT_LOCAL_API_URL = 'http://localhost:3000';
+
+interface CursorApiEnvironment {
+  VITE_API_MODE?: string;
+  VITE_FORWARDED_API_URL?: string;
+  VITE_LOCAL_API_URL?: string;
+}
+
+export const resolveCursorApiUrl = ({
+  VITE_API_MODE: mode = 'local',
+  VITE_FORWARDED_API_URL: forwardedUrl,
+  VITE_LOCAL_API_URL: localUrl = DEFAULT_LOCAL_API_URL,
+}: CursorApiEnvironment) => {
+  if (mode === 'local') {
+    return localUrl;
+  }
+
+  if (mode === 'forwarded') {
+    if (!forwardedUrl) {
+      throw new Error(
+        'VITE_FORWARDED_API_URL is required when VITE_API_MODE=forwarded',
+      );
+    }
+
+    return forwardedUrl;
+  }
+
+  throw new Error(`Unsupported VITE_API_MODE: ${mode}`);
+};
+
+const apiUrl = resolveCursorApiUrl(import.meta.env);
 
 export type CursorSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
