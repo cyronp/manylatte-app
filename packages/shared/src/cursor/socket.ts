@@ -1,6 +1,7 @@
 import type {
   CursorBatch,
   CursorColorInput,
+  CursorDisconnectNotice,
   CursorInput,
   CursorRemoval,
   CursorSession,
@@ -17,6 +18,7 @@ export interface ClientToServerEvents {
 export interface ServerToClientEvents {
   'cursor:batch': (batch: CursorBatch) => void;
   'cursor:click': (cursor: CursorUpdate) => void;
+  'cursor:disconnect': (notice: CursorDisconnectNotice) => void;
   'cursor:presence': (user: CursorUser) => void;
   'cursor:remove': (removal: CursorRemoval) => void;
   'cursor:session': (session: CursorSession) => void;

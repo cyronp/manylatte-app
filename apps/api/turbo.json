@@ -1,0 +1,19 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "dev": {
+      "passThroughEnv": [
+        "ALLOWED_ORIGINS",
+        "CURSOR_CONNECTION_IDLE_TIMEOUT_MS",
+        "CURSOR_MAX_CONNECTIONS_PER_IP",
+        "CURSOR_MAX_PARTICIPANTS_PER_ROOM",
+        "CURSOR_MAX_TOTAL_CONNECTIONS",
+        "NODE_ENV",
+        "PORT",
+        "REDIS_URL",
+        "SOCKET_MAX_HTTP_BUFFER_BYTES",
+        "TRUST_PROXY"
+      ]
+    }
+  }
+}

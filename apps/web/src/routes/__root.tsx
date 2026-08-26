@@ -93,7 +93,7 @@ function UsernamePrompt({ onSubmit }: UsernamePromptProps) {
 
         <FieldError id={USERNAME_ERROR_ID}>
           {hasError
-            ? 'Enter a username with 1–32 characters, including at least one non-space character.'
+            ? 'Enter 1–32 visible characters without control or directional formatting characters.'
             : undefined}
         </FieldError>
 

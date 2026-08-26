@@ -16,7 +16,7 @@ import {
 import { io as createClient, type Socket } from 'socket.io-client';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createApp } from '../app.js';
+import { createApp, type CreateAppOptions } from '../app.js';
 
 type TestSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
@@ -83,11 +83,11 @@ describe('cursor socket server', () => {
     await closeApp?.();
   });
 
-  const startServer = async (cursorIdleTimeoutMs = 5000) => {
+  const startServer = async (options: CreateAppOptions = {}) => {
     const app = await createApp({
-      cursorIdleTimeoutMs,
+      cursorIdleTimeoutMs: 5000,
       logger: false,
-      webUrl: 'http://localhost:5173',
+      ...options,
     });
     await app.listen({ host: '127.0.0.1', port: 0 });
     const address = app.server.address() as AddressInfo;
@@ -224,6 +224,83 @@ describe('cursor socket server', () => {
     });
   });
 
+  it('allows configured origins and rejects unconfigured origins', async () => {
+    const allowedOrigin = 'https://app.example';
+    const deniedOrigin = 'https://unconfigured-client.example';
+    const url = await startServer({ allowedOrigins: [allowedOrigin] });
+    const allowedPreflightResponse = await fetch(url, {
+      headers: {
+        'Access-Control-Request-Method': 'GET',
+        Origin: allowedOrigin,
+      },
+      method: 'OPTIONS',
+    });
+    const allowedSocketResponse = await fetch(
+      `${url}/socket.io/?EIO=4&transport=polling`,
+      { headers: { Origin: allowedOrigin } },
+    );
+    const deniedPreflightResponse = await fetch(url, {
+      headers: {
+        'Access-Control-Request-Method': 'GET',
+        Origin: deniedOrigin,
+      },
+      method: 'OPTIONS',
+    });
+    const deniedSocketResponse = await fetch(
+      `${url}/socket.io/?EIO=4&transport=polling`,
+      { headers: { Origin: deniedOrigin } },
+    );
+
+    expect(allowedPreflightResponse.status).toBe(204);
+    expect(
+      allowedPreflightResponse.headers.get('access-control-allow-origin'),
+    ).toBe(allowedOrigin);
+    expect(allowedSocketResponse.status).toBe(200);
+    expect(
+      allowedSocketResponse.headers.get('access-control-allow-origin'),
+    ).toBe(allowedOrigin);
+    expect(
+      deniedPreflightResponse.headers.get('access-control-allow-origin'),
+    ).toBeNull();
+    expect(deniedSocketResponse.status).toBe(403);
+    expect(
+      deniedSocketResponse.headers.get('access-control-allow-origin'),
+    ).toBeNull();
+  });
+
+  it('rejects WebSocket upgrades from an unconfigured browser origin', async () => {
+    const url = await startServer({
+      allowedOrigins: ['https://app.example'],
+    });
+    const socket: TestSocket = createClient(url, {
+      auth: { roomId: DEFAULT_CURSOR_ROOM_ID, username: 'Player' },
+      autoConnect: false,
+      extraHeaders: { Origin: 'https://malicious.example' },
+      forceNew: true,
+      reconnection: false,
+      transports: ['websocket'],
+    });
+    sockets.push(socket);
+    const errorPromise = withTimeout(
+      new Promise<Error>((resolve) => socket.once('connect_error', resolve)),
+      'connect_error',
+    );
+    socket.connect();
+
+    await expect(errorPromise).resolves.toBeInstanceOf(Error);
+    expect(socket.connected).toBe(false);
+  });
+
+  it('adds baseline security headers to HTTP responses', async () => {
+    const url = await startServer();
+    const response = await fetch(url);
+
+    expect(response.headers.get('content-security-policy')).toContain(
+      "default-src 'self'",
+    );
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+  });
+
   it('rejects rooms that have not been authorized by the server', async () => {
     const url = await startServer();
     const socket: TestSocket = createClient(url, {
@@ -242,6 +319,63 @@ describe('cursor socket server', () => {
     await expect(errorPromise).resolves.toMatchObject({
       message: 'Cursor room access denied',
     });
+  });
+
+  it('caps the number of participants in a room', async () => {
+    const url = await startServer({ maxParticipantsPerRoom: 1 });
+    await connect(url);
+    const socket: TestSocket = createClient(url, {
+      auth: { roomId: DEFAULT_CURSOR_ROOM_ID, username: 'Second player' },
+      autoConnect: false,
+      forceNew: true,
+      reconnection: false,
+    });
+    sockets.push(socket);
+    const errorPromise = withTimeout(
+      new Promise<Error>((resolve) => socket.once('connect_error', resolve)),
+      'connect_error',
+    );
+    socket.connect();
+
+    await expect(errorPromise).resolves.toMatchObject({
+      message: 'Cursor room is full',
+    });
+  });
+
+  it('disconnects clients that repeatedly exceed event rate limits', async () => {
+    const url = await startServer();
+    const { socket } = await connect(url);
+    const disconnectPromise = withTimeout(
+      new Promise<string>((resolve) => socket.once('disconnect', resolve)),
+      'disconnect',
+    );
+    const noticePromise = withTimeout(
+      new Promise<{ reason: 'abuse' | 'idle' }>((resolve) =>
+        socket.once(CURSOR_EVENTS.disconnect, resolve),
+      ),
+      CURSOR_EVENTS.disconnect,
+    );
+    const color = hexColorSchema.parse('#c026d3');
+
+    for (let index = 0; index < 30; index += 1) {
+      socket.emit(CURSOR_EVENTS.color, { color });
+    }
+
+    await expect(noticePromise).resolves.toEqual({ reason: 'abuse' });
+    await expect(disconnectPromise).resolves.toBe('io server disconnect');
+  });
+
+  it('closes sockets that send oversized messages', async () => {
+    const url = await startServer({ maxHttpBufferBytes: 1_024 });
+    const { socket } = await connect(url);
+    const disconnectPromise = withTimeout(
+      new Promise<string>((resolve) => socket.once('disconnect', resolve)),
+      'disconnect',
+    );
+
+    socket.emit(CURSOR_EVENTS.move, 'x'.repeat(10_000) as never);
+
+    await expect(disconnectPromise).resolves.toMatch(/transport|server/);
   });
 
   it('assigns a coffee guest name to legacy clients', async () => {
@@ -277,7 +411,7 @@ describe('cursor socket server', () => {
   );
 
   it('expires an idle cursor without disconnecting its socket', async () => {
-    const url = await startServer(75);
+    const url = await startServer({ cursorIdleTimeoutMs: 75 });
     const first = await connect(url);
     const second = await connect(url);
     const removalPromise = waitForRemoval(second.socket);
@@ -293,5 +427,23 @@ describe('cursor socket server', () => {
       userId: first.session.self.userId,
     });
     expect(first.socket.connected).toBe(true);
+  });
+
+  it('disconnects sockets after the connection idle timeout', async () => {
+    const url = await startServer({ connectionIdleTimeoutMs: 75 });
+    const { socket } = await connect(url);
+    const disconnectPromise = withTimeout(
+      new Promise<string>((resolve) => socket.once('disconnect', resolve)),
+      'disconnect',
+    );
+    const noticePromise = withTimeout(
+      new Promise<{ reason: 'abuse' | 'idle' }>((resolve) =>
+        socket.once(CURSOR_EVENTS.disconnect, resolve),
+      ),
+      CURSOR_EVENTS.disconnect,
+    );
+
+    await expect(noticePromise).resolves.toEqual({ reason: 'idle' });
+    await expect(disconnectPromise).resolves.toBe('io server disconnect');
   });
 });

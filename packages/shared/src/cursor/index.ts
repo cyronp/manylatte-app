@@ -1,5 +1,6 @@
 export {
   CURSOR_CLICK_DURATION_MS,
+  CURSOR_CONNECTION_IDLE_TIMEOUT_MS,
   CURSOR_EVENTS,
   CURSOR_IDLE_TIMEOUT_MS,
   CURSOR_MOVE_FPS,
@@ -11,6 +12,8 @@ export {
   type CursorBatch,
   cursorColorInputSchema,
   type CursorColorInput,
+  cursorDisconnectNoticeSchema,
+  type CursorDisconnectNotice,
   cursorInputSchema,
   type CursorInput,
   cursorPositionSchema,
