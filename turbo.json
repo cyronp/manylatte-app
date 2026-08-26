@@ -1,13 +1,5 @@
 {
   "$schema": "https://turborepo.com/schema.json",
-  "globalPassThroughEnv": [
-    "DATABASE_URL",
-    "PORT",
-    "REDIS_URL",
-    "VITE_API_MODE",
-    "VITE_FORWARDED_API_URL",
-    "VITE_LOCAL_API_URL"
-  ],
   "tasks": {
     "dev": {
       "cache": false,

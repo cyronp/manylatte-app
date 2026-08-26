@@ -71,13 +71,26 @@ export const SocketProvider = ({ children, username }: SocketProviderProps) => {
   );
 
   useEffect(() => {
+    let reconnectOnUserActivity = false;
+
     const handleConnect = () => {
+      reconnectOnUserActivity = false;
       setError(undefined);
       setStatus('connected');
     };
-    const handleDisconnect = () => {
+    const handleDisconnect: Parameters<typeof socket.on<'disconnect'>>[1] = (
+      reason,
+    ) => {
+      if (reason !== 'io server disconnect') {
+        reconnectOnUserActivity = false;
+      }
       setUser(undefined);
       setStatus('disconnected');
+    };
+    const handleDisconnectNotice: Parameters<
+      typeof socket.on<'cursor:disconnect'>
+    >[1] = ({ reason }) => {
+      reconnectOnUserActivity = reason === 'idle';
     };
     const handleConnectError = (connectionError: Error) => {
       setError(connectionError.message);
@@ -85,6 +98,15 @@ export const SocketProvider = ({ children, username }: SocketProviderProps) => {
     };
     const handleReconnectAttempt = () => {
       setStatus('connecting');
+    };
+    const handleUserActivity = () => {
+      if (!reconnectOnUserActivity) {
+        return;
+      }
+
+      reconnectOnUserActivity = false;
+      setStatus('connecting');
+      socket.connect();
     };
     const handleSession: Parameters<typeof socket.on<'cursor:session'>>[1] = (
       session,
@@ -105,6 +127,14 @@ export const SocketProvider = ({ children, username }: SocketProviderProps) => {
     socket.io.on('reconnect_attempt', handleReconnectAttempt);
     socket.on(CURSOR_EVENTS.session, handleSession);
     socket.on(CURSOR_EVENTS.presence, handlePresence);
+    socket.on(CURSOR_EVENTS.disconnect, handleDisconnectNotice);
+    window.addEventListener('keydown', handleUserActivity);
+    window.addEventListener('pointerdown', handleUserActivity, {
+      passive: true,
+    });
+    window.addEventListener('pointermove', handleUserActivity, {
+      passive: true,
+    });
     socket.connect();
 
     return () => {
@@ -114,6 +144,10 @@ export const SocketProvider = ({ children, username }: SocketProviderProps) => {
       socket.io.off('reconnect_attempt', handleReconnectAttempt);
       socket.off(CURSOR_EVENTS.session, handleSession);
       socket.off(CURSOR_EVENTS.presence, handlePresence);
+      socket.off(CURSOR_EVENTS.disconnect, handleDisconnectNotice);
+      window.removeEventListener('keydown', handleUserActivity);
+      window.removeEventListener('pointerdown', handleUserActivity);
+      window.removeEventListener('pointermove', handleUserActivity);
 
       if (colorUpdateTimer.current !== undefined) {
         clearTimeout(colorUpdateTimer.current);

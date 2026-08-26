@@ -43,4 +43,15 @@ describe('cursor contract', () => {
     expect(cursorUsernameSchema.safeParse('x'.repeat(33)).success).toBe(false);
     expect(cursorUsernameSchema.parse('  Alex  ')).toBe('Alex');
   });
+
+  it('normalizes usernames and rejects control or directional characters', () => {
+    expect(cursorUsernameSchema.parse('Cafe\u0301')).toBe('Caf\u00e9');
+    expect(cursorUsernameSchema.safeParse('Alex\nAdmin').success).toBe(false);
+    expect(cursorUsernameSchema.safeParse('Alex\u202eAdmin').success).toBe(
+      false,
+    );
+    expect(cursorUsernameSchema.safeParse('Alex\u200bAdmin').success).toBe(
+      false,
+    );
+  });
 });

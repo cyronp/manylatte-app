@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import {
+  CURSOR_CONNECTION_IDLE_TIMEOUT_MS,
   CURSOR_EVENTS,
   CURSOR_IDLE_TIMEOUT_MS,
   CURSOR_MOVE_FPS,
@@ -21,11 +22,25 @@ import type { Server, Socket } from 'socket.io';
 import { createCoffeeGuestUsername } from './guest-username.js';
 import { selectCursorColor } from './palette.js';
 import { TokenBucket } from './token-bucket.js';
+import {
+  DEFAULT_CURSOR_MAX_CONNECTIONS_PER_IP,
+  DEFAULT_CURSOR_MAX_PARTICIPANTS_PER_ROOM,
+  DEFAULT_CURSOR_MAX_TOTAL_CONNECTIONS,
+} from '../security-config.js';
 
 type InterServerEvents = Record<never, never>;
 
+const CURSOR_COLOR_UPDATES_PER_SECOND = 8;
+const SOCKET_MESSAGE_BURST = 60;
+const SOCKET_MESSAGES_PER_SECOND = 45;
+const ABUSE_DISCONNECT_THRESHOLD = 20;
+const ABUSE_WINDOW_MS = 10_000;
+const ABUSE_LOG_INTERVAL_MS = 5_000;
+const CONNECTION_ATTEMPT_RETENTION_MS = 10 * 60_000;
+
 export interface CursorSocketData {
   cursorColor?: HexColor;
+  cursorIpAddress: string;
   cursorLastPosition?: RemoteCursor;
   cursorRoomId: CursorRoomId;
   cursorUsername: string;
@@ -53,12 +68,23 @@ interface CursorLogger {
 interface Participant {
   clickLimiter: TokenBucket;
   color: HexColor;
+  colorLimiter: TokenBucket;
+  lastActivityAt: number;
   lastCursor?: RemoteCursor;
   lastSequence: number;
+  lastViolationLogAt?: number;
+  messageLimiter: TokenBucket;
   moveLimiter: TokenBucket;
   socketId: string;
   username: string;
   userId: string;
+  violationCount: number;
+  violationWindowStartedAt: number;
+}
+
+interface ConnectionAttemptState {
+  lastSeenAt: number;
+  limiter: TokenBucket;
 }
 
 interface CursorRoom {
@@ -68,20 +94,32 @@ interface CursorRoom {
 
 export interface CursorServerOptions {
   authorizeRoom: (roomId: CursorRoomId) => boolean | Promise<boolean>;
+  connectionIdleTimeoutMs?: number;
   idleTimeoutMs?: number;
   logger: CursorLogger;
+  maxConnectionsPerIp?: number;
+  maxParticipantsPerRoom?: number;
+  maxTotalConnections?: number;
   now?: () => number;
+  trustProxy?: boolean;
 }
 
 export const registerCursorServer = (
   io: CursorIo,
   {
     authorizeRoom,
+    connectionIdleTimeoutMs = CURSOR_CONNECTION_IDLE_TIMEOUT_MS,
     idleTimeoutMs = CURSOR_IDLE_TIMEOUT_MS,
     logger,
+    maxConnectionsPerIp = DEFAULT_CURSOR_MAX_CONNECTIONS_PER_IP,
+    maxParticipantsPerRoom = DEFAULT_CURSOR_MAX_PARTICIPANTS_PER_ROOM,
+    maxTotalConnections = DEFAULT_CURSOR_MAX_TOTAL_CONNECTIONS,
     now = Date.now,
+    trustProxy = false,
   }: CursorServerOptions,
 ) => {
+  const connectionAttemptsByIp = new Map<string, ConnectionAttemptState>();
+  const connectionCountsByIp = new Map<string, number>();
   const rooms = new Map<CursorRoomId, CursorRoom>();
 
   const getRoom = (roomId: CursorRoomId) => {
@@ -100,47 +138,164 @@ export const registerCursorServer = (
   };
 
   io.use(async (socket, next) => {
-    const authResult = cursorSocketAuthSchema.safeParse(socket.handshake.auth);
+    try {
+      const authResult = cursorSocketAuthSchema.safeParse(
+        socket.handshake.auth,
+      );
 
-    if (!authResult.success) {
-      next(new Error('Invalid cursor connection'));
-      return;
+      if (!authResult.success) {
+        next(new Error('Invalid cursor connection'));
+        return;
+      }
+
+      if (!(await authorizeRoom(authResult.data.roomId))) {
+        next(new Error('Cursor room access denied'));
+        return;
+      }
+
+      const currentTime = now();
+      const forwardedFor = socket.handshake.headers['x-forwarded-for'];
+      const forwardedAddress = Array.isArray(forwardedFor)
+        ? forwardedFor[0]
+        : forwardedFor?.split(',')[0]?.trim();
+      const ipAddress =
+        trustProxy && forwardedAddress
+          ? forwardedAddress
+          : socket.handshake.address;
+      const existingAttemptState = connectionAttemptsByIp.get(ipAddress);
+      const attemptState = existingAttemptState ?? {
+        lastSeenAt: currentTime,
+        limiter: new TokenBucket(
+          maxConnectionsPerIp,
+          Math.max(1, maxConnectionsPerIp / 10),
+          currentTime,
+        ),
+      };
+      attemptState.lastSeenAt = currentTime;
+      connectionAttemptsByIp.set(ipAddress, attemptState);
+
+      if (!attemptState.limiter.take(currentTime)) {
+        next(new Error('Cursor connection rate limit exceeded'));
+        return;
+      }
+
+      if ((connectionCountsByIp.get(ipAddress) ?? 0) >= maxConnectionsPerIp) {
+        next(new Error('Cursor connection limit exceeded'));
+        return;
+      }
+
+      if (io.of('/').sockets.size >= maxTotalConnections) {
+        next(new Error('Cursor server connection limit reached'));
+        return;
+      }
+
+      const roomSocketIds = await io.in(authResult.data.roomId).allSockets();
+
+      if (roomSocketIds.size >= maxParticipantsPerRoom) {
+        next(new Error('Cursor room is full'));
+        return;
+      }
+
+      socket.data.cursorIpAddress = ipAddress;
+      socket.data.cursorRoomId = authResult.data.roomId;
+      socket.data.cursorUsername =
+        authResult.data.username ?? createCoffeeGuestUsername();
+      next();
+    } catch {
+      next(new Error('Cursor connection unavailable'));
     }
-
-    if (!(await authorizeRoom(authResult.data.roomId))) {
-      next(new Error('Cursor room access denied'));
-      return;
-    }
-
-    socket.data.cursorRoomId = authResult.data.roomId;
-    socket.data.cursorUsername =
-      authResult.data.username ?? createCoffeeGuestUsername();
-    next();
   });
+
+  const recordViolation = (
+    socket: CursorSocket,
+    participant: Participant,
+    reason: string,
+    issueCodes?: string[],
+  ) => {
+    const currentTime = now();
+
+    if (currentTime - participant.violationWindowStartedAt >= ABUSE_WINDOW_MS) {
+      participant.violationCount = 0;
+      participant.violationWindowStartedAt = currentTime;
+    }
+
+    participant.violationCount += 1;
+    const reachedDisconnectThreshold =
+      participant.violationCount >= ABUSE_DISCONNECT_THRESHOLD;
+    const shouldLog =
+      reachedDisconnectThreshold ||
+      participant.lastViolationLogAt === undefined ||
+      currentTime - participant.lastViolationLogAt >= ABUSE_LOG_INTERVAL_MS;
+
+    if (shouldLog) {
+      participant.lastViolationLogAt = currentTime;
+      logger.warn(
+        {
+          issueCodes,
+          reason,
+          socketId: socket.id,
+          violations: participant.violationCount,
+        },
+        'Rejected abusive cursor socket message',
+      );
+    }
+
+    if (reachedDisconnectThreshold) {
+      socket.emit(CURSOR_EVENTS.disconnect, { reason: 'abuse' });
+      socket.disconnect(true);
+    }
+  };
+
+  const acceptMessageBudget = (
+    socket: CursorSocket,
+    participant: Participant,
+    eventName: string,
+  ) => {
+    const currentTime = now();
+
+    if (!participant.messageLimiter.take(currentTime)) {
+      recordViolation(socket, participant, `rate:${eventName}`);
+      return;
+    }
+
+    return currentTime;
+  };
 
   const acceptCursorInput = (
     socket: CursorSocket,
     participant: Participant,
     input: unknown,
     limiter: TokenBucket,
+    eventName: string,
   ) => {
+    const acceptedAt = acceptMessageBudget(socket, participant, eventName);
+
+    if (acceptedAt === undefined) {
+      return;
+    }
+
     const result = cursorInputSchema.safeParse(input);
 
     if (!result.success) {
-      logger.warn(
-        { issues: result.error.issues, socketId: socket.id },
-        'Received invalid cursor input',
+      recordViolation(
+        socket,
+        participant,
+        `invalid:${eventName}`,
+        result.error.issues.map((issue) => issue.code),
       );
       return;
     }
 
-    if (
-      result.data.sequence <= participant.lastSequence ||
-      !limiter.take(now())
-    ) {
+    if (!limiter.take(acceptedAt)) {
+      recordViolation(socket, participant, `rate:${eventName}`);
       return;
     }
 
+    if (result.data.sequence <= participant.lastSequence) {
+      return;
+    }
+
+    participant.lastActivityAt = acceptedAt;
     participant.lastSequence = result.data.sequence;
     return result.data;
   };
@@ -148,67 +303,109 @@ export const registerCursorServer = (
   io.on('connection', (socket) => {
     const roomId = socket.data.cursorRoomId;
     const room = getRoom(roomId);
+    const connectedAt = now();
     const participant: Participant = {
-      clickLimiter: new TokenBucket(3, 8, now()),
+      clickLimiter: new TokenBucket(3, 8, connectedAt),
       color: selectCursorColor(
         Array.from(room.participants.values(), ({ color }) => color),
       ),
+      colorLimiter: new TokenBucket(
+        2,
+        CURSOR_COLOR_UPDATES_PER_SECOND,
+        connectedAt,
+      ),
+      lastActivityAt: connectedAt,
       lastSequence: -1,
-      moveLimiter: new TokenBucket(2, CURSOR_MOVE_FPS, now()),
+      messageLimiter: new TokenBucket(
+        SOCKET_MESSAGE_BURST,
+        SOCKET_MESSAGES_PER_SECOND,
+        connectedAt,
+      ),
+      moveLimiter: new TokenBucket(2, CURSOR_MOVE_FPS, connectedAt),
       socketId: socket.id,
       username: socket.data.cursorUsername,
       userId: randomUUID(),
+      violationCount: 0,
+      violationWindowStartedAt: connectedAt,
     };
 
+    connectionCountsByIp.set(
+      socket.data.cursorIpAddress,
+      (connectionCountsByIp.get(socket.data.cursorIpAddress) ?? 0) + 1,
+    );
     room.participants.set(socket.id, participant);
     socket.data.cursorColor = participant.color;
     socket.data.cursorUsername = participant.username;
     socket.data.cursorUserId = participant.userId;
-    void Promise.resolve(socket.join(roomId)).then(async () => {
-      const roomSockets = await io.in(roomId).fetchSockets();
+    void Promise.resolve(socket.join(roomId))
+      .then(async () => {
+        const roomSockets = await io.in(roomId).fetchSockets();
 
-      if (!socket.connected) {
+        if (!socket.connected) {
+          return;
+        }
+
+        const user: CursorUser = {
+          color: participant.color,
+          username: participant.username,
+          userId: participant.userId,
+        };
+        const users = roomSockets.flatMap(({ data }) =>
+          data.cursorColor && data.cursorUserId
+            ? [
+                {
+                  color: data.cursorColor,
+                  username: data.cursorUsername,
+                  userId: data.cursorUserId,
+                },
+              ]
+            : [],
+        );
+        socket.to(roomId).emit(CURSOR_EVENTS.presence, user);
+
+        socket.emit(CURSOR_EVENTS.session, {
+          cursors: roomSockets
+            .map(({ data }) => data.cursorLastPosition)
+            .filter((cursor): cursor is RemoteCursor => cursor !== undefined),
+          self: user,
+          users,
+        });
+      })
+      .catch(() => {
+        if (socket.connected) {
+          socket.disconnect(true);
+        }
+      });
+
+    socket.on(CURSOR_EVENTS.color, (input) => {
+      const acceptedAt = acceptMessageBudget(
+        socket,
+        participant,
+        CURSOR_EVENTS.color,
+      );
+
+      if (acceptedAt === undefined) {
         return;
       }
 
-      const user: CursorUser = {
-        color: participant.color,
-        username: participant.username,
-        userId: participant.userId,
-      };
-      const users = roomSockets.flatMap(({ data }) =>
-        data.cursorColor && data.cursorUserId
-          ? [
-              {
-                color: data.cursorColor,
-                username: data.cursorUsername,
-                userId: data.cursorUserId,
-              },
-            ]
-          : [],
-      );
-      socket.to(roomId).emit(CURSOR_EVENTS.presence, user);
-
-      socket.emit(CURSOR_EVENTS.session, {
-        cursors: roomSockets
-          .map(({ data }) => data.cursorLastPosition)
-          .filter((cursor): cursor is RemoteCursor => cursor !== undefined),
-        self: user,
-        users,
-      });
-    });
-
-    socket.on(CURSOR_EVENTS.color, (input) => {
       const result = cursorColorInputSchema.safeParse(input);
 
       if (!result.success) {
-        logger.warn(
-          { issues: result.error.issues, socketId: socket.id },
-          'Received invalid cursor color',
+        recordViolation(
+          socket,
+          participant,
+          `invalid:${CURSOR_EVENTS.color}`,
+          result.error.issues.map((issue) => issue.code),
         );
         return;
       }
 
+      if (!participant.colorLimiter.take(acceptedAt)) {
+        recordViolation(socket, participant, `rate:${CURSOR_EVENTS.color}`);
+        return;
+      }
+
+      participant.lastActivityAt = acceptedAt;
       participant.color = result.data.color;
       socket.data.cursorColor = result.data.color;
 
@@ -242,6 +439,7 @@ export const registerCursorServer = (
         participant,
         input,
         participant.moveLimiter,
+        CURSOR_EVENTS.move,
       );
 
       if (!acceptedInput) {
@@ -269,6 +467,7 @@ export const registerCursorServer = (
         participant,
         input,
         participant.clickLimiter,
+        CURSOR_EVENTS.click,
       );
 
       if (!acceptedInput) {
@@ -292,6 +491,18 @@ export const registerCursorServer = (
     });
 
     socket.on('disconnect', () => {
+      const ipConnectionCount =
+        connectionCountsByIp.get(socket.data.cursorIpAddress) ?? 0;
+
+      if (ipConnectionCount <= 1) {
+        connectionCountsByIp.delete(socket.data.cursorIpAddress);
+      } else {
+        connectionCountsByIp.set(
+          socket.data.cursorIpAddress,
+          ipConnectionCount - 1,
+        );
+      }
+
       room.participants.delete(socket.id);
       room.pendingMoves.delete(participant.userId);
       socket.to(roomId).emit(CURSOR_EVENTS.remove, {
@@ -325,6 +536,20 @@ export const registerCursorServer = (
       for (const [roomId, room] of rooms) {
         for (const participant of room.participants.values()) {
           if (
+            currentTime - participant.lastActivityAt >=
+            connectionIdleTimeoutMs
+          ) {
+            const participantSocket = io.sockets.sockets.get(
+              participant.socketId,
+            );
+            participantSocket?.emit(CURSOR_EVENTS.disconnect, {
+              reason: 'idle',
+            });
+            participantSocket?.disconnect(true);
+            continue;
+          }
+
+          if (
             !participant.lastCursor ||
             currentTime - participant.lastCursor.updatedAt < idleTimeoutMs
           ) {
@@ -346,8 +571,17 @@ export const registerCursorServer = (
           });
         }
       }
+
+      for (const [ipAddress, attemptState] of connectionAttemptsByIp) {
+        if (
+          currentTime - attemptState.lastSeenAt >=
+          CONNECTION_ATTEMPT_RETENTION_MS
+        ) {
+          connectionAttemptsByIp.delete(ipAddress);
+        }
+      }
     },
-    Math.min(1000, idleTimeoutMs),
+    Math.max(10, Math.min(1_000, idleTimeoutMs, connectionIdleTimeoutMs)),
   );
 
   batchTimer.unref();
@@ -357,6 +591,8 @@ export const registerCursorServer = (
     close: () => {
       clearInterval(batchTimer);
       clearInterval(idleTimer);
+      connectionAttemptsByIp.clear();
+      connectionCountsByIp.clear();
       rooms.clear();
     },
   };

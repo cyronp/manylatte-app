@@ -1,0 +1,18 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "env": ["VITE_API_MODE", "VITE_FORWARDED_API_URL", "VITE_LOCAL_API_URL"],
+      "inputs": ["$TURBO_DEFAULT$", ".env", ".env.*"]
+    },
+    "dev": {
+      "passThroughEnv": [
+        "DEV_SERVER_ALLOWED_HOSTS",
+        "DEV_SERVER_HOST",
+        "VITE_API_MODE",
+        "VITE_FORWARDED_API_URL",
+        "VITE_LOCAL_API_URL"
+      ]
+    }
+  }
+}

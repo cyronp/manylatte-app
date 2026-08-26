@@ -33,4 +33,26 @@ describe('cursor API URL', () => {
       /Unsupported VITE_API_MODE/,
     );
   });
+
+  it('rejects unsafe API URLs', () => {
+    expect(() =>
+      resolveCursorApiUrl({
+        VITE_API_MODE: 'forwarded',
+        VITE_FORWARDED_API_URL: 'javascript:alert(1)',
+      }),
+    ).toThrow(/HTTP or HTTPS/);
+    expect(() =>
+      resolveCursorApiUrl({
+        PROD: true,
+        VITE_API_MODE: 'forwarded',
+        VITE_FORWARDED_API_URL: 'http://api.example',
+      }),
+    ).toThrow(/must use HTTPS/);
+    expect(() =>
+      resolveCursorApiUrl({
+        VITE_API_MODE: 'forwarded',
+        VITE_FORWARDED_API_URL: 'https://user:secret@api.example',
+      }),
+    ).toThrow(/credentials/);
+  });
 });

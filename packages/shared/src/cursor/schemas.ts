@@ -11,7 +11,21 @@ export const cursorRoomIdSchema = z
 
 export type CursorRoomId = z.infer<typeof cursorRoomIdSchema>;
 
-export const cursorUsernameSchema = z.string().trim().min(1).max(32);
+const disallowedUsernameCharacters = /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/u;
+
+export const cursorUsernameSchema = z
+  .string()
+  .transform((username) => username.trim().normalize('NFC'))
+  .pipe(
+    z
+      .string()
+      .min(1)
+      .max(32)
+      .refine(
+        (username) => !disallowedUsernameCharacters.test(username),
+        'Username cannot contain control or invisible formatting characters',
+      ),
+  );
 
 export type CursorUsername = z.infer<typeof cursorUsernameSchema>;
 
@@ -40,6 +54,14 @@ export const cursorColorInputSchema = z.object({
 });
 
 export type CursorColorInput = z.infer<typeof cursorColorInputSchema>;
+
+export const cursorDisconnectNoticeSchema = z.object({
+  reason: z.enum(['abuse', 'idle']),
+});
+
+export type CursorDisconnectNotice = z.infer<
+  typeof cursorDisconnectNoticeSchema
+>;
 
 export const cursorUserSchema = z.object({
   color: hexColorSchema,
