@@ -1,4 +1,5 @@
 import { CursorClickIcon, CursorIcon } from '@phosphor-icons/react';
+import type { XYPosition } from '@xyflow/react';
 import { memo, useLayoutEffect, useRef } from 'react';
 
 import { getCursorLabelTextColor } from '../../features/cursors/cursor-label-color';
@@ -12,20 +13,20 @@ export interface SurfaceSize {
 
 interface RemoteCursorProps {
   cursor: RemoteCursorView;
+  position: XYPosition;
   surfaceSize: SurfaceSize;
 }
 
 export const RemoteCursor = memo(function RemoteCursor({
   cursor,
+  position,
   surfaceSize,
 }: RemoteCursorProps) {
   const nodeRef = useRef<HTMLDivElement>(null);
   const labelRef = useRef<HTMLDivElement>(null);
   const animationFrameRef = useRef<number | undefined>(undefined);
-  const currentPositionRef = useRef({
-    x: cursor.x * surfaceSize.width,
-    y: cursor.y * surfaceSize.height,
-  });
+  const currentPositionRef = useRef(position);
+  const previousSequenceRef = useRef(cursor.sequence);
 
   useLayoutEffect(() => {
     const node = nodeRef.current;
@@ -35,10 +36,7 @@ export const RemoteCursor = memo(function RemoteCursor({
       return;
     }
 
-    const target = {
-      x: cursor.x * surfaceSize.width,
-      y: cursor.y * surfaceSize.height,
-    };
+    const target = position;
     let previousTime = performance.now();
 
     const positionLabel = (anchorX: number, anchorY: number) => {
@@ -52,6 +50,21 @@ export const RemoteCursor = memo(function RemoteCursor({
       });
       label.style.transform = `translate3d(${position.left}px, ${position.top}px, 0)`;
     };
+
+    const cursorMoved = previousSequenceRef.current !== cursor.sequence;
+    previousSequenceRef.current = cursor.sequence;
+
+    if (!cursorMoved) {
+      if (animationFrameRef.current !== undefined) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = undefined;
+      }
+
+      currentPositionRef.current = target;
+      node.style.transform = `translate3d(${target.x}px, ${target.y}px, 0)`;
+      positionLabel(target.x, target.y);
+      return;
+    }
 
     positionLabel(currentPositionRef.current.x, currentPositionRef.current.y);
 
@@ -90,9 +103,9 @@ export const RemoteCursor = memo(function RemoteCursor({
       }
     };
   }, [
+    cursor.sequence,
     cursor.username,
-    cursor.x,
-    cursor.y,
+    position,
     surfaceSize.height,
     surfaceSize.width,
   ]);

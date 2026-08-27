@@ -2,6 +2,14 @@ export { z } from 'zod';
 export type { ZodType } from 'zod';
 
 export {
+  CANVAS_COLUMN_COUNT,
+  CANVAS_HEIGHT,
+  CANVAS_REGION_HEIGHT,
+  CANVAS_REGION_WIDTH,
+  CANVAS_ROW_COUNT,
+  CANVAS_WIDTH,
+} from './canvas/index.js';
+export {
   CURSOR_CLICK_DURATION_MS,
   CURSOR_CONNECTION_IDLE_TIMEOUT_MS,
   CURSOR_EVENTS,

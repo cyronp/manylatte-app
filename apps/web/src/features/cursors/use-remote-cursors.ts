@@ -10,13 +10,24 @@ import {
 import { type RefObject, useEffect, useRef, useState } from 'react';
 
 import { useSocket } from '../../components/socket-provider';
-import { normalizeCursorPosition } from './cursor-position';
+
+interface PointerCoordinates {
+  x: number;
+  y: number;
+}
+
+type ProjectCursorPosition = (
+  position: PointerCoordinates,
+) => CursorPosition | undefined;
 
 export type RemoteCursorView = RemoteCursor & {
   isClicking: boolean;
 };
 
-export const useRemoteCursors = (surfaceRef: RefObject<HTMLElement | null>) => {
+export const useRemoteCursors = (
+  surfaceRef: RefObject<HTMLElement | null>,
+  projectCursorPosition: ProjectCursorPosition,
+) => {
   const { socket } = useSocket();
   const [cursors, setCursors] = useState<RemoteCursorView[]>([]);
   const sequenceRef = useRef(0);
@@ -202,7 +213,7 @@ export const useRemoteCursors = (surfaceRef: RefObject<HTMLElement | null>) => {
     };
 
     const getPosition = (event: PointerEvent) =>
-      normalizeCursorPosition(event, surface.getBoundingClientRect());
+      projectCursorPosition({ x: event.clientX, y: event.clientY });
 
     const flushMove = () => {
       moveTimer = undefined;
@@ -268,7 +279,7 @@ export const useRemoteCursors = (surfaceRef: RefObject<HTMLElement | null>) => {
         window.clearTimeout(moveTimer);
       }
     };
-  }, [socket, surfaceRef]);
+  }, [projectCursorPosition, socket, surfaceRef]);
 
   return cursors;
 };

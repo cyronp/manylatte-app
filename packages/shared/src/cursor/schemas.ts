@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { CANVAS_HEIGHT, CANVAS_WIDTH } from '../canvas/constants.js';
 import { hexColorSchema } from '../schemas/color.js';
 
 export const cursorRoomIdSchema = z
@@ -37,8 +38,8 @@ export const cursorSocketAuthSchema = z.object({
 export type CursorSocketAuth = z.infer<typeof cursorSocketAuthSchema>;
 
 export const cursorPositionSchema = z.object({
-  x: z.number().min(0).max(1),
-  y: z.number().min(0).max(1),
+  x: z.number().finite().min(0).max(CANVAS_WIDTH),
+  y: z.number().finite().min(0).max(CANVAS_HEIGHT),
 });
 
 export type CursorPosition = z.infer<typeof cursorPositionSchema>;
