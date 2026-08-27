@@ -1,5 +1,5 @@
 import { createRootRoute, Outlet } from '@tanstack/react-router';
-import { type FormEvent, useState } from 'react';
+import { type SubmitEvent, useState } from 'react';
 import { cursorUsernameSchema } from '@app/shared';
 
 import { SocketProvider } from '../components/socket-provider';
@@ -36,7 +36,13 @@ function RootLayout() {
     <SocketProvider username={username}>
       <div className="relative min-h-screen bg-neutral-100">
         <div className="absolute top-4 right-4 z-50">
-          <UserSettings username={username} />
+          <UserSettings
+            onUsernameChange={(nextUsername) => {
+              writeStoredCursorUsername(nextUsername);
+              setUsername(nextUsername);
+            }}
+            username={username}
+          />
         </div>
         <Outlet />
       </div>
@@ -52,7 +58,7 @@ function UsernamePrompt({ onSubmit }: UsernamePromptProps) {
   const [draft, setDraft] = useState('');
   const [hasError, setHasError] = useState(false);
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     const result = cursorUsernameSchema.safeParse(draft);
 
