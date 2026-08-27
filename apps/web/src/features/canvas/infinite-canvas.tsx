@@ -5,12 +5,28 @@ import {
   CANVAS_WIDTH,
 } from '@app/shared';
 import {
+  ArrowCounterClockwiseIcon,
+  CornersOutIcon,
+  MagnifyingGlassMinusIcon,
+  MagnifyingGlassPlusIcon,
+} from '@phosphor-icons/react';
+import {
   ReactFlow,
   type CoordinateExtent,
   type ReactFlowInstance,
+  useReactFlow,
   ViewportPortal,
 } from '@xyflow/react';
 import { useCallback } from 'react';
+
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
 
 const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 2;
@@ -23,6 +39,13 @@ const CANVAS_EXTENT: CoordinateExtent = [
 const FIRST_REGION_BOUNDS = {
   height: CANVAS_REGION_HEIGHT,
   width: CANVAS_REGION_WIDTH,
+  x: 0,
+  y: 0,
+};
+
+const CANVAS_BOUNDS = {
+  height: CANVAS_HEIGHT,
+  width: CANVAS_WIDTH,
   x: 0,
   y: 0,
 };
@@ -45,29 +68,75 @@ const CanvasSurface = () => (
   </ViewportPortal>
 );
 
+const CanvasContextMenu = () => {
+  const { fitBounds, zoomIn, zoomOut } = useReactFlow();
+
+  return (
+    <ContextMenuContent className="w-48">
+      <ContextMenuLabel>Canvas</ContextMenuLabel>
+      <ContextMenuSeparator />
+      <ContextMenuItem onSelect={() => void zoomIn({ duration: 150 })}>
+        <MagnifyingGlassPlusIcon />
+        Zoom in
+      </ContextMenuItem>
+      <ContextMenuItem onSelect={() => void zoomOut({ duration: 150 })}>
+        <MagnifyingGlassMinusIcon />
+        Zoom out
+      </ContextMenuItem>
+      <ContextMenuSeparator />
+      <ContextMenuItem
+        onSelect={() =>
+          void fitBounds(FIRST_REGION_BOUNDS, {
+            duration: 250,
+            padding: 0.02,
+          })
+        }
+      >
+        <ArrowCounterClockwiseIcon />
+        Reset view
+      </ContextMenuItem>
+      <ContextMenuItem
+        onSelect={() =>
+          void fitBounds(CANVAS_BOUNDS, { duration: 250, padding: 0.04 })
+        }
+      >
+        <CornersOutIcon />
+        Fit canvas
+      </ContextMenuItem>
+    </ContextMenuContent>
+  );
+};
+
 export const InfiniteCanvas = () => {
   const handleInit = useCallback((instance: ReactFlowInstance) => {
     void instance.fitBounds(FIRST_REGION_BOUNDS, { padding: 0.02 });
   }, []);
 
   return (
-    <ReactFlow
-      aria-label="ManyLatte canvas"
-      className="bg-slate-200"
-      maxZoom={MAX_ZOOM}
-      minZoom={MIN_ZOOM}
-      nodeExtent={CANVAS_EXTENT}
-      nodesConnectable={false}
-      nodesDraggable={false}
-      elementsSelectable={false}
-      onInit={handleInit}
-      panActivationKeyCode="Space"
-      panOnDrag={[1]}
-      proOptions={{ hideAttribution: true }}
-      translateExtent={CANVAS_EXTENT}
-      zoomOnDoubleClick={false}
-    >
-      <CanvasSurface />
-    </ReactFlow>
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div className="h-full w-full">
+          <ReactFlow
+            aria-label="ManyLatte canvas"
+            className="bg-slate-200"
+            maxZoom={MAX_ZOOM}
+            minZoom={MIN_ZOOM}
+            nodeExtent={CANVAS_EXTENT}
+            nodesConnectable={false}
+            nodesDraggable={false}
+            elementsSelectable={false}
+            onInit={handleInit}
+            panActivationKeyCode="Space"
+            panOnDrag={[1]}
+            proOptions={{ hideAttribution: true }}
+            translateExtent={CANVAS_EXTENT}
+            zoomOnDoubleClick={false}
+          >
+            <CanvasSurface />
+          </ReactFlow>
+        </div>
+      </ContextMenuTrigger>
+      <CanvasContextMenu />
+    </ContextMenu>
   );
 };
