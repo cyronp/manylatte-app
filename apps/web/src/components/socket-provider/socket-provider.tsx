@@ -36,8 +36,9 @@ interface SocketProviderProps extends PropsWithChildren {
 const SocketContext = createContext<SocketContextValue | undefined>(undefined);
 
 export const SocketProvider = ({ children, username }: SocketProviderProps) => {
-  const [socket] = useState(() =>
-    createCursorSocket(DEFAULT_CURSOR_ROOM_ID, username),
+  const socket = useMemo(
+    () => createCursorSocket(DEFAULT_CURSOR_ROOM_ID, username),
+    [username],
   );
   const [status, setStatus] = useState<SocketStatus>('connecting');
   const [error, setError] = useState<string>();
@@ -72,6 +73,10 @@ export const SocketProvider = ({ children, username }: SocketProviderProps) => {
 
   useEffect(() => {
     let reconnectOnUserActivity = false;
+
+    setError(undefined);
+    setStatus('connecting');
+    setUser(undefined);
 
     const handleConnect = () => {
       reconnectOnUserActivity = false;
@@ -151,6 +156,7 @@ export const SocketProvider = ({ children, username }: SocketProviderProps) => {
 
       if (colorUpdateTimer.current !== undefined) {
         clearTimeout(colorUpdateTimer.current);
+        colorUpdateTimer.current = undefined;
       }
 
       socket.disconnect();
