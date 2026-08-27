@@ -1,28 +1,30 @@
 import { describe, expect, it } from 'vitest';
+import { CANVAS_HEIGHT, CANVAS_WIDTH } from '@app/shared';
 
-import { normalizeCursorPosition } from './cursor-position';
+import { constrainCursorPosition } from './cursor-position';
 
-const bounds = { height: 400, left: 100, top: 50, width: 800 };
-
-describe('normalizeCursorPosition', () => {
-  it('maps viewport coordinates into a shared surface', () => {
-    expect(
-      normalizeCursorPosition({ clientX: 500, clientY: 250 }, bounds),
-    ).toEqual({ x: 0.5, y: 0.5 });
+describe('constrainCursorPosition', () => {
+  it('keeps positions inside the shared canvas unchanged', () => {
+    expect(constrainCursorPosition({ x: 2_400, y: 1_350 })).toEqual({
+      x: 2_400,
+      y: 1_350,
+    });
   });
 
-  it('clamps positions at the surface edges', () => {
-    expect(
-      normalizeCursorPosition({ clientX: 0, clientY: 1000 }, bounds),
-    ).toEqual({ x: 0, y: 1 });
+  it('clamps projected positions at the canvas edges', () => {
+    expect(constrainCursorPosition({ x: -10, y: CANVAS_HEIGHT + 10 })).toEqual({
+      x: 0,
+      y: CANVAS_HEIGHT,
+    });
   });
 
-  it('ignores surfaces without measurable dimensions', () => {
+  it('accepts the bottom-right canvas boundary', () => {
     expect(
-      normalizeCursorPosition(
-        { clientX: 100, clientY: 50 },
-        { ...bounds, width: 0 },
-      ),
-    ).toBeUndefined();
+      constrainCursorPosition({ x: CANVAS_WIDTH, y: CANVAS_HEIGHT }),
+    ).toEqual({ x: CANVAS_WIDTH, y: CANVAS_HEIGHT });
+  });
+
+  it('ignores non-finite projected positions', () => {
+    expect(constrainCursorPosition({ x: Number.NaN, y: 50 })).toBeUndefined();
   });
 });

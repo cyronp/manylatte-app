@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { CANVAS_HEIGHT, CANVAS_WIDTH } from '../canvas/constants.js';
 import {
   cursorInputSchema,
   cursorRoomIdSchema,
@@ -8,21 +9,34 @@ import {
 } from './schemas.js';
 
 describe('cursor contract', () => {
-  it('accepts normalized cursor input with a sequence', () => {
-    expect(cursorInputSchema.parse({ sequence: 3, x: 0.25, y: 0.75 })).toEqual({
+  it('accepts canvas world coordinates with a sequence', () => {
+    expect(
+      cursorInputSchema.parse({ sequence: 3, x: 2_400, y: 1_350 }),
+    ).toEqual({
       sequence: 3,
-      x: 0.25,
-      y: 0.75,
+      x: 2_400,
+      y: 1_350,
     });
   });
 
   it('rejects coordinates outside the shared surface', () => {
     expect(
-      cursorInputSchema.safeParse({ sequence: 0, x: 1.01, y: 0.5 }).success,
+      cursorInputSchema.safeParse({
+        sequence: 0,
+        x: CANVAS_WIDTH + 1,
+        y: 0,
+      }).success,
     ).toBe(false);
     expect(
-      cursorInputSchema.safeParse({ sequence: 0, x: 0.5, y: -0.01 }).success,
+      cursorInputSchema.safeParse({ sequence: 0, x: 0, y: -1 }).success,
     ).toBe(false);
+    expect(
+      cursorInputSchema.safeParse({
+        sequence: 0,
+        x: CANVAS_WIDTH,
+        y: CANVAS_HEIGHT,
+      }).success,
+    ).toBe(true);
   });
 
   it('keeps room identifiers URL and adapter friendly', () => {
