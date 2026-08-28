@@ -159,9 +159,12 @@ export const useRemoteCursors = (
     };
 
     const handleRemoval: Parameters<typeof socket.on<'cursor:remove'>>[1] = ({
+      reason,
       userId,
     }) => {
-      userMap.delete(userId);
+      if (reason === 'disconnect') {
+        userMap.delete(userId);
+      }
       clearCursor(userId);
     };
 
