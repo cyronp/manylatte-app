@@ -5,40 +5,27 @@ import {
   CANVAS_WIDTH,
 } from '@app/shared';
 import {
-  ChatIcon,
-  ScreencastIcon,
-  SmileyStickerIcon,
-} from '@phosphor-icons/react';
-import {
   ReactFlow,
   type CoordinateExtent,
-  type Node,
-  type NodeProps,
   type ReactFlowInstance,
   type XYPosition,
-  ViewportPortal,
   useNodesState,
   useReactFlow,
 } from '@xyflow/react';
-import type { EmojiClickData, EmojiStyle } from 'emoji-picker-react';
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useCallback, useState } from 'react';
 
+import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
+
+import { CanvasContextMenu } from './components/canvas-context-menu';
+import { CanvasSurface } from './components/canvas-surface';
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-} from '@/components/ui/context-menu';
+  EmojiCanvasNode,
+  type EmojiNode,
+} from './components/emoji-canvas-node';
+import { EmojiPickerPortal } from './components/emoji-picker-portal';
 
 const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 2;
-const EMOJI_PICKER_WIDTH = 320;
-const EMOJI_PICKER_HEIGHT = 400;
-const EMOJI_PICKER_VIEWPORT_PADDING = 12;
-const NATIVE_EMOJI_STYLE = 'native' as EmojiStyle;
-
-const EmojiPicker = lazy(() => import('emoji-picker-react'));
 
 const CANVAS_EXTENT: CoordinateExtent = [
   [0, 0],
@@ -52,156 +39,8 @@ const FIRST_REGION_BOUNDS = {
   y: 0,
 };
 
-type EmojiNode = Node<
-  {
-    emoji: string;
-    label: string;
-  },
-  'emoji'
->;
-
-const EmojiCanvasNode = ({ data }: NodeProps<EmojiNode>) => (
-  <div
-    aria-label={data.label}
-    className="rounded-lg p-1 text-5xl leading-none select-none"
-    role="img"
-    title={data.label}
-  >
-    <span aria-hidden="true">{data.emoji}</span>
-  </div>
-);
-
 const NODE_TYPES = {
   emoji: EmojiCanvasNode,
-};
-
-const CanvasSurface = () => (
-  <ViewportPortal>
-    <div
-      aria-hidden="true"
-      className="pointer-events-none absolute top-0 left-0 overflow-hidden bg-white outline-2 outline-slate-400/70"
-      data-canvas-height={CANVAS_HEIGHT}
-      data-canvas-width={CANVAS_WIDTH}
-      style={{
-        backgroundImage:
-          'radial-gradient(circle, rgb(148 163 184 / 0.55) 1.5px, transparent 1.5px)',
-        backgroundSize: '32px 32px',
-        height: CANVAS_HEIGHT,
-        width: CANVAS_WIDTH,
-        zIndex: -1,
-      }}
-    />
-  </ViewportPortal>
-);
-
-interface CanvasContextMenuProps {
-  onReactionSelect: () => void;
-}
-
-const CanvasContextMenu = ({ onReactionSelect }: CanvasContextMenuProps) => {
-  return (
-    <ContextMenuContent className="w-48">
-      <ContextMenuItem onSelect={onReactionSelect}>
-        <SmileyStickerIcon />
-        Reaction
-      </ContextMenuItem>
-      <ContextMenuItem>
-        <ChatIcon />
-        Message
-      </ContextMenuItem>
-      <ContextMenuItem>
-        <ScreencastIcon />
-        ScreenShare
-      </ContextMenuItem>
-    </ContextMenuContent>
-  );
-};
-
-interface EmojiPickerPortalProps {
-  anchorPosition: XYPosition;
-  onClose: () => void;
-  onEmojiSelect: (emoji: string, label: string) => void;
-}
-
-const EmojiPickerPortal = ({
-  anchorPosition,
-  onClose,
-  onEmojiSelect,
-}: EmojiPickerPortalProps) => {
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('resize', onClose);
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('resize', onClose);
-    };
-  }, [onClose]);
-
-  if (typeof document === 'undefined') {
-    return null;
-  }
-
-  const width = Math.min(
-    EMOJI_PICKER_WIDTH,
-    Math.max(1, window.innerWidth - EMOJI_PICKER_VIEWPORT_PADDING * 2),
-  );
-  const height = Math.min(
-    EMOJI_PICKER_HEIGHT,
-    Math.max(1, window.innerHeight - EMOJI_PICKER_VIEWPORT_PADDING * 2),
-  );
-  const left = Math.min(
-    Math.max(EMOJI_PICKER_VIEWPORT_PADDING, anchorPosition.x),
-    Math.max(0, window.innerWidth - width - EMOJI_PICKER_VIEWPORT_PADDING),
-  );
-  const top = Math.min(
-    Math.max(EMOJI_PICKER_VIEWPORT_PADDING, anchorPosition.y),
-    Math.max(0, window.innerHeight - height - EMOJI_PICKER_VIEWPORT_PADDING),
-  );
-
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50"
-      onContextMenu={(event) => event.preventDefault()}
-      onPointerDown={onClose}
-    >
-      <div
-        aria-label="Choose a reaction"
-        aria-modal="true"
-        className="absolute"
-        onPointerDown={(event) => event.stopPropagation()}
-        role="dialog"
-        style={{ height, left, top, width }}
-      >
-        <Suspense
-          fallback={
-            <div className="flex size-full items-center justify-center rounded-lg bg-popover text-sm text-muted-foreground shadow-md">
-              Loading emoji picker…
-            </div>
-          }
-        >
-          <EmojiPicker
-            emojiStyle={NATIVE_EMOJI_STYLE}
-            height={height}
-            lazyLoadEmojis
-            onEmojiClick={(emojiData: EmojiClickData) => {
-              onEmojiSelect(emojiData.emoji, emojiData.names[0] ?? 'Emoji');
-            }}
-            previewConfig={{ showPreview: false }}
-            searchPlaceholder="Search emojis"
-            width={width}
-          />
-        </Suspense>
-      </div>
-    </div>,
-    document.body,
-  );
 };
 
 export const InfiniteCanvas = () => {
