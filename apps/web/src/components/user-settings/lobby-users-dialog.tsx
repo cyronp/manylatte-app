@@ -19,6 +19,12 @@ export function LobbyUsersDialog({
   users,
   userID,
 }: LobbyUsersDialogProps) {
+  const orderedUsers = [...(users ?? [])].sort((firstUser, secondUser) => {
+    if (firstUser.userId === userID) return -1;
+    if (secondUser.userId === userID) return 1;
+    return 0;
+  });
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -26,9 +32,9 @@ export function LobbyUsersDialog({
           <DialogTitle>Users in this Lobby</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-4">
-          {users?.map((user, index) => (
+          {orderedUsers.map((user) => (
             <div
-              key={index}
+              key={user.userId}
               className="flex flex-row justify-between items-center hover:bg-neutral-100 py-1.5 px-2 rounded-lg transition-colors duration-200"
             >
               <div className="flex flex-row items-center gap-2">
