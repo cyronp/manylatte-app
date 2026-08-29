@@ -1,5 +1,6 @@
 import {
   CaretDownIcon,
+  DoorOpenIcon,
   GearIcon,
   PaintBrushIcon,
   UserIcon,
@@ -131,6 +132,10 @@ export default function UserMenu({
             <DropdownMenuItem>
               <GearIcon />
               Settings
+            </DropdownMenuItem>
+            <DropdownMenuItem variant='destructive'>
+              <DoorOpenIcon/>
+              Leave
             </DropdownMenuItem>
           </DropdownMenuGroup>
         </DropdownMenuContent>

@@ -5,16 +5,14 @@ import {
   CANVAS_WIDTH,
 } from '@app/shared';
 import {
-  ArrowCounterClockwiseIcon,
-  CornersOutIcon,
-  MagnifyingGlassMinusIcon,
-  MagnifyingGlassPlusIcon,
+  ChatIcon,
+  ScreencastIcon,
+  SmileyStickerIcon,
 } from '@phosphor-icons/react';
 import {
   ReactFlow,
   type CoordinateExtent,
   type ReactFlowInstance,
-  useReactFlow,
   ViewportPortal,
 } from '@xyflow/react';
 import { useCallback } from 'react';
@@ -23,8 +21,6 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
-  ContextMenuLabel,
-  ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 
@@ -39,13 +35,6 @@ const CANVAS_EXTENT: CoordinateExtent = [
 const FIRST_REGION_BOUNDS = {
   height: CANVAS_REGION_HEIGHT,
   width: CANVAS_REGION_WIDTH,
-  x: 0,
-  y: 0,
-};
-
-const CANVAS_BOUNDS = {
-  height: CANVAS_HEIGHT,
-  width: CANVAS_WIDTH,
   x: 0,
   y: 0,
 };
@@ -69,39 +58,19 @@ const CanvasSurface = () => (
 );
 
 const CanvasContextMenu = () => {
-  const { fitBounds, zoomIn, zoomOut } = useReactFlow();
-
   return (
     <ContextMenuContent className="w-48">
-      <ContextMenuLabel>Canvas</ContextMenuLabel>
-      <ContextMenuSeparator />
-      <ContextMenuItem onSelect={() => void zoomIn({ duration: 150 })}>
-        <MagnifyingGlassPlusIcon />
-        Zoom in
+      <ContextMenuItem>
+        <SmileyStickerIcon />
+        Reaction
       </ContextMenuItem>
-      <ContextMenuItem onSelect={() => void zoomOut({ duration: 150 })}>
-        <MagnifyingGlassMinusIcon />
-        Zoom out
+      <ContextMenuItem>
+        <ChatIcon />
+        Message
       </ContextMenuItem>
-      <ContextMenuSeparator />
-      <ContextMenuItem
-        onSelect={() =>
-          void fitBounds(FIRST_REGION_BOUNDS, {
-            duration: 250,
-            padding: 0.02,
-          })
-        }
-      >
-        <ArrowCounterClockwiseIcon />
-        Reset view
-      </ContextMenuItem>
-      <ContextMenuItem
-        onSelect={() =>
-          void fitBounds(CANVAS_BOUNDS, { duration: 250, padding: 0.04 })
-        }
-      >
-        <CornersOutIcon />
-        Fit canvas
+      <ContextMenuItem>
+        <ScreencastIcon />
+        ScreenShare
       </ContextMenuItem>
     </ContextMenuContent>
   );
@@ -128,9 +97,12 @@ export const InfiniteCanvas = () => {
             onInit={handleInit}
             panActivationKeyCode="Space"
             panOnDrag={[1]}
+            panOnScroll
             proOptions={{ hideAttribution: true }}
             translateExtent={CANVAS_EXTENT}
+            zoomActivationKeyCode="Control"
             zoomOnDoubleClick={false}
+            zoomOnScroll={false}
           >
             <CanvasSurface />
           </ReactFlow>
