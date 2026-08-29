@@ -5,28 +5,24 @@ import {
   CANVAS_WIDTH,
 } from '@app/shared';
 import {
-  ArrowCounterClockwiseIcon,
-  CornersOutIcon,
-  MagnifyingGlassMinusIcon,
-  MagnifyingGlassPlusIcon,
-} from '@phosphor-icons/react';
-import {
   ReactFlow,
   type CoordinateExtent,
   type ReactFlowInstance,
+  type XYPosition,
+  useNodesState,
   useReactFlow,
-  ViewportPortal,
 } from '@xyflow/react';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 
+import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
+
+import { CanvasContextMenu } from './components/canvas-context-menu';
+import { CanvasSurface } from './components/canvas-surface';
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuLabel,
-  ContextMenuSeparator,
-  ContextMenuTrigger,
-} from '@/components/ui/context-menu';
+  EmojiCanvasNode,
+  type EmojiNode,
+} from './components/emoji-canvas-node';
+import { EmojiPickerPortal } from './components/emoji-picker-portal';
 
 const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 2;
@@ -43,100 +39,103 @@ const FIRST_REGION_BOUNDS = {
   y: 0,
 };
 
-const CANVAS_BOUNDS = {
-  height: CANVAS_HEIGHT,
-  width: CANVAS_WIDTH,
-  x: 0,
-  y: 0,
-};
-
-const CanvasSurface = () => (
-  <ViewportPortal>
-    <div
-      aria-hidden="true"
-      className="pointer-events-none absolute top-0 left-0 overflow-hidden bg-white shadow-2xl outline-2 outline-slate-400/70"
-      data-canvas-height={CANVAS_HEIGHT}
-      data-canvas-width={CANVAS_WIDTH}
-      style={{
-        backgroundImage:
-          'radial-gradient(circle, rgb(148 163 184 / 0.55) 1.5px, transparent 1.5px)',
-        backgroundSize: '32px 32px',
-        height: CANVAS_HEIGHT,
-        width: CANVAS_WIDTH,
-      }}
-    />
-  </ViewportPortal>
-);
-
-const CanvasContextMenu = () => {
-  const { fitBounds, zoomIn, zoomOut } = useReactFlow();
-
-  return (
-    <ContextMenuContent className="w-48">
-      <ContextMenuLabel>Canvas</ContextMenuLabel>
-      <ContextMenuSeparator />
-      <ContextMenuItem onSelect={() => void zoomIn({ duration: 150 })}>
-        <MagnifyingGlassPlusIcon />
-        Zoom in
-      </ContextMenuItem>
-      <ContextMenuItem onSelect={() => void zoomOut({ duration: 150 })}>
-        <MagnifyingGlassMinusIcon />
-        Zoom out
-      </ContextMenuItem>
-      <ContextMenuSeparator />
-      <ContextMenuItem
-        onSelect={() =>
-          void fitBounds(FIRST_REGION_BOUNDS, {
-            duration: 250,
-            padding: 0.02,
-          })
-        }
-      >
-        <ArrowCounterClockwiseIcon />
-        Reset view
-      </ContextMenuItem>
-      <ContextMenuItem
-        onSelect={() =>
-          void fitBounds(CANVAS_BOUNDS, { duration: 250, padding: 0.04 })
-        }
-      >
-        <CornersOutIcon />
-        Fit canvas
-      </ContextMenuItem>
-    </ContextMenuContent>
-  );
+const NODE_TYPES = {
+  emoji: EmojiCanvasNode,
 };
 
 export const InfiniteCanvas = () => {
-  const handleInit = useCallback((instance: ReactFlowInstance) => {
+  const { screenToFlowPosition } = useReactFlow();
+  const [nodes, setNodes, onNodesChange] = useNodesState<EmojiNode>([]);
+  const [contextMenuOpen, setContextMenuOpen] = useState(false);
+  const [contextMenuPosition, setContextMenuPosition] = useState<XYPosition>();
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+
+  const handleInit = useCallback((instance: ReactFlowInstance<EmojiNode>) => {
     void instance.fitBounds(FIRST_REGION_BOUNDS, { padding: 0.02 });
   }, []);
 
+  const handleEmojiSelect = useCallback(
+    (emoji: string, label: string) => {
+      if (!contextMenuPosition) {
+        return;
+      }
+
+      const position = screenToFlowPosition(contextMenuPosition);
+
+      setNodes((currentNodes) => [
+        ...currentNodes,
+        {
+          ariaLabel: label,
+          data: { emoji, label },
+          id: crypto.randomUUID(),
+          origin: [0.5, 0.5],
+          position,
+          type: 'emoji',
+        },
+      ]);
+      setEmojiPickerOpen(false);
+    },
+    [contextMenuPosition, screenToFlowPosition, setNodes],
+  );
+
+  const handleReactionSelect = useCallback(() => {
+    setContextMenuOpen(false);
+
+    if (contextMenuPosition) {
+      setEmojiPickerOpen(true);
+    }
+  }, [contextMenuPosition]);
+
+  const handleEmojiPickerClose = useCallback(() => {
+    setEmojiPickerOpen(false);
+  }, []);
+
   return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>
-        <div className="h-full w-full">
-          <ReactFlow
-            aria-label="ManyLatte canvas"
-            className="bg-slate-200"
-            maxZoom={MAX_ZOOM}
-            minZoom={MIN_ZOOM}
-            nodeExtent={CANVAS_EXTENT}
-            nodesConnectable={false}
-            nodesDraggable={false}
-            elementsSelectable={false}
-            onInit={handleInit}
-            panActivationKeyCode="Space"
-            panOnDrag={[1]}
-            proOptions={{ hideAttribution: true }}
-            translateExtent={CANVAS_EXTENT}
-            zoomOnDoubleClick={false}
+    <>
+      <ContextMenu open={contextMenuOpen} onOpenChange={setContextMenuOpen}>
+        <ContextMenuTrigger asChild>
+          <div
+            className="h-full w-full"
+            onContextMenu={(event) => {
+              setContextMenuPosition({ x: event.clientX, y: event.clientY });
+            }}
           >
-            <CanvasSurface />
-          </ReactFlow>
-        </div>
-      </ContextMenuTrigger>
-      <CanvasContextMenu />
-    </ContextMenu>
+            <ReactFlow
+              aria-label="ManyLatte canvas"
+              className="bg-slate-200"
+              elementsSelectable
+              maxZoom={MAX_ZOOM}
+              minZoom={MIN_ZOOM}
+              nodeExtent={CANVAS_EXTENT}
+              nodeTypes={NODE_TYPES}
+              nodes={nodes}
+              nodesConnectable={false}
+              nodesDraggable
+              onInit={handleInit}
+              onNodesChange={onNodesChange}
+              panActivationKeyCode="Space"
+              panOnDrag={[1]}
+              panOnScroll
+              proOptions={{ hideAttribution: true }}
+              translateExtent={CANVAS_EXTENT}
+              zoomActivationKeyCode="Control"
+              zoomOnDoubleClick={false}
+              zoomOnScroll={false}
+            >
+              <CanvasSurface />
+            </ReactFlow>
+          </div>
+        </ContextMenuTrigger>
+        <CanvasContextMenu onReactionSelect={handleReactionSelect} />
+      </ContextMenu>
+
+      {emojiPickerOpen && contextMenuPosition && (
+        <EmojiPickerPortal
+          anchorPosition={contextMenuPosition}
+          onClose={handleEmojiPickerClose}
+          onEmojiSelect={handleEmojiSelect}
+        />
+      )}
+    </>
   );
 };

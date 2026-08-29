@@ -27,6 +27,7 @@ interface SocketContextValue {
   socket: CursorSocket;
   status: SocketStatus;
   user?: CursorUser;
+  users: CursorUser[];
 }
 
 interface SocketProviderProps extends PropsWithChildren {
@@ -43,6 +44,7 @@ export const SocketProvider = ({ children, username }: SocketProviderProps) => {
   const [status, setStatus] = useState<SocketStatus>('connecting');
   const [error, setError] = useState<string>();
   const [user, setUser] = useState<CursorUser>();
+  const [users, setUsers] = useState<CursorUser[]>([]);
   const colorUpdateTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
@@ -58,6 +60,13 @@ export const SocketProvider = ({ children, username }: SocketProviderProps) => {
       setUser((currentUser) =>
         currentUser ? { ...currentUser, color: result.data } : currentUser,
       );
+      setUsers((currentUsers) =>
+        currentUsers.map((currentUser) =>
+          currentUser.userId === user?.userId
+            ? { ...currentUser, color: result.data }
+            : currentUser,
+        ),
+      );
 
       if (colorUpdateTimer.current !== undefined) {
         clearTimeout(colorUpdateTimer.current);
@@ -68,7 +77,7 @@ export const SocketProvider = ({ children, username }: SocketProviderProps) => {
         socket.emit(CURSOR_EVENTS.color, { color: result.data });
       }, USER_COLOR_UPDATE_DEBOUNCE_MS);
     },
-    [socket],
+    [socket, user?.userId],
   );
 
   useEffect(() => {
@@ -77,6 +86,7 @@ export const SocketProvider = ({ children, username }: SocketProviderProps) => {
     setError(undefined);
     setStatus('connecting');
     setUser(undefined);
+    setUsers([]);
 
     const handleConnect = () => {
       reconnectOnUserActivity = false;
@@ -90,6 +100,7 @@ export const SocketProvider = ({ children, username }: SocketProviderProps) => {
         reconnectOnUserActivity = false;
       }
       setUser(undefined);
+      setUsers([]);
       setStatus('disconnected');
     };
     const handleDisconnectNotice: Parameters<
@@ -117,6 +128,7 @@ export const SocketProvider = ({ children, username }: SocketProviderProps) => {
       session,
     ) => {
       setUser(session.self);
+      setUsers(session.users);
     };
     const handlePresence: Parameters<typeof socket.on<'cursor:presence'>>[1] = (
       nextUser,
@@ -124,6 +136,36 @@ export const SocketProvider = ({ children, username }: SocketProviderProps) => {
       setUser((currentUser) =>
         currentUser?.userId === nextUser.userId ? nextUser : currentUser,
       );
+      setUsers((currentUsers) => {
+        const userIndex = currentUsers.findIndex(
+          ({ userId }) => userId === nextUser.userId,
+        );
+
+        if (userIndex === -1) {
+          return [...currentUsers, nextUser];
+        }
+
+        return currentUsers.map((currentUser, index) =>
+          index === userIndex ? nextUser : currentUser,
+        );
+      });
+    };
+    const handleRemoval: Parameters<typeof socket.on<'cursor:remove'>>[1] = ({
+      reason,
+      userId,
+    }) => {
+      if (reason === 'idle') {
+        return;
+      }
+
+      setUsers((currentUsers) =>
+        currentUsers.filter((currentUser) => currentUser.userId !== userId),
+      );
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        handleUserActivity();
+      }
     };
 
     socket.on('connect', handleConnect);
@@ -132,6 +174,7 @@ export const SocketProvider = ({ children, username }: SocketProviderProps) => {
     socket.io.on('reconnect_attempt', handleReconnectAttempt);
     socket.on(CURSOR_EVENTS.session, handleSession);
     socket.on(CURSOR_EVENTS.presence, handlePresence);
+    socket.on(CURSOR_EVENTS.remove, handleRemoval);
     socket.on(CURSOR_EVENTS.disconnect, handleDisconnectNotice);
     window.addEventListener('keydown', handleUserActivity);
     window.addEventListener('pointerdown', handleUserActivity, {
@@ -140,6 +183,10 @@ export const SocketProvider = ({ children, username }: SocketProviderProps) => {
     window.addEventListener('pointermove', handleUserActivity, {
       passive: true,
     });
+    window.addEventListener('focus', handleUserActivity);
+    window.addEventListener('pageshow', handleUserActivity);
+    window.addEventListener('online', handleUserActivity);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     socket.connect();
 
     return () => {
@@ -149,10 +196,15 @@ export const SocketProvider = ({ children, username }: SocketProviderProps) => {
       socket.io.off('reconnect_attempt', handleReconnectAttempt);
       socket.off(CURSOR_EVENTS.session, handleSession);
       socket.off(CURSOR_EVENTS.presence, handlePresence);
+      socket.off(CURSOR_EVENTS.remove, handleRemoval);
       socket.off(CURSOR_EVENTS.disconnect, handleDisconnectNotice);
       window.removeEventListener('keydown', handleUserActivity);
       window.removeEventListener('pointerdown', handleUserActivity);
       window.removeEventListener('pointermove', handleUserActivity);
+      window.removeEventListener('focus', handleUserActivity);
+      window.removeEventListener('pageshow', handleUserActivity);
+      window.removeEventListener('online', handleUserActivity);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
 
       if (colorUpdateTimer.current !== undefined) {
         clearTimeout(colorUpdateTimer.current);
@@ -164,8 +216,8 @@ export const SocketProvider = ({ children, username }: SocketProviderProps) => {
   }, [socket]);
 
   const value = useMemo(
-    () => ({ error, setUserColor, socket, status, user }),
-    [error, setUserColor, socket, status, user],
+    () => ({ error, setUserColor, socket, status, user, users }),
+    [error, setUserColor, socket, status, user, users],
   );
 
   return (
