@@ -50,7 +50,9 @@ export function LobbyUsersDialog({
                         <GavelIcon />
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>Kick User</TooltipContent>
+                    <TooltipContent>
+                      <p>Kick User</p>
+                    </TooltipContent>
                   </Tooltip>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -58,7 +60,9 @@ export function LobbyUsersDialog({
                         <CrownIcon />
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>Delegate Owner</TooltipContent>
+                    <TooltipContent>
+                      <p>Delegate Owner</p>
+                    </TooltipContent>
                   </Tooltip>
                 </div>
               ) : (

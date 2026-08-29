@@ -26,7 +26,7 @@ import { LatteUserIcon } from '../icons/user-icon';
 import { LobbyUsersDialog } from './lobby-users-dialog';
 import { UsernameDialog } from './username-dialog';
 
-interface UserSettingsProps {
+interface UserMenuProps {
   onUsernameChange: (username: string) => void;
   username: string;
 }
@@ -34,10 +34,10 @@ interface UserSettingsProps {
 const MAX_VISIBLE_USERS = 3;
 type ActiveDialog = 'lobbyusers' | 'username' | null;
 
-export default function UserSettings({
+export default function UserMenu({
   onUsernameChange,
   username,
-}: UserSettingsProps) {
+}: UserMenuProps) {
   const { setUserColor, user, users } = useSocket();
   const [activeDialog, setActiveDialog] = useState<ActiveDialog>(null);
   const hasUserOverflow = users.length > MAX_VISIBLE_USERS;
@@ -60,7 +60,7 @@ export default function UserSettings({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
-            aria-label="Open user settings"
+            aria-label="Open user menu"
             variant="outline"
             className="flex flex-row gap-3 py-0.5 px-2 rounded-full border border-border"
           >

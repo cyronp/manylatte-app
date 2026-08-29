@@ -3,7 +3,7 @@ import { type SubmitEvent, useState } from 'react';
 import { cursorUsernameSchema } from '@app/shared';
 
 import { SocketProvider } from '../components/socket-provider';
-import UserSettings from '../components/user-settings/user-settings';
+import UserMenu from '../components/user-menu/user-menu';
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -35,7 +35,7 @@ function RootLayout() {
         <SocketProvider username={username}>
           <div className="relative min-h-screen bg-neutral-100">
             <div className="absolute top-4 right-4 z-50">
-              <UserSettings
+              <UserMenu
                 onUsernameChange={(nextUsername) => {
                   writeStoredCursorUsername(nextUsername);
                   setUsername(nextUsername);
