@@ -145,6 +145,7 @@ export default function UserSettings({
         open={activeDialog === 'lobbyusers'}
         onOpenChange={(isOpen) => setActiveDialog(isOpen ? 'lobbyusers' : null)}
         users={users}
+        userID={user?.userId}
       />
     </>
   );

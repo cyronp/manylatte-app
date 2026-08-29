@@ -7,6 +7,7 @@ import UserSettings from '../components/user-settings/user-settings';
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import {
   readStoredCursorUsername,
   writeStoredCursorUsername,
@@ -21,32 +22,32 @@ const USERNAME_ERROR_ID = 'username-error';
 function RootLayout() {
   const [username, setUsername] = useState(readStoredCursorUsername);
 
-  if (!username) {
-    return (
-      <UsernamePrompt
-        onSubmit={(nextUsername) => {
-          writeStoredCursorUsername(nextUsername);
-          setUsername(nextUsername);
-        }}
-      />
-    );
-  }
-
   return (
-    <SocketProvider username={username}>
-      <div className="relative min-h-screen bg-neutral-100">
-        <div className="absolute top-4 right-4 z-50">
-          <UserSettings
-            onUsernameChange={(nextUsername) => {
-              writeStoredCursorUsername(nextUsername);
-              setUsername(nextUsername);
-            }}
-            username={username}
-          />
-        </div>
-        <Outlet />
-      </div>
-    </SocketProvider>
+    <TooltipProvider>
+      {!username ? (
+        <UsernamePrompt
+          onSubmit={(nextUsername) => {
+            writeStoredCursorUsername(nextUsername);
+            setUsername(nextUsername);
+          }}
+        />
+      ) : (
+        <SocketProvider username={username}>
+          <div className="relative min-h-screen bg-neutral-100">
+            <div className="absolute top-4 right-4 z-50">
+              <UserSettings
+                onUsernameChange={(nextUsername) => {
+                  writeStoredCursorUsername(nextUsername);
+                  setUsername(nextUsername);
+                }}
+                username={username}
+              />
+            </div>
+            <Outlet />
+          </div>
+        </SocketProvider>
+      )}
+    </TooltipProvider>
   );
 }
 
