@@ -35,7 +35,7 @@ export function LobbyUsersDialog({
           {orderedUsers.map((user) => (
             <div
               key={user.userId}
-              className="flex flex-row justify-between items-center hover:bg-neutral-100 py-1.5 px-2 rounded-lg transition-colors duration-200"
+              className="flex flex-row items-center justify-between rounded-lg px-2 py-1.5 transition-colors duration-200 hover:bg-muted"
             >
               <div className="flex flex-row items-center gap-2">
                 <LatteUserIcon backgroundColor={user.color} />
