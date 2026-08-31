@@ -25,6 +25,7 @@ import {
 
 import { LatteUserIcon } from '../icons/user-icon';
 import { LobbyUsersDialog } from './lobby-users-dialog';
+import { SettingsDialog } from './settings-dialog';
 import { UsernameDialog } from './username-dialog';
 
 interface UserMenuProps {
@@ -33,7 +34,7 @@ interface UserMenuProps {
 }
 
 const MAX_VISIBLE_USERS = 3;
-type ActiveDialog = 'lobbyusers' | 'username' | null;
+type ActiveDialog = 'lobbyusers' | 'settings' | 'username' | null;
 
 export default function UserMenu({
   onUsernameChange,
@@ -63,7 +64,7 @@ export default function UserMenu({
           <Button
             aria-label="Open user menu"
             variant="outline"
-            className="flex flex-row gap-3 py-0.5 px-2 rounded-full border border-border"
+            className="flex flex-row gap-3 rounded-full border-border bg-popover px-2 py-0.5 text-popover-foreground shadow-sm hover:bg-muted dark:border-border dark:bg-popover dark:hover:bg-muted"
           >
             <span
               className="isolate flex -space-x-2"
@@ -81,7 +82,7 @@ export default function UserMenu({
                     className={
                       visibleUser.userId === user?.userId
                         ? 'rounded-full'
-                        : 'rounded-full ring-2 ring-background'
+                        : 'rounded-full ring-2 ring-popover'
                     }
                     title={visibleUser.username}
                   />
@@ -90,7 +91,7 @@ export default function UserMenu({
               {hasUserOverflow ? (
                 <span
                   aria-label={`${overflowCount} more users`}
-                  className="relative flex size-6 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-xs font-bold text-muted-foreground ring-2 ring-background"
+                  className="relative flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground ring-2 ring-popover"
                   style={{
                     zIndex: visibleUsers.length + 1,
                   }}
@@ -129,12 +130,12 @@ export default function UserMenu({
               Lobby Users
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setActiveDialog('settings')}>
               <GearIcon />
               Settings
             </DropdownMenuItem>
-            <DropdownMenuItem variant='destructive'>
-              <DoorOpenIcon/>
+            <DropdownMenuItem variant="destructive">
+              <DoorOpenIcon />
               Leave
             </DropdownMenuItem>
           </DropdownMenuGroup>
@@ -151,6 +152,10 @@ export default function UserMenu({
         onOpenChange={(isOpen) => setActiveDialog(isOpen ? 'lobbyusers' : null)}
         users={users}
         userID={user?.userId}
+      />
+      <SettingsDialog
+        onOpenChange={(isOpen) => setActiveDialog(isOpen ? 'settings' : null)}
+        open={activeDialog === 'settings'}
       />
     </>
   );
