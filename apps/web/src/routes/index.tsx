@@ -47,10 +47,14 @@ function CanvasPage() {
       {status !== 'connected' && (
         <div
           aria-live="polite"
-          className="flex flex-row gap-2 items-center absolute right-4 bottom-4 z-60 rounded-full bg-primary px-3 py-1.5 text-sm text-white"
+          className="absolute right-4 bottom-4 z-60 flex flex-row items-center gap-2 rounded-full bg-primary px-3 py-1.5 text-sm text-primary-foreground"
           title={error}
         >
-          <CircleNotchIcon className='animate-spin animation-duration-[2.5s]' weight='bold' size={18}/>
+          <CircleNotchIcon
+            className="animate-spin animation-duration-[2.5s]"
+            weight="bold"
+            size={18}
+          />
           {status === 'connecting' ? 'Connecting…' : 'Reconnecting…'}
         </div>
       )}

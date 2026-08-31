@@ -33,7 +33,7 @@ function RootLayout() {
         />
       ) : (
         <SocketProvider username={username}>
-          <div className="relative min-h-screen bg-neutral-100">
+          <div className="relative min-h-screen bg-background">
             <div className="absolute top-4 right-4 z-50">
               <UserMenu
                 onUsernameChange={(nextUsername) => {

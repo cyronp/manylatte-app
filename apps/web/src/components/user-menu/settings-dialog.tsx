@@ -1,12 +1,7 @@
 import { GearIcon } from '@phosphor-icons/react';
-import { useEffect, useState } from 'react';
 
-import {
-  type Appearance,
-  readStoredAppearance,
-  shouldUseDarkAppearance,
-  writeStoredAppearance,
-} from '@/lib/appearance-storage';
+import { useAppearance } from '@/components/appearance-provider';
+import type { Appearance } from '@/lib/appearance-storage';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { ScrollArea } from '../ui/scroll-area';
@@ -24,26 +19,10 @@ interface SettingsDialogProps {
 }
 
 export function SettingsDialog({ onOpenChange, open }: SettingsDialogProps) {
-  const [appearance, setAppearance] =
-    useState<Appearance>(readStoredAppearance);
-
-  useEffect(() => {
-    const colorScheme = window.matchMedia('(prefers-color-scheme: dark)');
-    const applyAppearance = () => {
-      document.documentElement.classList.toggle(
-        'dark',
-        shouldUseDarkAppearance(appearance, colorScheme.matches),
-      );
-    };
-
-    applyAppearance();
-    colorScheme.addEventListener('change', applyAppearance);
-    return () => colorScheme.removeEventListener('change', applyAppearance);
-  }, [appearance]);
+  const { appearance, setAppearance } = useAppearance();
 
   const handleAppearanceChange = (nextAppearance: Appearance) => {
     setAppearance(nextAppearance);
-    writeStoredAppearance(nextAppearance);
   };
 
   return (
