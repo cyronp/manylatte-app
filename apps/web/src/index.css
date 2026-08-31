@@ -8,6 +8,7 @@
 
 :root {
   font-family: 'Figtree', sans-serif;
+  color-scheme: light;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -40,6 +41,10 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  --canvas-background: oklch(1 0 0);
+  --canvas-border: oklch(0.704 0.04 256.788 / 70%);
+  --canvas-grid: oklch(0.704 0.04 256.788 / 55%);
+  --canvas-surround: oklch(0.929 0.013 255.508);
 }
 
 @theme inline {
@@ -76,6 +81,10 @@
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
+  --color-canvas-background: var(--canvas-background);
+  --color-canvas-border: var(--canvas-border);
+  --color-canvas-grid: var(--canvas-grid);
+  --color-canvas-surround: var(--canvas-surround);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -86,6 +95,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
@@ -117,6 +127,10 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  --canvas-background: oklch(0.205 0 0);
+  --canvas-border: oklch(0.556 0 0 / 70%);
+  --canvas-grid: oklch(0.556 0 0 / 55%);
+  --canvas-surround: oklch(0.145 0 0);
 }
 
 @layer base {

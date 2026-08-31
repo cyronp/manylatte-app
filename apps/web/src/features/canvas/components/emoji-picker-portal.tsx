@@ -1,12 +1,20 @@
 import type { XYPosition } from '@xyflow/react';
-import type { EmojiClickData, EmojiStyle } from 'emoji-picker-react';
+import type {
+  EmojiClickData,
+  EmojiStyle,
+  Theme,
+} from 'emoji-picker-react';
 import { lazy, Suspense, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+
+import { useAppearance } from '@/components/appearance-provider';
 
 const EMOJI_PICKER_WIDTH = 320;
 const EMOJI_PICKER_HEIGHT = 400;
 const EMOJI_PICKER_VIEWPORT_PADDING = 12;
 const NATIVE_EMOJI_STYLE = 'native' as EmojiStyle;
+const DARK_EMOJI_THEME = 'dark' as Theme;
+const LIGHT_EMOJI_THEME = 'light' as Theme;
 
 const EmojiPicker = lazy(() => import('emoji-picker-react'));
 
@@ -21,6 +29,8 @@ export const EmojiPickerPortal = ({
   onClose,
   onEmojiSelect,
 }: EmojiPickerPortalProps) => {
+  const { isDark } = useAppearance();
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -88,6 +98,7 @@ export const EmojiPickerPortal = ({
             }}
             previewConfig={{ showPreview: false }}
             searchPlaceholder="Search emojis"
+            theme={isDark ? DARK_EMOJI_THEME : LIGHT_EMOJI_THEME}
             width={width}
           />
         </Suspense>

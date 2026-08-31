@@ -102,7 +102,7 @@ export const InfiniteCanvas = () => {
           >
             <ReactFlow
               aria-label="ManyLatte canvas"
-              className="bg-slate-200"
+              className="bg-canvas-surround"
               elementsSelectable
               maxZoom={MAX_ZOOM}
               minZoom={MIN_ZOOM}
