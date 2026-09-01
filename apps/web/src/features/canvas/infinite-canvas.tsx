@@ -1,8 +1,10 @@
 import {
+  CANVAS_EVENTS,
   CANVAS_HEIGHT,
   CANVAS_REGION_HEIGHT,
   CANVAS_REGION_WIDTH,
   CANVAS_WIDTH,
+  type CanvasNode as SyncedCanvasNode,
 } from '@app/shared';
 import {
   ReactFlow,
@@ -12,8 +14,9 @@ import {
   useNodesState,
   useReactFlow,
 } from '@xyflow/react';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
+import { useSocket } from '@/components/socket-provider';
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 
 import { CanvasContextMenu } from './components/canvas-context-menu';
@@ -23,6 +26,10 @@ import {
   type EmojiNode,
 } from './components/emoji-canvas-node';
 import { EmojiPickerPortal } from './components/emoji-picker-portal';
+import {
+  MessageCanvasNode,
+  type MessageNode,
+} from './components/message-canvas-node';
 
 const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 2;
@@ -41,18 +48,98 @@ const FIRST_REGION_BOUNDS = {
 
 const NODE_TYPES = {
   emoji: EmojiCanvasNode,
+  message: MessageCanvasNode,
+};
+
+type FlowCanvasNode = EmojiNode | MessageNode;
+
+const toFlowCanvasNode = (node: SyncedCanvasNode): FlowCanvasNode => {
+  if (node.type === 'emoji') {
+    return {
+      ...node,
+      ariaLabel: node.data.label,
+      origin: [0.5, 0.5],
+    };
+  }
+
+  return {
+    ...node,
+    data: {},
+    origin: [0.5, 0.5],
+  };
+};
+
+const toSyncedCanvasNode = (
+  node: FlowCanvasNode,
+): SyncedCanvasNode | undefined => {
+  if (node.type === 'emoji') {
+    return {
+      data: node.data,
+      id: node.id,
+      position: node.position,
+      type: node.type,
+    };
+  }
+
+  if (node.type === 'message') {
+    return {
+      data: {},
+      id: node.id,
+      position: node.position,
+      type: node.type,
+    };
+  }
 };
 
 export const InfiniteCanvas = () => {
+  const { socket } = useSocket();
   const { screenToFlowPosition } = useReactFlow();
-  const [nodes, setNodes, onNodesChange] = useNodesState<EmojiNode>([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<FlowCanvasNode>([]);
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState<XYPosition>();
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
 
-  const handleInit = useCallback((instance: ReactFlowInstance<EmojiNode>) => {
-    void instance.fitBounds(FIRST_REGION_BOUNDS, { padding: 0.02 });
-  }, []);
+  const handleInit = useCallback(
+    (instance: ReactFlowInstance<FlowCanvasNode>) => {
+      void instance.fitBounds(FIRST_REGION_BOUNDS, { padding: 0.02 });
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const handleSnapshot: Parameters<
+      typeof socket.on<'canvas:snapshot'>
+    >[1] = ({ nodes: syncedNodes }) => {
+      setNodes(syncedNodes.map(toFlowCanvasNode));
+    };
+    const handleNodeUpsert: Parameters<
+      typeof socket.on<'canvas:node-upsert'>
+    >[1] = (syncedNode) => {
+      const nextNode = toFlowCanvasNode(syncedNode);
+
+      setNodes((currentNodes) => {
+        const hasNode = currentNodes.some(({ id }) => id === nextNode.id);
+
+        if (!hasNode) {
+          return [...currentNodes, nextNode];
+        }
+
+        return currentNodes.map((currentNode) =>
+          currentNode.id === nextNode.id
+            ? { ...currentNode, ...nextNode }
+            : currentNode,
+        );
+      });
+    };
+
+    socket.on(CANVAS_EVENTS.snapshot, handleSnapshot);
+    socket.on(CANVAS_EVENTS.nodeUpsert, handleNodeUpsert);
+
+    return () => {
+      socket.off(CANVAS_EVENTS.snapshot, handleSnapshot);
+      socket.off(CANVAS_EVENTS.nodeUpsert, handleNodeUpsert);
+    };
+  }, [setNodes, socket]);
 
   const handleEmojiSelect = useCallback(
     (emoji: string, label: string) => {
@@ -62,20 +149,18 @@ export const InfiniteCanvas = () => {
 
       const position = screenToFlowPosition(contextMenuPosition);
 
-      setNodes((currentNodes) => [
-        ...currentNodes,
-        {
-          ariaLabel: label,
-          data: { emoji, label },
-          id: crypto.randomUUID(),
-          origin: [0.5, 0.5],
-          position,
-          type: 'emoji',
-        },
-      ]);
+      const node: SyncedCanvasNode = {
+        data: { emoji, label },
+        id: crypto.randomUUID(),
+        position,
+        type: 'emoji',
+      };
+
+      setNodes((currentNodes) => [...currentNodes, toFlowCanvasNode(node)]);
+      socket.emit(CANVAS_EVENTS.nodeUpsert, node);
       setEmojiPickerOpen(false);
     },
-    [contextMenuPosition, screenToFlowPosition, setNodes],
+    [contextMenuPosition, screenToFlowPosition, setNodes, socket],
   );
 
   const handleReactionSelect = useCallback(() => {
@@ -85,6 +170,26 @@ export const InfiniteCanvas = () => {
       setEmojiPickerOpen(true);
     }
   }, [contextMenuPosition]);
+
+  const handleMessageSelect = useCallback(() => {
+    setContextMenuOpen(false);
+
+    if (!contextMenuPosition) {
+      return;
+    }
+
+    const position = screenToFlowPosition(contextMenuPosition);
+
+    const node: SyncedCanvasNode = {
+      data: {},
+      id: crypto.randomUUID(),
+      position,
+      type: 'message',
+    };
+
+    setNodes((currentNodes) => [...currentNodes, toFlowCanvasNode(node)]);
+    socket.emit(CANVAS_EVENTS.nodeUpsert, node);
+  }, [contextMenuPosition, screenToFlowPosition, setNodes, socket]);
 
   const handleEmojiPickerClose = useCallback(() => {
     setEmojiPickerOpen(false);
@@ -112,6 +217,14 @@ export const InfiniteCanvas = () => {
               nodesConnectable={false}
               nodesDraggable
               onInit={handleInit}
+              onNodeDragStop={(event, node) => {
+                void event;
+                const syncedNode = toSyncedCanvasNode(node);
+
+                if (syncedNode) {
+                  socket.emit(CANVAS_EVENTS.nodeUpsert, syncedNode);
+                }
+              }}
               onNodesChange={onNodesChange}
               panActivationKeyCode="Space"
               panOnDrag={[1]}
@@ -126,7 +239,10 @@ export const InfiniteCanvas = () => {
             </ReactFlow>
           </div>
         </ContextMenuTrigger>
-        <CanvasContextMenu onReactionSelect={handleReactionSelect} />
+        <CanvasContextMenu
+          onMessageSelect={handleMessageSelect}
+          onReactionSelect={handleReactionSelect}
+        />
       </ContextMenu>
 
       {emojiPickerOpen && contextMenuPosition && (

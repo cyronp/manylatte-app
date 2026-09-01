@@ -5,3 +5,8 @@ export const CANVAS_ROW_COUNT = 2;
 
 export const CANVAS_WIDTH = CANVAS_REGION_WIDTH * CANVAS_COLUMN_COUNT;
 export const CANVAS_HEIGHT = CANVAS_REGION_HEIGHT * CANVAS_ROW_COUNT;
+
+export const CANVAS_EVENTS = {
+  nodeUpsert: 'canvas:node-upsert',
+  snapshot: 'canvas:snapshot',
+} as const;

@@ -8,14 +8,18 @@ import type {
   CursorUpdate,
   CursorUser,
 } from './schemas.js';
+import type { CanvasNode, CanvasSnapshot } from '../canvas/schemas.js';
 
 export interface ClientToServerEvents {
+  'canvas:node-upsert': (node: CanvasNode) => void;
   'cursor:click': (input: CursorInput) => void;
   'cursor:color': (input: CursorColorInput) => void;
   'cursor:move': (input: CursorInput) => void;
 }
 
 export interface ServerToClientEvents {
+  'canvas:node-upsert': (node: CanvasNode) => void;
+  'canvas:snapshot': (snapshot: CanvasSnapshot) => void;
   'cursor:batch': (batch: CursorBatch) => void;
   'cursor:click': (cursor: CursorUpdate) => void;
   'cursor:disconnect': (notice: CursorDisconnectNotice) => void;

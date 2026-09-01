@@ -1,9 +1,13 @@
 import type { AddressInfo } from 'node:net';
 
 import {
+  CANVAS_EVENTS,
+  CANVAS_WIDTH,
   CURSOR_EVENTS,
   DEFAULT_CURSOR_ROOM_ID,
   hexColorSchema,
+  type CanvasNode,
+  type CanvasSnapshot,
   type ClientToServerEvents,
   type CursorBatch,
   type CursorRemoval,
@@ -40,6 +44,22 @@ const waitForSession = (socket: TestSocket) =>
       socket.once(CURSOR_EVENTS.session, resolve);
     }),
     CURSOR_EVENTS.session,
+  );
+
+const waitForCanvasSnapshot = (socket: TestSocket) =>
+  withTimeout(
+    new Promise<CanvasSnapshot>((resolve) => {
+      socket.once(CANVAS_EVENTS.snapshot, resolve);
+    }),
+    CANVAS_EVENTS.snapshot,
+  );
+
+const waitForCanvasNode = (socket: TestSocket) =>
+  withTimeout(
+    new Promise<CanvasNode>((resolve) => {
+      socket.once(CANVAS_EVENTS.nodeUpsert, resolve);
+    }),
+    CANVAS_EVENTS.nodeUpsert,
   );
 
 const waitForBatch = (socket: TestSocket) =>
@@ -109,9 +129,36 @@ describe('cursor socket server', () => {
     });
     sockets.push(socket);
     const sessionPromise = waitForSession(socket);
+    const snapshotPromise = waitForCanvasSnapshot(socket);
     socket.connect();
-    return { session: await sessionPromise, socket };
+    const [session, snapshot] = await Promise.all([
+      sessionPromise,
+      snapshotPromise,
+    ]);
+    return { session, snapshot, socket };
   };
+
+  it('broadcasts canvas nodes and includes them in new sessions', async () => {
+    const url = await startServer();
+    const first = await connect(url);
+    const second = await connect(url);
+    const node: CanvasNode = {
+      data: { emoji: '☕', label: 'Hot beverage' },
+      id: 'd599a14f-1078-4c17-b809-f7fe3e9902ec',
+      position: { x: 100, y: 200 },
+      type: 'emoji',
+    };
+    const firstUpdate = waitForCanvasNode(first.socket);
+    const secondUpdate = waitForCanvasNode(second.socket);
+
+    first.socket.emit(CANVAS_EVENTS.nodeUpsert, node);
+
+    await expect(firstUpdate).resolves.toEqual(node);
+    await expect(secondUpdate).resolves.toEqual(node);
+
+    const third = await connect(url);
+    expect(third.snapshot.nodes).toContainEqual(node);
+  });
 
   it('batches movement, snapshots presence, relays clicks, and removes users', async () => {
     const url = await startServer();
@@ -150,7 +197,7 @@ describe('cursor socket server', () => {
     expect(third.session.cursors).toContainEqual({
       ...movedCursor,
       color: changedColor,
-      username: 'Player 1',
+      username: first.session.self.username,
     });
 
     const clickPromise = waitForClick(second.socket);
@@ -172,7 +219,7 @@ describe('cursor socket server', () => {
     const validBatch = waitForBatch(second.socket);
     first.socket.emit(CURSOR_EVENTS.move, {
       sequence: 2,
-      x: 2,
+      x: CANVAS_WIDTH + 1,
       y: 0.5,
     });
     first.socket.emit(CURSOR_EVENTS.move, {

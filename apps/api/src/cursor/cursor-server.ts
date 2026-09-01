@@ -1,14 +1,17 @@
 import { randomUUID } from 'node:crypto';
 
 import {
+  CANVAS_EVENTS,
   CURSOR_CONNECTION_IDLE_TIMEOUT_MS,
   CURSOR_EVENTS,
   CURSOR_IDLE_TIMEOUT_MS,
   CURSOR_MOVE_FPS,
   CURSOR_MOVE_INTERVAL_MS,
+  canvasNodeSchema,
   cursorColorInputSchema,
   cursorInputSchema,
   cursorSocketAuthSchema,
+  type CanvasNode,
   type ClientToServerEvents,
   type CursorRoomId,
   type CursorUpdate,
@@ -37,6 +40,7 @@ const ABUSE_DISCONNECT_THRESHOLD = 20;
 const ABUSE_WINDOW_MS = 10_000;
 const ABUSE_LOG_INTERVAL_MS = 5_000;
 const CONNECTION_ATTEMPT_RETENTION_MS = 10 * 60_000;
+const MAX_CANVAS_NODES_PER_ROOM = 500;
 
 export interface CursorSocketData {
   cursorColor?: HexColor;
@@ -88,6 +92,7 @@ interface ConnectionAttemptState {
 }
 
 interface CursorRoom {
+  nodes: Map<string, CanvasNode>;
   participants: Map<string, Participant>;
   pendingMoves: Map<string, CursorUpdate>;
 }
@@ -130,6 +135,7 @@ export const registerCursorServer = (
     }
 
     const room: CursorRoom = {
+      nodes: new Map(),
       participants: new Map(),
       pendingMoves: new Map(),
     };
@@ -370,6 +376,9 @@ export const registerCursorServer = (
           self: user,
           users,
         });
+        socket.emit(CANVAS_EVENTS.snapshot, {
+          nodes: Array.from(room.nodes.values()),
+        });
       })
       .catch(() => {
         if (socket.connected) {
@@ -488,6 +497,42 @@ export const registerCursorServer = (
       socket.data.cursorLastPosition = cursor;
       room.pendingMoves.delete(participant.userId);
       socket.to(roomId).volatile.emit(CURSOR_EVENTS.click, update);
+    });
+
+    socket.on(CANVAS_EVENTS.nodeUpsert, (input) => {
+      const acceptedAt = acceptMessageBudget(
+        socket,
+        participant,
+        CANVAS_EVENTS.nodeUpsert,
+      );
+
+      if (acceptedAt === undefined) {
+        return;
+      }
+
+      const result = canvasNodeSchema.safeParse(input);
+
+      if (!result.success) {
+        recordViolation(
+          socket,
+          participant,
+          `invalid:${CANVAS_EVENTS.nodeUpsert}`,
+          result.error.issues.map((issue) => issue.code),
+        );
+        return;
+      }
+
+      if (
+        !room.nodes.has(result.data.id) &&
+        room.nodes.size >= MAX_CANVAS_NODES_PER_ROOM
+      ) {
+        recordViolation(socket, participant, 'limit:canvas-nodes');
+        return;
+      }
+
+      participant.lastActivityAt = acceptedAt;
+      room.nodes.set(result.data.id, result.data);
+      io.to(roomId).emit(CANVAS_EVENTS.nodeUpsert, result.data);
     });
 
     socket.on('disconnect', () => {

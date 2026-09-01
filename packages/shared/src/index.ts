@@ -3,11 +3,16 @@ export type { ZodType } from 'zod';
 
 export {
   CANVAS_COLUMN_COUNT,
+  CANVAS_EVENTS,
   CANVAS_HEIGHT,
   CANVAS_REGION_HEIGHT,
   CANVAS_REGION_WIDTH,
   CANVAS_ROW_COUNT,
   CANVAS_WIDTH,
+  canvasNodeSchema,
+  type CanvasNode,
+  canvasSnapshotSchema,
+  type CanvasSnapshot,
 } from './canvas/index.js';
 export {
   CURSOR_CLICK_DURATION_MS,
