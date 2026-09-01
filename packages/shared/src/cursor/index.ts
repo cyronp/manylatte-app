@@ -5,6 +5,7 @@ export {
   CURSOR_IDLE_TIMEOUT_MS,
   CURSOR_MOVE_FPS,
   CURSOR_MOVE_INTERVAL_MS,
+  CURSOR_PALETTE,
   DEFAULT_CURSOR_ROOM_ID,
 } from './constants.js';
 export {
