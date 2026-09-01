@@ -10,6 +10,7 @@ import {
   MAX_CANVAS_MESSAGES_PER_NODE,
   canvasMessageInputSchema,
   canvasNodeSchema,
+  canvasTypingInputSchema,
   cursorColorInputSchema,
   cursorInputSchema,
   cursorSocketAuthSchema,
@@ -82,6 +83,7 @@ interface Participant {
   messageLimiter: TokenBucket;
   moveLimiter: TokenBucket;
   socketId: string;
+  typingNodeIds: Set<string>;
   username: string;
   userId: string;
   violationCount: number;
@@ -331,6 +333,7 @@ export const registerCursorServer = (
       ),
       moveLimiter: new TokenBucket(2, CURSOR_MOVE_FPS, connectedAt),
       socketId: socket.id,
+      typingNodeIds: new Set(),
       username: socket.data.cursorUsername,
       userId: randomUUID(),
       violationCount: 0,
@@ -381,6 +384,19 @@ export const registerCursorServer = (
         socket.emit(CANVAS_EVENTS.snapshot, {
           nodes: Array.from(room.nodes.values()),
         });
+        for (const typingParticipant of room.participants.values()) {
+          for (const nodeId of typingParticipant.typingNodeIds) {
+            socket.emit(CANVAS_EVENTS.typing, {
+              isTyping: true,
+              nodeId,
+              user: {
+                color: typingParticipant.color,
+                username: typingParticipant.username,
+                userId: typingParticipant.userId,
+              },
+            });
+          }
+        }
       })
       .catch(() => {
         if (socket.connected) {
@@ -442,6 +458,17 @@ export const registerCursorServer = (
         username: participant.username,
         userId: participant.userId,
       });
+      for (const nodeId of participant.typingNodeIds) {
+        socket.to(roomId).emit(CANVAS_EVENTS.typing, {
+          isTyping: true,
+          nodeId,
+          user: {
+            color: participant.color,
+            username: participant.username,
+            userId: participant.userId,
+          },
+        });
+      }
     });
 
     socket.on(CURSOR_EVENTS.move, (input) => {
@@ -540,6 +567,18 @@ export const registerCursorServer = (
         return;
       }
 
+      if (participant.typingNodeIds.delete(node.id)) {
+        socket.to(roomId).emit(CANVAS_EVENTS.typing, {
+          isTyping: false,
+          nodeId: node.id,
+          user: {
+            color: participant.color,
+            username: participant.username,
+            userId: participant.userId,
+          },
+        });
+      }
+
       const nextNode: CanvasNode = {
         ...node,
         data: {
@@ -561,6 +600,69 @@ export const registerCursorServer = (
       participant.lastActivityAt = acceptedAt;
       room.nodes.set(nextNode.id, nextNode);
       io.to(roomId).emit(CANVAS_EVENTS.nodeUpsert, nextNode);
+    });
+
+    socket.on(CANVAS_EVENTS.typing, (input) => {
+      const acceptedAt = acceptMessageBudget(
+        socket,
+        participant,
+        CANVAS_EVENTS.typing,
+      );
+
+      if (acceptedAt === undefined) {
+        return;
+      }
+
+      const result = canvasTypingInputSchema.safeParse(input);
+
+      if (!result.success) {
+        recordViolation(
+          socket,
+          participant,
+          `invalid:${CANVAS_EVENTS.typing}`,
+          result.error.issues.map((issue) => issue.code),
+        );
+        return;
+      }
+
+      const node = room.nodes.get(result.data.nodeId);
+
+      if (result.data.isTyping && (!node || node.type !== 'message')) {
+        recordViolation(socket, participant, 'invalid:canvas-typing-node');
+        return;
+      }
+
+      if (result.data.isTyping) {
+        for (const previousNodeId of participant.typingNodeIds) {
+          if (previousNodeId === result.data.nodeId) {
+            continue;
+          }
+
+          participant.typingNodeIds.delete(previousNodeId);
+          socket.to(roomId).emit(CANVAS_EVENTS.typing, {
+            isTyping: false,
+            nodeId: previousNodeId,
+            user: {
+              color: participant.color,
+              username: participant.username,
+              userId: participant.userId,
+            },
+          });
+        }
+        participant.typingNodeIds.add(result.data.nodeId);
+      } else {
+        participant.typingNodeIds.delete(result.data.nodeId);
+      }
+
+      participant.lastActivityAt = acceptedAt;
+      socket.to(roomId).emit(CANVAS_EVENTS.typing, {
+        ...result.data,
+        user: {
+          color: participant.color,
+          username: participant.username,
+          userId: participant.userId,
+        },
+      });
     });
 
     socket.on(CANVAS_EVENTS.nodeUpsert, (input) => {
@@ -628,6 +730,17 @@ export const registerCursorServer = (
 
       room.participants.delete(socket.id);
       room.pendingMoves.delete(participant.userId);
+      for (const nodeId of participant.typingNodeIds) {
+        socket.to(roomId).emit(CANVAS_EVENTS.typing, {
+          isTyping: false,
+          nodeId,
+          user: {
+            color: participant.color,
+            username: participant.username,
+            userId: participant.userId,
+          },
+        });
+      }
       socket.to(roomId).emit(CURSOR_EVENTS.remove, {
         reason: 'disconnect',
         userId: participant.userId,

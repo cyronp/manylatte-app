@@ -64,7 +64,8 @@ const toFlowCanvasNode = (node: SyncedCanvasNode): FlowCanvasNode => {
 
   return {
     ...node,
-    origin: [0.5, 0.5],
+    data: { ...node.data, typingUsers: [] },
+    origin: [0.5, 0],
   };
 };
 
@@ -82,7 +83,7 @@ const toSyncedCanvasNode = (
 
   if (node.type === 'message') {
     return {
-      data: node.data,
+      data: { messages: node.data.messages },
       id: node.id,
       position: node.position,
       type: node.type,
@@ -125,18 +126,58 @@ export const InfiniteCanvas = () => {
 
         return currentNodes.map((currentNode) =>
           currentNode.id === nextNode.id
-            ? { ...currentNode, ...nextNode }
+            ? currentNode.type === 'message' && nextNode.type === 'message'
+              ? {
+                  ...currentNode,
+                  ...nextNode,
+                  data: {
+                    ...nextNode.data,
+                    typingUsers: currentNode.data.typingUsers,
+                  },
+                }
+              : { ...currentNode, ...nextNode }
             : currentNode,
         );
       });
     };
+    const handleTyping: Parameters<typeof socket.on<'canvas:typing'>>[1] = ({
+      isTyping,
+      nodeId,
+      user: typingUser,
+    }) => {
+      setNodes((currentNodes) =>
+        currentNodes.map((currentNode) => {
+          if (currentNode.id !== nodeId || currentNode.type !== 'message') {
+            return currentNode;
+          }
+
+          const typingUsers = isTyping
+            ? [
+                ...currentNode.data.typingUsers.filter(
+                  ({ userId }) => userId !== typingUser.userId,
+                ),
+                typingUser,
+              ]
+            : currentNode.data.typingUsers.filter(
+                ({ userId }) => userId !== typingUser.userId,
+              );
+
+          return {
+            ...currentNode,
+            data: { ...currentNode.data, typingUsers },
+          };
+        }),
+      );
+    };
 
     socket.on(CANVAS_EVENTS.snapshot, handleSnapshot);
     socket.on(CANVAS_EVENTS.nodeUpsert, handleNodeUpsert);
+    socket.on(CANVAS_EVENTS.typing, handleTyping);
 
     return () => {
       socket.off(CANVAS_EVENTS.snapshot, handleSnapshot);
       socket.off(CANVAS_EVENTS.nodeUpsert, handleNodeUpsert);
+      socket.off(CANVAS_EVENTS.typing, handleTyping);
     };
   }, [setNodes, socket]);
 

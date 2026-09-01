@@ -13,18 +13,56 @@ import {
   MessageContent,
   MessageHeader,
 } from '@/components/ui/message';
+import { Marker, MarkerContent, MarkerIcon } from '@/components/ui/marker';
 import { useSocket } from '@/components/socket-provider';
-import { MinusIcon, PaperPlaneRightIcon, PlusIcon } from '@phosphor-icons/react';
-import { CANVAS_EVENTS, type CanvasMessage } from '@app/shared';
+import {
+  MinusIcon,
+  PaperPlaneRightIcon,
+  PlusIcon,
+} from '@phosphor-icons/react';
+import {
+  CANVAS_EVENTS,
+  type CanvasMessage,
+  type CursorUser,
+} from '@app/shared';
 import type { Node, NodeProps } from '@xyflow/react';
-import { useMemo, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
-export type MessageNode = Node<{ messages: CanvasMessage[] }, 'message'>;
+const TYPING_IDLE_TIMEOUT_MS = 1_500;
+
+const getTypingLabel = (users: CursorUser[]) => {
+  if (users.length === 1) {
+    return `${users[0]?.username} is typing...`;
+  }
+
+  if (users.length === 2) {
+    return `${users[0]?.username} and ${users[1]?.username} are typing...`;
+  }
+
+  return `${users[0]?.username} and ${users.length - 1} others are typing...`;
+};
+
+export type MessageNode = Node<
+  { messages: CanvasMessage[]; typingUsers: CursorUser[] },
+  'message'
+>;
 
 export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
   const { socket, status, user, users } = useSocket();
   const [draft, setDraft] = useState('');
   const [isOpen, setIsOpen] = useState(true);
+  const isTypingRef = useRef(false);
+  const messageListRef = useRef<HTMLDivElement>(null);
+  const typingIdleTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
   const usersById = useMemo(() => {
     const nextUsers = new Map(
       users.map((canvasUser) => [canvasUser.userId, canvasUser]),
@@ -36,10 +74,51 @@ export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
 
     return nextUsers;
   }, [user, users]);
+  const typingUsers = useMemo(
+    () =>
+      data.typingUsers
+        .filter((typingUser) => typingUser.userId !== user?.userId)
+        .map((typingUser) => usersById.get(typingUser.userId) ?? typingUser),
+    [data.typingUsers, user?.userId, usersById],
+  );
+  const emitTyping = useCallback(
+    (isTyping: boolean) => {
+      if (!socket.connected) {
+        isTypingRef.current = false;
+        return;
+      }
+
+      if (isTypingRef.current === isTyping) {
+        return;
+      }
+
+      isTypingRef.current = isTyping;
+      socket.emit(CANVAS_EVENTS.typing, { isTyping, nodeId: id });
+    },
+    [id, socket],
+  );
+  const stopTyping = useCallback(() => {
+    if (typingIdleTimerRef.current !== undefined) {
+      clearTimeout(typingIdleTimerRef.current);
+      typingIdleTimerRef.current = undefined;
+    }
+
+    emitTyping(false);
+  }, [emitTyping]);
+
+  useEffect(() => () => stopTyping(), [stopTyping]);
+
+  useLayoutEffect(() => {
+    if (!isOpen || !messageListRef.current) {
+      return;
+    }
+
+    messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+  }, [data.messages.length, isOpen]);
 
   if (!isOpen) {
     return (
-      <div className="flex w-64 items-center justify-between rounded-xl border border-border bg-background p-2 shadow-sm">
+      <div className="flex w-72 items-center justify-between rounded-2xl border border-border bg-background p-2 shadow-sm">
         <span className="px-2 text-sm font-medium">Messages</span>
         <Button
           aria-label="Open messages"
@@ -63,7 +142,10 @@ export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
         <Button
           aria-label="Close messages"
           className="nodrag"
-          onClick={() => setIsOpen(false)}
+          onClick={() => {
+            stopTyping();
+            setIsOpen(false);
+          }}
           size="icon-sm"
           title="Close messages"
           type="button"
@@ -72,7 +154,10 @@ export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
           <MinusIcon />
         </Button>
       </div>
-      <div className="nowheel flex flex-1 flex-col gap-6 overflow-y-auto p-4">
+      <div
+        className="nowheel flex flex-1 flex-col gap-6 overflow-y-auto p-4"
+        ref={messageListRef}
+      >
         {data.messages.map((message) => {
           const author = usersById.get(message.author.userId) ?? message.author;
           const isCurrentUser = message.author.userId === user?.userId;
@@ -96,6 +181,11 @@ export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
           );
         })}
       </div>
+      {typingUsers.length > 0 && (
+        <Marker className="shrink-0 px-4 py-1.5" role="status">
+          <MarkerContent className='shimmer'>{getTypingLabel(typingUsers)}</MarkerContent>
+        </Marker>
+      )}
       <form
         className="nodrag nowheel border-t border-border p-2"
         onSubmit={(event) => {
@@ -107,6 +197,7 @@ export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
             return;
           }
 
+          stopTyping();
           socket.emit(CANVAS_EVENTS.messageSend, {
             id: crypto.randomUUID(),
             nodeId: id,
@@ -119,7 +210,28 @@ export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
           <InputGroupInput
             aria-label="Message"
             autoComplete="off"
-            onChange={(event) => setDraft(event.target.value)}
+            onBlur={stopTyping}
+            onChange={(event) => {
+              const nextDraft = event.target.value;
+
+              setDraft(nextDraft);
+
+              if (typingIdleTimerRef.current !== undefined) {
+                clearTimeout(typingIdleTimerRef.current);
+                typingIdleTimerRef.current = undefined;
+              }
+
+              if (!nextDraft.trim()) {
+                emitTyping(false);
+                return;
+              }
+
+              emitTyping(true);
+              typingIdleTimerRef.current = setTimeout(() => {
+                typingIdleTimerRef.current = undefined;
+                emitTyping(false);
+              }, TYPING_IDLE_TIMEOUT_MS);
+            }}
             placeholder="Type a message..."
             value={draft}
           />

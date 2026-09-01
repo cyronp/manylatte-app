@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { CANVAS_WIDTH } from './constants.js';
-import { canvasMessageInputSchema, canvasNodeSchema } from './schemas.js';
+import {
+  canvasMessageInputSchema,
+  canvasNodeSchema,
+  canvasTypingInputSchema,
+} from './schemas.js';
 
 describe('canvas node contract', () => {
   it('accepts emoji and message nodes', () => {
@@ -59,6 +63,24 @@ describe('canvas node contract', () => {
         id: '3817c8a6-9f88-478f-b03c-c3b06b095a47',
         nodeId: '21c9b25b-4656-47ba-b95d-94ad13ba8a3b',
         text: '   ',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('validates per-node typing updates', () => {
+    expect(
+      canvasTypingInputSchema.parse({
+        isTyping: true,
+        nodeId: '21c9b25b-4656-47ba-b95d-94ad13ba8a3b',
+      }),
+    ).toEqual({
+      isTyping: true,
+      nodeId: '21c9b25b-4656-47ba-b95d-94ad13ba8a3b',
+    });
+    expect(
+      canvasTypingInputSchema.safeParse({
+        isTyping: true,
+        nodeId: 'not-a-node-id',
       }).success,
     ).toBe(false);
   });

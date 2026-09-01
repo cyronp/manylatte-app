@@ -11,4 +11,5 @@ export const CANVAS_EVENTS = {
   messageSend: 'canvas:message-send',
   nodeUpsert: 'canvas:node-upsert',
   snapshot: 'canvas:snapshot',
+  typing: 'canvas:typing',
 } as const;

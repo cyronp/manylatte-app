@@ -8,6 +8,7 @@ import {
   hexColorSchema,
   type CanvasNode,
   type CanvasSnapshot,
+  type CanvasTypingUpdate,
   type ClientToServerEvents,
   type CursorBatch,
   type CursorRemoval,
@@ -60,6 +61,14 @@ const waitForCanvasNode = (socket: TestSocket) =>
       socket.once(CANVAS_EVENTS.nodeUpsert, resolve);
     }),
     CANVAS_EVENTS.nodeUpsert,
+  );
+
+const waitForCanvasTyping = (socket: TestSocket) =>
+  withTimeout(
+    new Promise<CanvasTypingUpdate>((resolve) => {
+      socket.once(CANVAS_EVENTS.typing, resolve);
+    }),
+    CANVAS_EVENTS.typing,
   );
 
 const waitForBatch = (socket: TestSocket) =>
@@ -200,6 +209,41 @@ describe('cursor socket server', () => {
 
     const third = await connect(url);
     expect(third.snapshot.nodes).toContainEqual(expectedNode);
+  });
+
+  it('broadcasts typing users and clears them on disconnect', async () => {
+    const url = await startServer();
+    const first = await connect(url);
+    const second = await connect(url);
+    const node: CanvasNode = {
+      data: { messages: [] },
+      id: '21c9b25b-4656-47ba-b95d-94ad13ba8a3b',
+      position: { x: 300, y: 400 },
+      type: 'message',
+    };
+    const nodeCreated = waitForCanvasNode(second.socket);
+
+    first.socket.emit(CANVAS_EVENTS.nodeUpsert, node);
+    await nodeCreated;
+
+    const typingStarted = waitForCanvasTyping(second.socket);
+    first.socket.emit(CANVAS_EVENTS.typing, {
+      isTyping: true,
+      nodeId: node.id,
+    });
+    await expect(typingStarted).resolves.toEqual({
+      isTyping: true,
+      nodeId: node.id,
+      user: first.session.self,
+    });
+
+    const typingStopped = waitForCanvasTyping(second.socket);
+    first.socket.disconnect();
+    await expect(typingStopped).resolves.toEqual({
+      isTyping: false,
+      nodeId: node.id,
+      user: first.session.self,
+    });
   });
 
   it('batches movement, snapshots presence, relays clicks, and removes users', async () => {

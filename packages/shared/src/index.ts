@@ -18,6 +18,10 @@ export {
   type CanvasNode,
   canvasSnapshotSchema,
   type CanvasSnapshot,
+  canvasTypingInputSchema,
+  type CanvasTypingInput,
+  canvasTypingUpdateSchema,
+  type CanvasTypingUpdate,
 } from './canvas/index.js';
 export {
   CURSOR_CLICK_DURATION_MS,

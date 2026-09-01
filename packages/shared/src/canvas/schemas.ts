@@ -28,6 +28,19 @@ export const canvasMessageInputSchema = z.object({
 
 export type CanvasMessageInput = z.infer<typeof canvasMessageInputSchema>;
 
+export const canvasTypingInputSchema = z.object({
+  isTyping: z.boolean(),
+  nodeId: z.uuidv4(),
+});
+
+export type CanvasTypingInput = z.infer<typeof canvasTypingInputSchema>;
+
+export const canvasTypingUpdateSchema = canvasTypingInputSchema.extend({
+  user: cursorUserSchema,
+});
+
+export type CanvasTypingUpdate = z.infer<typeof canvasTypingUpdateSchema>;
+
 const canvasNodeBaseSchema = z.object({
   id: z.uuidv4(),
   position: z.object({

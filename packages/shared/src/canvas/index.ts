@@ -17,4 +17,8 @@ export {
   type CanvasNode,
   canvasSnapshotSchema,
   type CanvasSnapshot,
+  canvasTypingInputSchema,
+  type CanvasTypingInput,
+  canvasTypingUpdateSchema,
+  type CanvasTypingUpdate,
 } from './schemas.js';
