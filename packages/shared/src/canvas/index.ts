@@ -6,8 +6,13 @@ export {
   CANVAS_REGION_WIDTH,
   CANVAS_ROW_COUNT,
   CANVAS_WIDTH,
+  MAX_CANVAS_MESSAGES_PER_NODE,
 } from './constants.js';
 export {
+  canvasMessageInputSchema,
+  type CanvasMessageInput,
+  canvasMessageSchema,
+  type CanvasMessage,
   canvasNodeSchema,
   type CanvasNode,
   canvasSnapshotSchema,

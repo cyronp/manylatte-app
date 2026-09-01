@@ -8,9 +8,14 @@ import type {
   CursorUpdate,
   CursorUser,
 } from './schemas.js';
-import type { CanvasNode, CanvasSnapshot } from '../canvas/schemas.js';
+import type {
+  CanvasMessageInput,
+  CanvasNode,
+  CanvasSnapshot,
+} from '../canvas/schemas.js';
 
 export interface ClientToServerEvents {
+  'canvas:message-send': (input: CanvasMessageInput) => void;
   'canvas:node-upsert': (node: CanvasNode) => void;
   'cursor:click': (input: CursorInput) => void;
   'cursor:color': (input: CursorColorInput) => void;

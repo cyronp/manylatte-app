@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { CANVAS_WIDTH } from './constants.js';
-import { canvasNodeSchema } from './schemas.js';
+import { canvasMessageInputSchema, canvasNodeSchema } from './schemas.js';
 
 describe('canvas node contract', () => {
   it('accepts emoji and message nodes', () => {
@@ -15,7 +15,7 @@ describe('canvas node contract', () => {
     ).toBe(true);
     expect(
       canvasNodeSchema.safeParse({
-        data: {},
+        data: { messages: [] },
         id: '21c9b25b-4656-47ba-b95d-94ad13ba8a3b',
         position: { x: 300, y: 400 },
         type: 'message',
@@ -26,7 +26,7 @@ describe('canvas node contract', () => {
   it('rejects invalid node types and positions outside the canvas', () => {
     expect(
       canvasNodeSchema.safeParse({
-        data: {},
+        data: { messages: [] },
         id: '21c9b25b-4656-47ba-b95d-94ad13ba8a3b',
         position: { x: CANVAS_WIDTH + 1, y: 0 },
         type: 'message',
@@ -38,6 +38,27 @@ describe('canvas node contract', () => {
         id: '21c9b25b-4656-47ba-b95d-94ad13ba8a3b',
         position: { x: 0, y: 0 },
         type: 'video',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('normalizes valid message input and rejects blank messages', () => {
+    expect(
+      canvasMessageInputSchema.parse({
+        id: '3817c8a6-9f88-478f-b03c-c3b06b095a47',
+        nodeId: '21c9b25b-4656-47ba-b95d-94ad13ba8a3b',
+        text: '  Olá  ',
+      }),
+    ).toEqual({
+      id: '3817c8a6-9f88-478f-b03c-c3b06b095a47',
+      nodeId: '21c9b25b-4656-47ba-b95d-94ad13ba8a3b',
+      text: 'Olá',
+    });
+    expect(
+      canvasMessageInputSchema.safeParse({
+        id: '3817c8a6-9f88-478f-b03c-c3b06b095a47',
+        nodeId: '21c9b25b-4656-47ba-b95d-94ad13ba8a3b',
+        text: '   ',
       }).success,
     ).toBe(false);
   });

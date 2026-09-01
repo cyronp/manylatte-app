@@ -11,19 +11,31 @@ import {
   Message,
   MessageAvatar,
   MessageContent,
+  MessageHeader,
 } from '@/components/ui/message';
-import { ChatIcon, PaperPlaneRightIcon, XIcon } from '@phosphor-icons/react';
-import type { Node } from '@xyflow/react';
-import { useState } from 'react';
+import { useSocket } from '@/components/socket-provider';
+import { MinusIcon, PaperPlaneRightIcon, PlusIcon } from '@phosphor-icons/react';
+import { CANVAS_EVENTS, type CanvasMessage } from '@app/shared';
+import type { Node, NodeProps } from '@xyflow/react';
+import { useMemo, useState } from 'react';
 
-export type MessageNode = Node<Record<string, never>, 'message'>;
+export type MessageNode = Node<{ messages: CanvasMessage[] }, 'message'>;
 
-export const MessageCanvasNode = () => {
+export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
+  const { socket, status, user, users } = useSocket();
   const [draft, setDraft] = useState('');
   const [isOpen, setIsOpen] = useState(true);
-  const [sentMessages, setSentMessages] = useState<
-    Array<{ id: string; text: string }>
-  >([]);
+  const usersById = useMemo(() => {
+    const nextUsers = new Map(
+      users.map((canvasUser) => [canvasUser.userId, canvasUser]),
+    );
+
+    if (user) {
+      nextUsers.set(user.userId, user);
+    }
+
+    return nextUsers;
+  }, [user, users]);
 
   if (!isOpen) {
     return (
@@ -38,7 +50,7 @@ export const MessageCanvasNode = () => {
           type="button"
           variant="ghost"
         >
-          <ChatIcon />
+          <PlusIcon />
         </Button>
       </div>
     );
@@ -57,42 +69,32 @@ export const MessageCanvasNode = () => {
           type="button"
           variant="ghost"
         >
-          <XIcon />
+          <MinusIcon />
         </Button>
       </div>
       <div className="nowheel flex flex-1 flex-col gap-6 overflow-y-auto p-4">
-        <Message>
-          <MessageAvatar>
-            <LatteUserIcon size={28} />
-          </MessageAvatar>
-          <MessageContent>
-            <Bubble>
-              <BubbleContent>Teste</BubbleContent>
-            </Bubble>
-          </MessageContent>
-        </Message>
-        <Message align="end">
-          <MessageAvatar>
-            <LatteUserIcon size={28} />
-          </MessageAvatar>
-          <MessageContent>
-            <Bubble variant="muted">
-              <BubbleContent>Lorem, ipsum.</BubbleContent>
-            </Bubble>
-          </MessageContent>
-        </Message>
-        {sentMessages.map((message) => (
-          <Message align="end" key={message.id}>
-            <MessageAvatar>
-              <LatteUserIcon size={28} />
-            </MessageAvatar>
-            <MessageContent>
-              <Bubble>
-                <BubbleContent>{message.text}</BubbleContent>
-              </Bubble>
-            </MessageContent>
-          </Message>
-        ))}
+        {data.messages.map((message) => {
+          const author = usersById.get(message.author.userId) ?? message.author;
+          const isCurrentUser = message.author.userId === user?.userId;
+
+          return (
+            <Message align={isCurrentUser ? 'start' : 'end'} key={message.id}>
+              <MessageAvatar>
+                <LatteUserIcon
+                  backgroundColor={author.color}
+                  size={28}
+                  title={author.username}
+                />
+              </MessageAvatar>
+              <MessageContent>
+                <MessageHeader>{author.username}</MessageHeader>
+                <Bubble variant={isCurrentUser ? 'default' : 'muted'}>
+                  <BubbleContent>{message.text}</BubbleContent>
+                </Bubble>
+              </MessageContent>
+            </Message>
+          );
+        })}
       </div>
       <form
         className="nodrag nowheel border-t border-border p-2"
@@ -101,14 +103,15 @@ export const MessageCanvasNode = () => {
 
           const text = draft.trim();
 
-          if (!text) {
+          if (!text || !user || status !== 'connected') {
             return;
           }
 
-          setSentMessages((messages) => [
-            ...messages,
-            { id: crypto.randomUUID(), text },
-          ]);
+          socket.emit(CANVAS_EVENTS.messageSend, {
+            id: crypto.randomUUID(),
+            nodeId: id,
+            text,
+          });
           setDraft('');
         }}
       >
@@ -123,12 +126,12 @@ export const MessageCanvasNode = () => {
           <InputGroupAddon align="inline-end">
             <InputGroupButton
               aria-label="Send message"
-              disabled={!draft.trim()}
+              className="rounded-full"
+              disabled={!draft.trim() || !user || status !== 'connected'}
               size="icon-sm"
               title="Send message"
               type="submit"
               variant="default"
-              className="rounded-full bg-blue-800Te"
             >
               <PaperPlaneRightIcon />
             </InputGroupButton>

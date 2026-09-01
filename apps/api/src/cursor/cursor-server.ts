@@ -7,6 +7,8 @@ import {
   CURSOR_IDLE_TIMEOUT_MS,
   CURSOR_MOVE_FPS,
   CURSOR_MOVE_INTERVAL_MS,
+  MAX_CANVAS_MESSAGES_PER_NODE,
+  canvasMessageInputSchema,
   canvasNodeSchema,
   cursorColorInputSchema,
   cursorInputSchema,
@@ -499,6 +501,68 @@ export const registerCursorServer = (
       socket.to(roomId).volatile.emit(CURSOR_EVENTS.click, update);
     });
 
+    socket.on(CANVAS_EVENTS.messageSend, (input) => {
+      const acceptedAt = acceptMessageBudget(
+        socket,
+        participant,
+        CANVAS_EVENTS.messageSend,
+      );
+
+      if (acceptedAt === undefined) {
+        return;
+      }
+
+      const result = canvasMessageInputSchema.safeParse(input);
+
+      if (!result.success) {
+        recordViolation(
+          socket,
+          participant,
+          `invalid:${CANVAS_EVENTS.messageSend}`,
+          result.error.issues.map((issue) => issue.code),
+        );
+        return;
+      }
+
+      const node = room.nodes.get(result.data.nodeId);
+
+      if (!node || node.type !== 'message') {
+        recordViolation(socket, participant, 'invalid:canvas-message-node');
+        return;
+      }
+
+      if (node.data.messages.some(({ id }) => id === result.data.id)) {
+        return;
+      }
+
+      if (node.data.messages.length >= MAX_CANVAS_MESSAGES_PER_NODE) {
+        recordViolation(socket, participant, 'limit:canvas-messages');
+        return;
+      }
+
+      const nextNode: CanvasNode = {
+        ...node,
+        data: {
+          messages: [
+            ...node.data.messages,
+            {
+              author: {
+                color: participant.color,
+                username: participant.username,
+                userId: participant.userId,
+              },
+              id: result.data.id,
+              text: result.data.text,
+            },
+          ],
+        },
+      };
+
+      participant.lastActivityAt = acceptedAt;
+      room.nodes.set(nextNode.id, nextNode);
+      io.to(roomId).emit(CANVAS_EVENTS.nodeUpsert, nextNode);
+    });
+
     socket.on(CANVAS_EVENTS.nodeUpsert, (input) => {
       const acceptedAt = acceptMessageBudget(
         socket,
@@ -530,9 +594,23 @@ export const registerCursorServer = (
         return;
       }
 
+      const existingNode = room.nodes.get(result.data.id);
+      const nextNode: CanvasNode =
+        result.data.type === 'message'
+          ? {
+              ...result.data,
+              data: {
+                messages:
+                  existingNode?.type === 'message'
+                    ? existingNode.data.messages
+                    : [],
+              },
+            }
+          : result.data;
+
       participant.lastActivityAt = acceptedAt;
-      room.nodes.set(result.data.id, result.data);
-      io.to(roomId).emit(CANVAS_EVENTS.nodeUpsert, result.data);
+      room.nodes.set(nextNode.id, nextNode);
+      io.to(roomId).emit(CANVAS_EVENTS.nodeUpsert, nextNode);
     });
 
     socket.on('disconnect', () => {

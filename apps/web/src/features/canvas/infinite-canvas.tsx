@@ -64,7 +64,6 @@ const toFlowCanvasNode = (node: SyncedCanvasNode): FlowCanvasNode => {
 
   return {
     ...node,
-    data: {},
     origin: [0.5, 0.5],
   };
 };
@@ -83,7 +82,7 @@ const toSyncedCanvasNode = (
 
   if (node.type === 'message') {
     return {
-      data: {},
+      data: node.data,
       id: node.id,
       position: node.position,
       type: node.type,
@@ -181,7 +180,7 @@ export const InfiniteCanvas = () => {
     const position = screenToFlowPosition(contextMenuPosition);
 
     const node: SyncedCanvasNode = {
-      data: {},
+      data: { messages: [] },
       id: crypto.randomUUID(),
       position,
       type: 'message',

@@ -160,6 +160,48 @@ describe('cursor socket server', () => {
     expect(third.snapshot.nodes).toContainEqual(node);
   });
 
+  it('attributes canvas messages to their sender and broadcasts them', async () => {
+    const url = await startServer();
+    const first = await connect(url);
+    const second = await connect(url);
+    const node: CanvasNode = {
+      data: { messages: [] },
+      id: '21c9b25b-4656-47ba-b95d-94ad13ba8a3b',
+      position: { x: 300, y: 400 },
+      type: 'message',
+    };
+    const nodeCreated = waitForCanvasNode(second.socket);
+
+    first.socket.emit(CANVAS_EVENTS.nodeUpsert, node);
+    await expect(nodeCreated).resolves.toEqual(node);
+
+    const firstUpdate = waitForCanvasNode(first.socket);
+    const secondUpdate = waitForCanvasNode(second.socket);
+    first.socket.emit(CANVAS_EVENTS.messageSend, {
+      id: '3817c8a6-9f88-478f-b03c-c3b06b095a47',
+      nodeId: node.id,
+      text: '  Hello everyone  ',
+    });
+    const expectedNode: CanvasNode = {
+      ...node,
+      data: {
+        messages: [
+          {
+            author: first.session.self,
+            id: '3817c8a6-9f88-478f-b03c-c3b06b095a47',
+            text: 'Hello everyone',
+          },
+        ],
+      },
+    };
+
+    await expect(firstUpdate).resolves.toEqual(expectedNode);
+    await expect(secondUpdate).resolves.toEqual(expectedNode);
+
+    const third = await connect(url);
+    expect(third.snapshot.nodes).toContainEqual(expectedNode);
+  });
+
   it('batches movement, snapshots presence, relays clicks, and removes users', async () => {
     const url = await startServer();
     const first = await connect(url);
