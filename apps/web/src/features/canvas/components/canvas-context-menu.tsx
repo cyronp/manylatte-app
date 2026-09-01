@@ -11,17 +11,19 @@ import {
 
 interface CanvasContextMenuProps {
   onReactionSelect: () => void;
+  onMessageSelect: () => void;
 }
 
 export const CanvasContextMenu = ({
   onReactionSelect,
+  onMessageSelect,
 }: CanvasContextMenuProps) => (
   <ContextMenuContent className="w-48">
     <ContextMenuItem onSelect={onReactionSelect}>
       <SmileyStickerIcon />
       Reaction
     </ContextMenuItem>
-    <ContextMenuItem>
+    <ContextMenuItem onSelect={onMessageSelect}>
       <ChatIcon />
       Message
     </ContextMenuItem>
