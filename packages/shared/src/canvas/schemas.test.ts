@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { CANVAS_WIDTH } from './constants.js';
 import {
   canvasMessageInputSchema,
+  canvasNodeMutationSchema,
   canvasNodeSchema,
   canvasTypingInputSchema,
 } from './schemas.js';
@@ -44,6 +45,47 @@ describe('canvas node contract', () => {
         type: 'video',
       }).success,
     ).toBe(false);
+  });
+
+  it('separates client mutations from server-authored snapshots', () => {
+    expect(
+      canvasNodeMutationSchema.parse({
+        action: 'create',
+        node: {
+          id: '21c9b25b-4656-47ba-b95d-94ad13ba8a3b',
+          position: { x: 300, y: 400 },
+          type: 'message',
+        },
+      }),
+    ).toEqual({
+      action: 'create',
+      node: {
+        id: '21c9b25b-4656-47ba-b95d-94ad13ba8a3b',
+        position: { x: 300, y: 400 },
+        type: 'message',
+      },
+    });
+    expect(
+      canvasNodeMutationSchema.safeParse({
+        action: 'create',
+        node: {
+          data: { messages: [] },
+          id: '21c9b25b-4656-47ba-b95d-94ad13ba8a3b',
+          position: { x: 300, y: 400 },
+          type: 'message',
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('accepts position-only move mutations', () => {
+    expect(
+      canvasNodeMutationSchema.safeParse({
+        action: 'move',
+        nodeId: '21c9b25b-4656-47ba-b95d-94ad13ba8a3b',
+        position: { x: 500, y: 600 },
+      }).success,
+    ).toBe(true);
   });
 
   it('normalizes valid message input and rejects blank messages', () => {

@@ -5,6 +5,7 @@ import {
   CANVAS_REGION_WIDTH,
   CANVAS_WIDTH,
   type CanvasNode as SyncedCanvasNode,
+  type CanvasNodeMutation,
 } from '@app/shared';
 import {
   ReactFlow,
@@ -69,27 +70,11 @@ const toFlowCanvasNode = (node: SyncedCanvasNode): FlowCanvasNode => {
   };
 };
 
-const toSyncedCanvasNode = (
-  node: FlowCanvasNode,
-): SyncedCanvasNode | undefined => {
-  if (node.type === 'emoji') {
-    return {
-      data: node.data,
-      id: node.id,
-      position: node.position,
-      type: node.type,
-    };
-  }
-
-  if (node.type === 'message') {
-    return {
-      data: { messages: node.data.messages },
-      id: node.id,
-      position: node.position,
-      type: node.type,
-    };
-  }
-};
+const toCanvasMoveMutation = (node: FlowCanvasNode): CanvasNodeMutation => ({
+  action: 'move',
+  nodeId: node.id,
+  position: node.position,
+});
 
 export const InfiniteCanvas = () => {
   const { socket } = useSocket();
@@ -197,7 +182,10 @@ export const InfiniteCanvas = () => {
       };
 
       setNodes((currentNodes) => [...currentNodes, toFlowCanvasNode(node)]);
-      socket.emit(CANVAS_EVENTS.nodeUpsert, node);
+      socket.emit(CANVAS_EVENTS.mutation, {
+        action: 'create',
+        node,
+      });
       setEmojiPickerOpen(false);
     },
     [contextMenuPosition, screenToFlowPosition, setNodes, socket],
@@ -228,7 +216,14 @@ export const InfiniteCanvas = () => {
     };
 
     setNodes((currentNodes) => [...currentNodes, toFlowCanvasNode(node)]);
-    socket.emit(CANVAS_EVENTS.nodeUpsert, node);
+    socket.emit(CANVAS_EVENTS.mutation, {
+      action: 'create',
+      node: {
+        id: node.id,
+        position: node.position,
+        type: node.type,
+      },
+    });
   }, [contextMenuPosition, screenToFlowPosition, setNodes, socket]);
 
   const handleEmojiPickerClose = useCallback(() => {
@@ -259,11 +254,7 @@ export const InfiniteCanvas = () => {
               onInit={handleInit}
               onNodeDragStop={(event, node) => {
                 void event;
-                const syncedNode = toSyncedCanvasNode(node);
-
-                if (syncedNode) {
-                  socket.emit(CANVAS_EVENTS.nodeUpsert, syncedNode);
-                }
+                socket.emit(CANVAS_EVENTS.mutation, toCanvasMoveMutation(node));
               }}
               onNodesChange={onNodesChange}
               panActivationKeyCode="Space"

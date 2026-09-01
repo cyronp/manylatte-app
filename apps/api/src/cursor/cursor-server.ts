@@ -7,14 +7,13 @@ import {
   CURSOR_IDLE_TIMEOUT_MS,
   CURSOR_MOVE_FPS,
   CURSOR_MOVE_INTERVAL_MS,
-  MAX_CANVAS_MESSAGES_PER_NODE,
   canvasMessageInputSchema,
-  canvasNodeSchema,
+  canvasNodeMutationSchema,
   canvasTypingInputSchema,
   cursorColorInputSchema,
   cursorInputSchema,
   cursorSocketAuthSchema,
-  type CanvasNode,
+  type CanvasMessage,
   type ClientToServerEvents,
   type CursorRoomId,
   type CursorUpdate,
@@ -28,6 +27,7 @@ import type { Server, Socket } from 'socket.io';
 import { createCoffeeGuestUsername } from './guest-username.js';
 import { selectCursorColor } from './palette.js';
 import { TokenBucket } from './token-bucket.js';
+import { CanvasState } from './canvas-state.js';
 import {
   DEFAULT_CURSOR_MAX_CONNECTIONS_PER_IP,
   DEFAULT_CURSOR_MAX_PARTICIPANTS_PER_ROOM,
@@ -43,7 +43,6 @@ const ABUSE_DISCONNECT_THRESHOLD = 20;
 const ABUSE_WINDOW_MS = 10_000;
 const ABUSE_LOG_INTERVAL_MS = 5_000;
 const CONNECTION_ATTEMPT_RETENTION_MS = 10 * 60_000;
-const MAX_CANVAS_NODES_PER_ROOM = 500;
 
 export interface CursorSocketData {
   cursorColor?: HexColor;
@@ -96,7 +95,7 @@ interface ConnectionAttemptState {
 }
 
 interface CursorRoom {
-  nodes: Map<string, CanvasNode>;
+  canvas: CanvasState;
   participants: Map<string, Participant>;
   pendingMoves: Map<string, CursorUpdate>;
 }
@@ -139,7 +138,7 @@ export const registerCursorServer = (
     }
 
     const room: CursorRoom = {
-      nodes: new Map(),
+      canvas: new CanvasState(),
       participants: new Map(),
       pendingMoves: new Map(),
     };
@@ -382,7 +381,7 @@ export const registerCursorServer = (
           users,
         });
         socket.emit(CANVAS_EVENTS.snapshot, {
-          nodes: Array.from(room.nodes.values()),
+          nodes: room.canvas.snapshot(),
         });
         for (const typingParticipant of room.participants.values()) {
           for (const nodeId of typingParticipant.typingNodeIds) {
@@ -551,26 +550,36 @@ export const registerCursorServer = (
         return;
       }
 
-      const node = room.nodes.get(result.data.nodeId);
+      const message: CanvasMessage = {
+        author: {
+          color: participant.color,
+          username: participant.username,
+          userId: participant.userId,
+        },
+        id: result.data.id,
+        text: result.data.text,
+      };
+      const change = room.canvas.appendMessage(result.data.nodeId, message);
 
-      if (!node || node.type !== 'message') {
-        recordViolation(socket, participant, 'invalid:canvas-message-node');
+      if (change.status === 'ignored') {
         return;
       }
 
-      if (node.data.messages.some(({ id }) => id === result.data.id)) {
+      if (change.status === 'rejected') {
+        recordViolation(
+          socket,
+          participant,
+          change.reason === 'message-limit'
+            ? 'limit:canvas-messages'
+            : 'invalid:canvas-message-node',
+        );
         return;
       }
 
-      if (node.data.messages.length >= MAX_CANVAS_MESSAGES_PER_NODE) {
-        recordViolation(socket, participant, 'limit:canvas-messages');
-        return;
-      }
-
-      if (participant.typingNodeIds.delete(node.id)) {
+      if (participant.typingNodeIds.delete(result.data.nodeId)) {
         socket.to(roomId).emit(CANVAS_EVENTS.typing, {
           isTyping: false,
-          nodeId: node.id,
+          nodeId: result.data.nodeId,
           user: {
             color: participant.color,
             username: participant.username,
@@ -579,27 +588,8 @@ export const registerCursorServer = (
         });
       }
 
-      const nextNode: CanvasNode = {
-        ...node,
-        data: {
-          messages: [
-            ...node.data.messages,
-            {
-              author: {
-                color: participant.color,
-                username: participant.username,
-                userId: participant.userId,
-              },
-              id: result.data.id,
-              text: result.data.text,
-            },
-          ],
-        },
-      };
-
       participant.lastActivityAt = acceptedAt;
-      room.nodes.set(nextNode.id, nextNode);
-      io.to(roomId).emit(CANVAS_EVENTS.nodeUpsert, nextNode);
+      io.to(roomId).emit(CANVAS_EVENTS.nodeUpsert, change.node);
     });
 
     socket.on(CANVAS_EVENTS.typing, (input) => {
@@ -625,9 +615,10 @@ export const registerCursorServer = (
         return;
       }
 
-      const node = room.nodes.get(result.data.nodeId);
-
-      if (result.data.isTyping && (!node || node.type !== 'message')) {
+      if (
+        result.data.isTyping &&
+        !room.canvas.hasMessageNode(result.data.nodeId)
+      ) {
         recordViolation(socket, participant, 'invalid:canvas-typing-node');
         return;
       }
@@ -665,54 +656,44 @@ export const registerCursorServer = (
       });
     });
 
-    socket.on(CANVAS_EVENTS.nodeUpsert, (input) => {
+    socket.on(CANVAS_EVENTS.mutation, (input) => {
       const acceptedAt = acceptMessageBudget(
         socket,
         participant,
-        CANVAS_EVENTS.nodeUpsert,
+        CANVAS_EVENTS.mutation,
       );
 
       if (acceptedAt === undefined) {
         return;
       }
 
-      const result = canvasNodeSchema.safeParse(input);
+      const result = canvasNodeMutationSchema.safeParse(input);
 
       if (!result.success) {
         recordViolation(
           socket,
           participant,
-          `invalid:${CANVAS_EVENTS.nodeUpsert}`,
+          `invalid:${CANVAS_EVENTS.mutation}`,
           result.error.issues.map((issue) => issue.code),
         );
         return;
       }
 
-      if (
-        !room.nodes.has(result.data.id) &&
-        room.nodes.size >= MAX_CANVAS_NODES_PER_ROOM
-      ) {
-        recordViolation(socket, participant, 'limit:canvas-nodes');
+      const change = room.canvas.applyMutation(result.data);
+
+      if (change.status === 'rejected') {
+        recordViolation(
+          socket,
+          participant,
+          change.reason === 'node-limit'
+            ? 'limit:canvas-nodes'
+            : 'invalid:canvas-node-mutation',
+        );
         return;
       }
 
-      const existingNode = room.nodes.get(result.data.id);
-      const nextNode: CanvasNode =
-        result.data.type === 'message'
-          ? {
-              ...result.data,
-              data: {
-                messages:
-                  existingNode?.type === 'message'
-                    ? existingNode.data.messages
-                    : [],
-              },
-            }
-          : result.data;
-
       participant.lastActivityAt = acceptedAt;
-      room.nodes.set(nextNode.id, nextNode);
-      io.to(roomId).emit(CANVAS_EVENTS.nodeUpsert, nextNode);
+      io.to(roomId).emit(CANVAS_EVENTS.nodeUpsert, change.node);
     });
 
     socket.on('disconnect', () => {
