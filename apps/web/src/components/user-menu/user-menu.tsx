@@ -6,10 +6,10 @@ import {
   UserIcon,
   UsersIcon,
 } from '@phosphor-icons/react';
-import { HexColorPicker } from 'react-colorful';
 import { useState } from 'react';
 
 import { Button } from '../ui/button';
+import { HexColorPicker } from '../ui/hex-color-picker';
 import { useSocket } from '../socket-provider';
 import {
   DropdownMenu,
