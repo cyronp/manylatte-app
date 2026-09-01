@@ -13,12 +13,17 @@ import {
   MessageContent,
   MessageHeader,
 } from '@/components/ui/message';
-import { Marker, MarkerContent, MarkerIcon } from '@/components/ui/marker';
+import { Marker, MarkerContent } from '@/components/ui/marker';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useSocket } from '@/components/socket-provider';
 import {
+  ChatIcon,
   MinusIcon,
   PaperPlaneRightIcon,
-  PlusIcon,
 } from '@phosphor-icons/react';
 import {
   CANVAS_EVENTS,
@@ -57,7 +62,7 @@ export type MessageNode = Node<
 export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
   const { socket, status, user, users } = useSocket();
   const [draft, setDraft] = useState('');
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(() => data.messages.length === 0);
   const isTypingRef = useRef(false);
   const messageListRef = useRef<HTMLDivElement>(null);
   const typingIdleTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
@@ -81,6 +86,10 @@ export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
         .map((typingUser) => usersById.get(typingUser.userId) ?? typingUser),
     [data.typingUsers, user?.userId, usersById],
   );
+  const latestMessage = data.messages.at(-1);
+  const latestAuthor = latestMessage
+    ? (usersById.get(latestMessage.author.userId) ?? latestMessage.author)
+    : undefined;
   const emitTyping = useCallback(
     (isTyping: boolean) => {
       if (!socket.connected) {
@@ -118,20 +127,63 @@ export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
 
   if (!isOpen) {
     return (
-      <div className="flex w-72 items-center justify-between rounded-2xl border border-border bg-background p-2 shadow-sm">
-        <span className="px-2 text-sm font-medium">Messages</span>
-        <Button
-          aria-label="Open messages"
-          className="nodrag"
-          onClick={() => setIsOpen(true)}
-          size="icon-sm"
-          title="Open messages"
-          type="button"
-          variant="ghost"
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            className="nodrag bg-background shadow nowheel overflow-hidden rounded-full rounded-bl-none border-2 border-background p-0 transition-transform hover:scale-105"
+            onClick={() => setIsOpen(true)}
+            size="icon"
+            type="button"
+            variant="ghost"
+          >
+            {latestAuthor ? (
+              <LatteUserIcon
+                backgroundColor={latestAuthor.color}
+                className="size-full"
+                title={latestAuthor.username}
+              />
+            ) : (
+              <ChatIcon className="size-5" />
+            )}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent
+          className="w-64 max-w-64 items-start gap-3 rounded-xl border border-border bg-popover p-3 text-popover-foreground shadow-xl [&>svg]:bg-popover [&>svg]:fill-popover"
+          collisionPadding={12}
+          side="right"
+          sideOffset={10}
         >
-          <PlusIcon />
-        </Button>
-      </div>
+          {latestMessage && latestAuthor ? (
+            <>
+              <LatteUserIcon
+                backgroundColor={latestAuthor.color}
+                size={36}
+                title={latestAuthor.username}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold">
+                  {latestAuthor.username}
+                </p>
+                <p className="mt-1 line-clamp-3 text-sm leading-relaxed text-muted-foreground">
+                  {latestMessage.text}
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted">
+                <ChatIcon className="size-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold">Messages</p>
+                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                  Click to start a conversation.
+                </p>
+              </div>
+            </>
+          )}
+        </TooltipContent>
+      </Tooltip>
     );
   }
 
@@ -183,7 +235,9 @@ export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
       </div>
       {typingUsers.length > 0 && (
         <Marker className="shrink-0 px-4 py-1.5" role="status">
-          <MarkerContent className='shimmer'>{getTypingLabel(typingUsers)}</MarkerContent>
+          <MarkerContent className="shimmer">
+            {getTypingLabel(typingUsers)}
+          </MarkerContent>
         </Marker>
       )}
       <form
