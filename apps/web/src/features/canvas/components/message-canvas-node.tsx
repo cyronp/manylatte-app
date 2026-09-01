@@ -25,12 +25,13 @@ import {
   MinusIcon,
   PaperPlaneRightIcon,
 } from '@phosphor-icons/react';
+import { Popover as PopoverPrimitive } from 'radix-ui';
 import {
   CANVAS_EVENTS,
   type CanvasMessage,
   type CursorUser,
 } from '@app/shared';
-import type { Node, NodeProps } from '@xyflow/react';
+import { type Node, type NodeProps, useStore } from '@xyflow/react';
 import {
   useCallback,
   useEffect,
@@ -61,8 +62,10 @@ export type MessageNode = Node<
 
 export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
   const { socket, status, user, users } = useSocket();
+  const zoom = useStore((state) => state.transform[2]);
   const [draft, setDraft] = useState('');
   const [isOpen, setIsOpen] = useState(() => data.messages.length === 0);
+  const [isTooltipOpen, setIsTooltipOpen] = useState(false);
   const isTypingRef = useRef(false);
   const messageListRef = useRef<HTMLDivElement>(null);
   const typingIdleTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
@@ -125,185 +128,218 @@ export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
     messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
   }, [data.messages.length, isOpen]);
 
-  if (!isOpen) {
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            className="nodrag bg-background shadow nowheel overflow-hidden rounded-full rounded-bl-none border-2 border-background p-0 transition-transform hover:scale-105"
-            onClick={() => setIsOpen(true)}
-            size="icon"
-            type="button"
-            variant="ghost"
-          >
-            {latestAuthor ? (
-              <LatteUserIcon
-                backgroundColor={latestAuthor.color}
-                className="size-full"
-                title={latestAuthor.username}
-              />
-            ) : (
-              <ChatIcon className="size-5" />
-            )}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent
-          className="w-64 max-w-64 items-start gap-3 rounded-xl border border-border bg-popover p-3 text-popover-foreground shadow-xl [&>svg]:bg-popover [&>svg]:fill-popover"
-          collisionPadding={12}
-          side="right"
-          sideOffset={10}
-        >
-          {latestMessage && latestAuthor ? (
-            <>
-              <LatteUserIcon
-                backgroundColor={latestAuthor.color}
-                size={36}
-                title={latestAuthor.username}
-              />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">
-                  {latestAuthor.username}
-                </p>
-                <p className="mt-1 line-clamp-3 text-sm leading-relaxed text-muted-foreground">
-                  {latestMessage.text}
-                </p>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted">
-                <ChatIcon className="size-4" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold">Messages</p>
-                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                  Click to start a conversation.
-                </p>
-              </div>
-            </>
-          )}
-        </TooltipContent>
-      </Tooltip>
-    );
-  }
-
   return (
-    <div className="flex h-96 w-72 flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-sm">
-      <div className="flex w-full items-center justify-between gap-2 bg-background border-b border-border p-2 pl-4">
-        <span className="text-sm font-medium">Messages</span>
-        <Button
-          aria-label="Close messages"
-          className="nodrag"
-          onClick={() => {
-            stopTyping();
-            setIsOpen(false);
-          }}
-          size="icon-sm"
-          title="Close messages"
-          type="button"
-          variant="ghost"
-        >
-          <MinusIcon />
-        </Button>
-      </div>
-      <div
-        className="nowheel flex flex-1 flex-col gap-6 overflow-y-auto p-4"
-        ref={messageListRef}
-      >
-        {data.messages.map((message) => {
-          const author = usersById.get(message.author.userId) ?? message.author;
-          const isCurrentUser = message.author.userId === user?.userId;
+    <PopoverPrimitive.Root
+      onOpenChange={(nextIsOpen) => {
+        setIsTooltipOpen(false);
+        setIsOpen(nextIsOpen);
 
-          return (
-            <Message align={isCurrentUser ? 'start' : 'end'} key={message.id}>
-              <MessageAvatar>
-                <LatteUserIcon
-                  backgroundColor={author.color}
-                  size={28}
-                  title={author.username}
-                />
-              </MessageAvatar>
-              <MessageContent>
-                <MessageHeader>{author.username}</MessageHeader>
-                <Bubble variant={isCurrentUser ? 'default' : 'muted'}>
-                  <BubbleContent>{message.text}</BubbleContent>
-                </Bubble>
-              </MessageContent>
-            </Message>
-          );
-        })}
-      </div>
-      {typingUsers.length > 0 && (
-        <Marker className="shrink-0 px-4 py-1.5" role="status">
-          <MarkerContent className="shimmer">
-            {getTypingLabel(typingUsers)}
-          </MarkerContent>
-        </Marker>
-      )}
-      <form
-        className="nodrag nowheel border-t border-border p-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-
-          const text = draft.trim();
-
-          if (!text || !user || status !== 'connected') {
-            return;
-          }
-
+        if (!nextIsOpen) {
           stopTyping();
-          socket.emit(CANVAS_EVENTS.messageSend, {
-            id: crypto.randomUUID(),
-            nodeId: id,
-            text,
-          });
-          setDraft('');
-        }}
+        }
+      }}
+      open={isOpen}
+    >
+      <div
+        className="w-fit origin-top"
+        style={{ transform: `scale(${1 / zoom})` }}
       >
-        <InputGroup className="rounded-full">
-          <InputGroupInput
-            aria-label="Message"
-            autoComplete="off"
-            onBlur={stopTyping}
-            onChange={(event) => {
-              const nextDraft = event.target.value;
+        <Tooltip
+          onOpenChange={(nextIsTooltipOpen) => {
+            setIsTooltipOpen(!isOpen && nextIsTooltipOpen);
+          }}
+          open={!isOpen && isTooltipOpen}
+        >
+          <TooltipTrigger asChild>
+            <PopoverPrimitive.Trigger asChild>
+              <Button
+                aria-label={isOpen ? 'Close messages' : 'Open messages'}
+                className="nodrag bg-background shadow nowheel overflow-hidden rounded-full rounded-bl-none border-2 border-background p-0"
+                size="icon"
+                type="button"
+                variant="ghost"
+              >
+                {latestAuthor ? (
+                  <LatteUserIcon
+                    backgroundColor={latestAuthor.color}
+                    size="100%"
+                    title={latestAuthor.username}
+                  />
+                ) : (
+                  <ChatIcon className="size-5" />
+                )}
+              </Button>
+            </PopoverPrimitive.Trigger>
+          </TooltipTrigger>
+          <TooltipContent
+            className="w-64 max-w-64 items-start gap-3 rounded-xl border border-border bg-popover p-3 text-popover-foreground shadow-xl [&>svg]:bg-popover [&>svg]:fill-popover"
+            collisionPadding={12}
+            side="right"
+            sideOffset={10}
+            updatePositionStrategy="always"
+          >
+            {latestMessage && latestAuthor ? (
+              <>
+                <LatteUserIcon
+                  backgroundColor={latestAuthor.color}
+                  size={36}
+                  title={latestAuthor.username}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">
+                    {latestAuthor.username}
+                  </p>
+                  <p className="mt-1 line-clamp-3 text-sm leading-relaxed text-muted-foreground">
+                    {latestMessage.text}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted">
+                  <ChatIcon className="size-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold">Messages</p>
+                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                    Click to start a conversation.
+                  </p>
+                </div>
+              </>
+            )}
+          </TooltipContent>
+        </Tooltip>
+      </div>
+      <PopoverPrimitive.Portal>
+        <PopoverPrimitive.Content
+          align="start"
+          aria-label="Messages"
+          className="z-50 flex h-96 w-72 flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-sm outline-none"
+          collisionPadding={12}
+          onOpenAutoFocus={(event) => event.preventDefault()}
+          side="right"
+          sideOffset={12}
+          updatePositionStrategy="always"
+        >
+          <div className="flex w-full items-center justify-between gap-2 bg-background border-b border-border p-2 pl-4">
+            <span className="text-sm font-medium">Messages</span>
+            <PopoverPrimitive.Close asChild>
+              <Button
+                aria-label="Close messages"
+                className="nodrag"
+                size="icon-sm"
+                title="Close messages"
+                type="button"
+                variant="ghost"
+              >
+                <MinusIcon />
+              </Button>
+            </PopoverPrimitive.Close>
+          </div>
+          <div
+            className="nowheel flex flex-1 flex-col gap-6 overflow-y-auto p-4"
+            ref={messageListRef}
+          >
+            {data.messages.map((message) => {
+              const author =
+                usersById.get(message.author.userId) ?? message.author;
+              const isCurrentUser = message.author.userId === user?.userId;
 
-              setDraft(nextDraft);
+              return (
+                <Message
+                  align={isCurrentUser ? 'start' : 'end'}
+                  key={message.id}
+                >
+                  <MessageAvatar>
+                    <LatteUserIcon
+                      backgroundColor={author.color}
+                      size={28}
+                      title={author.username}
+                    />
+                  </MessageAvatar>
+                  <MessageContent>
+                    <MessageHeader>{author.username}</MessageHeader>
+                    <Bubble variant={isCurrentUser ? 'default' : 'muted'}>
+                      <BubbleContent>{message.text}</BubbleContent>
+                    </Bubble>
+                  </MessageContent>
+                </Message>
+              );
+            })}
+          </div>
+          {typingUsers.length > 0 && (
+            <Marker className="shrink-0 px-4 py-1.5" role="status">
+              <MarkerContent className="shimmer">
+                {getTypingLabel(typingUsers)}
+              </MarkerContent>
+            </Marker>
+          )}
+          <form
+            className="nodrag nowheel border-t border-border p-2"
+            onSubmit={(event) => {
+              event.preventDefault();
 
-              if (typingIdleTimerRef.current !== undefined) {
-                clearTimeout(typingIdleTimerRef.current);
-                typingIdleTimerRef.current = undefined;
-              }
+              const text = draft.trim();
 
-              if (!nextDraft.trim()) {
-                emitTyping(false);
+              if (!text || !user || status !== 'connected') {
                 return;
               }
 
-              emitTyping(true);
-              typingIdleTimerRef.current = setTimeout(() => {
-                typingIdleTimerRef.current = undefined;
-                emitTyping(false);
-              }, TYPING_IDLE_TIMEOUT_MS);
+              stopTyping();
+              socket.emit(CANVAS_EVENTS.messageSend, {
+                id: crypto.randomUUID(),
+                nodeId: id,
+                text,
+              });
+              setDraft('');
             }}
-            placeholder="Type a message..."
-            value={draft}
-          />
-          <InputGroupAddon align="inline-end">
-            <InputGroupButton
-              aria-label="Send message"
-              className="rounded-full"
-              disabled={!draft.trim() || !user || status !== 'connected'}
-              size="icon-sm"
-              title="Send message"
-              type="submit"
-              variant="default"
-            >
-              <PaperPlaneRightIcon />
-            </InputGroupButton>
-          </InputGroupAddon>
-        </InputGroup>
-      </form>
-    </div>
+          >
+            <InputGroup className="rounded-full">
+              <InputGroupInput
+                aria-label="Message"
+                autoComplete="off"
+                onBlur={stopTyping}
+                onChange={(event) => {
+                  const nextDraft = event.target.value;
+
+                  setDraft(nextDraft);
+
+                  if (typingIdleTimerRef.current !== undefined) {
+                    clearTimeout(typingIdleTimerRef.current);
+                    typingIdleTimerRef.current = undefined;
+                  }
+
+                  if (!nextDraft.trim()) {
+                    emitTyping(false);
+                    return;
+                  }
+
+                  emitTyping(true);
+                  typingIdleTimerRef.current = setTimeout(() => {
+                    typingIdleTimerRef.current = undefined;
+                    emitTyping(false);
+                  }, TYPING_IDLE_TIMEOUT_MS);
+                }}
+                placeholder="Type a message..."
+                value={draft}
+              />
+              <InputGroupAddon align="inline-end">
+                <InputGroupButton
+                  aria-label="Send message"
+                  className="rounded-full"
+                  disabled={!draft.trim() || !user || status !== 'connected'}
+                  size="icon-sm"
+                  title="Send message"
+                  type="submit"
+                  variant="default"
+                >
+                  <PaperPlaneRightIcon />
+                </InputGroupButton>
+              </InputGroupAddon>
+            </InputGroup>
+          </form>
+        </PopoverPrimitive.Content>
+      </PopoverPrimitive.Portal>
+    </PopoverPrimitive.Root>
   );
 };
