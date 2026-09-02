@@ -3,6 +3,7 @@ import {
   ScreencastIcon,
   SmileyStickerIcon,
 } from '@phosphor-icons/react';
+import type { ComponentProps } from 'react';
 
 import {
   ContextMenuContent,
@@ -10,15 +11,19 @@ import {
 } from '@/components/ui/context-menu';
 
 interface CanvasContextMenuProps {
+  onCloseAutoFocus?: ComponentProps<
+    typeof ContextMenuContent
+  >['onCloseAutoFocus'];
   onReactionSelect: () => void;
   onMessageSelect: () => void;
 }
 
 export const CanvasContextMenu = ({
+  onCloseAutoFocus,
   onReactionSelect,
   onMessageSelect,
 }: CanvasContextMenuProps) => (
-  <ContextMenuContent className="w-48">
+  <ContextMenuContent className="w-48" onCloseAutoFocus={onCloseAutoFocus}>
     <ContextMenuItem onSelect={onReactionSelect}>
       <SmileyStickerIcon />
       Reaction

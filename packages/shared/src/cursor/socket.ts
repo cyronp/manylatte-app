@@ -11,6 +11,7 @@ import type {
 import type {
   CanvasMessageInput,
   CanvasNode,
+  CanvasNodeMutation,
   CanvasSnapshot,
   CanvasTypingInput,
   CanvasTypingUpdate,
@@ -18,7 +19,7 @@ import type {
 
 export interface ClientToServerEvents {
   'canvas:message-send': (input: CanvasMessageInput) => void;
-  'canvas:node-upsert': (node: CanvasNode) => void;
+  'canvas:mutation': (mutation: CanvasNodeMutation) => void;
   'canvas:typing': (input: CanvasTypingInput) => void;
   'cursor:click': (input: CursorInput) => void;
   'cursor:color': (input: CursorColorInput) => void;

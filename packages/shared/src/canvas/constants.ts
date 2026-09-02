@@ -9,6 +9,7 @@ export const MAX_CANVAS_MESSAGES_PER_NODE = 200;
 
 export const CANVAS_EVENTS = {
   messageSend: 'canvas:message-send',
+  mutation: 'canvas:mutation',
   nodeUpsert: 'canvas:node-upsert',
   snapshot: 'canvas:snapshot',
   typing: 'canvas:typing',

@@ -160,7 +160,10 @@ describe('cursor socket server', () => {
     const firstUpdate = waitForCanvasNode(first.socket);
     const secondUpdate = waitForCanvasNode(second.socket);
 
-    first.socket.emit(CANVAS_EVENTS.nodeUpsert, node);
+    first.socket.emit(CANVAS_EVENTS.mutation, {
+      action: 'create',
+      node,
+    });
 
     await expect(firstUpdate).resolves.toEqual(node);
     await expect(secondUpdate).resolves.toEqual(node);
@@ -181,7 +184,14 @@ describe('cursor socket server', () => {
     };
     const nodeCreated = waitForCanvasNode(second.socket);
 
-    first.socket.emit(CANVAS_EVENTS.nodeUpsert, node);
+    first.socket.emit(CANVAS_EVENTS.mutation, {
+      action: 'create',
+      node: {
+        id: node.id,
+        position: node.position,
+        type: node.type,
+      },
+    });
     await expect(nodeCreated).resolves.toEqual(node);
 
     const firstUpdate = waitForCanvasNode(first.socket);
@@ -207,8 +217,21 @@ describe('cursor socket server', () => {
     await expect(firstUpdate).resolves.toEqual(expectedNode);
     await expect(secondUpdate).resolves.toEqual(expectedNode);
 
+    const movedUpdate = waitForCanvasNode(second.socket);
+    first.socket.emit(CANVAS_EVENTS.mutation, {
+      action: 'move',
+      nodeId: node.id,
+      position: { x: 500, y: 600 },
+    });
+    const movedNode = {
+      ...expectedNode,
+      position: { x: 500, y: 600 },
+    };
+
+    await expect(movedUpdate).resolves.toEqual(movedNode);
+
     const third = await connect(url);
-    expect(third.snapshot.nodes).toContainEqual(expectedNode);
+    expect(third.snapshot.nodes).toContainEqual(movedNode);
   });
 
   it('broadcasts typing users and clears them on disconnect', async () => {
@@ -223,7 +246,14 @@ describe('cursor socket server', () => {
     };
     const nodeCreated = waitForCanvasNode(second.socket);
 
-    first.socket.emit(CANVAS_EVENTS.nodeUpsert, node);
+    first.socket.emit(CANVAS_EVENTS.mutation, {
+      action: 'create',
+      node: {
+        id: node.id,
+        position: node.position,
+        type: node.type,
+      },
+    });
     await nodeCreated;
 
     const typingStarted = waitForCanvasTyping(second.socket);
