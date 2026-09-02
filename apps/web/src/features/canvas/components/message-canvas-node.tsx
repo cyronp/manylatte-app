@@ -14,12 +14,8 @@ import {
   MessageHeader,
 } from '@/components/ui/message';
 import { Marker, MarkerContent } from '@/components/ui/marker';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { useSocket } from '@/components/socket-provider';
+import { cn } from '@/lib/utils';
 import {
   ChatIcon,
   MinusIcon,
@@ -65,7 +61,6 @@ export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
   const zoom = useStore((state) => state.transform[2]);
   const [draft, setDraft] = useState('');
   const [isOpen, setIsOpen] = useState(() => data.messages.length === 0);
-  const [isTooltipOpen, setIsTooltipOpen] = useState(false);
   const isTypingRef = useRef(false);
   const messageListRef = useRef<HTMLDivElement>(null);
   const typingIdleTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
@@ -131,7 +126,6 @@ export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
   return (
     <PopoverPrimitive.Root
       onOpenChange={(nextIsOpen) => {
-        setIsTooltipOpen(false);
         setIsOpen(nextIsOpen);
 
         if (!nextIsOpen) {
@@ -141,74 +135,38 @@ export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
       open={isOpen}
     >
       <div
-        className="w-fit origin-top"
+        className="size-9 origin-top"
         style={{ transform: `scale(${1 / zoom})` }}
       >
-        <Tooltip
-          onOpenChange={(nextIsTooltipOpen) => {
-            setIsTooltipOpen(!isOpen && nextIsTooltipOpen);
-          }}
-          open={!isOpen && isTooltipOpen}
-        >
-          <TooltipTrigger asChild>
-            <PopoverPrimitive.Trigger asChild>
-              <Button
-                aria-label={isOpen ? 'Close messages' : 'Open messages'}
-                className="nodrag bg-background shadow nowheel overflow-hidden rounded-full rounded-bl-none border-2 border-background p-0"
-                size="icon"
-                type="button"
-                variant="ghost"
-              >
-                {latestAuthor ? (
-                  <LatteUserIcon
-                    backgroundColor={latestAuthor.color}
-                    size="100%"
-                    title={latestAuthor.username}
-                  />
-                ) : (
-                  <ChatIcon className="size-5" />
-                )}
-              </Button>
-            </PopoverPrimitive.Trigger>
-          </TooltipTrigger>
-          <TooltipContent
-            className="w-64 max-w-64 items-start gap-3 rounded-xl border border-border bg-popover p-3 text-popover-foreground shadow-xl [&>svg]:bg-popover [&>svg]:fill-popover"
-            collisionPadding={12}
-            side="right"
-            sideOffset={10}
-            updatePositionStrategy="always"
-          >
-            {latestMessage && latestAuthor ? (
-              <>
-                <LatteUserIcon
-                  backgroundColor={latestAuthor.color}
-                  size={36}
-                  title={latestAuthor.username}
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">
-                    {latestAuthor.username}
-                  </p>
-                  <p className="mt-1 line-clamp-3 text-sm leading-relaxed text-muted-foreground">
-                    {latestMessage.text}
-                  </p>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted">
-                  <ChatIcon className="size-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold">Messages</p>
-                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                    Click to start a conversation.
-                  </p>
-                </div>
-              </>
+        <PopoverPrimitive.Trigger asChild>
+          <Button
+            aria-label={isOpen ? 'Close messages' : 'Open messages'}
+            className={cn(
+              'nodrag nowheel group/message h-9 w-9 justify-start overflow-hidden rounded-[18px] rounded-bl-none border-2 border-background bg-background p-0 shadow transition-all duration-200 ease-out',
+              !isOpen &&
+                'hover:h-16 hover:w-60 hover:bg-background hover:shadow-lg focus-visible:h-16 focus-visible:w-60 hover:p-2 hover: gap-2 dark:hover:bg-background',
             )}
-          </TooltipContent>
-        </Tooltip>
+            size="icon"
+            type="button"
+            variant="ghost"
+          >
+            {latestAuthor ? (
+              <LatteUserIcon backgroundColor={latestAuthor.color} size={32} />
+            ) : (
+              <span className="flex size-8 shrink-0 items-center justify-center">
+                <ChatIcon className="size-5" />
+              </span>
+            )}
+            <span className="min-w-0 flex-1 pr-3 text-left opacity-0 transition-opacity duration-100 group-hover/message:opacity-100 group-focus-visible/message:opacity-100">
+              <span className="block truncate text-xs font-semibold text-foreground">
+                {latestAuthor?.username ?? 'Messages'}
+              </span>
+              <span className="mt-0.5 line-clamp-2 whitespace-normal text-xs leading-4 text-muted-foreground">
+                {latestMessage?.text ?? 'Click to start a conversation.'}
+              </span>
+            </span>
+          </Button>
+        </PopoverPrimitive.Trigger>
       </div>
       <PopoverPrimitive.Portal>
         <PopoverPrimitive.Content
