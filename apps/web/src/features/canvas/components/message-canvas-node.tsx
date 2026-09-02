@@ -17,7 +17,7 @@ import { Marker, MarkerContent } from '@/components/ui/marker';
 import { useSocket } from '@/components/socket-provider';
 import { cn } from '@/lib/utils';
 import {
-  ChatIcon,
+  CircleDashedIcon,
   MinusIcon,
   PaperPlaneRightIcon,
 } from '@phosphor-icons/react';
@@ -154,7 +154,7 @@ export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
               <LatteUserIcon backgroundColor={latestAuthor.color} size={32} />
             ) : (
               <span className="flex size-8 shrink-0 items-center justify-center">
-                <ChatIcon className="size-5" />
+                <CircleDashedIcon className="size-5" />
               </span>
             )}
             <span className="min-w-0 flex-1 pr-3 text-left opacity-0 transition-opacity duration-100 group-hover/message:opacity-100 group-focus-visible/message:opacity-100">

@@ -15,7 +15,7 @@ import {
   useNodesState,
   useReactFlow,
 } from '@xyflow/react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useSocket } from '@/components/socket-provider';
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
@@ -27,6 +27,10 @@ import {
   type EmojiNode,
 } from './components/emoji-canvas-node';
 import { EmojiPickerPortal } from './components/emoji-picker-portal';
+import {
+  MessageDraftCanvasNode,
+  type MessageDraftNode,
+} from './components/message-draft-canvas-node';
 import {
   MessageCanvasNode,
   type MessageNode,
@@ -50,11 +54,13 @@ const FIRST_REGION_BOUNDS = {
 const NODE_TYPES = {
   emoji: EmojiCanvasNode,
   message: MessageCanvasNode,
+  messageDraft: MessageDraftCanvasNode,
 };
 
-type FlowCanvasNode = EmojiNode | MessageNode;
+type SyncedFlowCanvasNode = EmojiNode | MessageNode;
+type FlowCanvasNode = SyncedFlowCanvasNode | MessageDraftNode;
 
-const toFlowCanvasNode = (node: SyncedCanvasNode): FlowCanvasNode => {
+const toFlowCanvasNode = (node: SyncedCanvasNode): SyncedFlowCanvasNode => {
   if (node.type === 'emoji') {
     return {
       ...node,
@@ -70,7 +76,9 @@ const toFlowCanvasNode = (node: SyncedCanvasNode): FlowCanvasNode => {
   };
 };
 
-const toCanvasMoveMutation = (node: FlowCanvasNode): CanvasNodeMutation => ({
+const toCanvasMoveMutation = (
+  node: SyncedFlowCanvasNode,
+): CanvasNodeMutation => ({
   action: 'move',
   nodeId: node.id,
   position: node.position,
@@ -83,6 +91,7 @@ export const InfiniteCanvas = () => {
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState<XYPosition>();
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+  const pendingMessageDraftPositionRef = useRef<XYPosition>(undefined);
 
   const handleInit = useCallback(
     (instance: ReactFlowInstance<FlowCanvasNode>) => {
@@ -95,7 +104,10 @@ export const InfiniteCanvas = () => {
     const handleSnapshot: Parameters<
       typeof socket.on<'canvas:snapshot'>
     >[1] = ({ nodes: syncedNodes }) => {
-      setNodes(syncedNodes.map(toFlowCanvasNode));
+      setNodes((currentNodes) => [
+        ...syncedNodes.map(toFlowCanvasNode),
+        ...currentNodes.filter((node) => node.type === 'messageDraft'),
+      ]);
     };
     const handleNodeUpsert: Parameters<
       typeof socket.on<'canvas:node-upsert'>
@@ -199,32 +211,72 @@ export const InfiniteCanvas = () => {
     }
   }, [contextMenuPosition]);
 
-  const handleMessageSelect = useCallback(() => {
-    setContextMenuOpen(false);
+  const createMessageDraft = useCallback(
+    (position: XYPosition) => {
+      const nodeId = crypto.randomUUID();
+      const node: MessageDraftNode = {
+        data: {
+          onCancel: () => {
+            setNodes((currentNodes) =>
+              currentNodes.filter((currentNode) => currentNode.id !== nodeId),
+            );
+          },
+          onSubmit: (text) => {
+            const messageNode: SyncedCanvasNode = {
+              data: { messages: [] },
+              id: nodeId,
+              position,
+              type: 'message',
+            };
 
+            setNodes((currentNodes) =>
+              currentNodes.map((currentNode) =>
+                currentNode.id === nodeId
+                  ? toFlowCanvasNode(messageNode)
+                  : currentNode,
+              ),
+            );
+            socket.emit(CANVAS_EVENTS.mutation, {
+              action: 'create',
+              node: {
+                id: messageNode.id,
+                position: messageNode.position,
+                type: messageNode.type,
+              },
+            });
+            socket.emit(CANVAS_EVENTS.messageSend, {
+              id: crypto.randomUUID(),
+              nodeId,
+              text,
+            });
+          },
+        },
+        draggable: false,
+        id: nodeId,
+        origin: [0.5, 0],
+        position,
+        type: 'messageDraft',
+      };
+
+      setNodes((currentNodes) => [
+        ...currentNodes.filter(
+          (currentNode) => currentNode.type !== 'messageDraft',
+        ),
+        node,
+      ]);
+    },
+    [setNodes, socket],
+  );
+
+  const handleMessageSelect = useCallback(() => {
     if (!contextMenuPosition) {
       return;
     }
 
-    const position = screenToFlowPosition(contextMenuPosition);
-
-    const node: SyncedCanvasNode = {
-      data: { messages: [] },
-      id: crypto.randomUUID(),
-      position,
-      type: 'message',
-    };
-
-    setNodes((currentNodes) => [...currentNodes, toFlowCanvasNode(node)]);
-    socket.emit(CANVAS_EVENTS.mutation, {
-      action: 'create',
-      node: {
-        id: node.id,
-        position: node.position,
-        type: node.type,
-      },
-    });
-  }, [contextMenuPosition, screenToFlowPosition, setNodes, socket]);
+    pendingMessageDraftPositionRef.current =
+      screenToFlowPosition(contextMenuPosition);
+    setContextMenuOpen(false);
+  }, [contextMenuPosition, screenToFlowPosition]);
 
   const handleEmojiPickerClose = useCallback(() => {
     setEmojiPickerOpen(false);
@@ -254,6 +306,11 @@ export const InfiniteCanvas = () => {
               onInit={handleInit}
               onNodeDragStop={(event, node) => {
                 void event;
+
+                if (node.type === 'messageDraft') {
+                  return;
+                }
+
                 socket.emit(CANVAS_EVENTS.mutation, toCanvasMoveMutation(node));
               }}
               onNodesChange={onNodesChange}
@@ -271,6 +328,17 @@ export const InfiniteCanvas = () => {
           </div>
         </ContextMenuTrigger>
         <CanvasContextMenu
+          onCloseAutoFocus={(event) => {
+            const draftPosition = pendingMessageDraftPositionRef.current;
+
+            if (!draftPosition) {
+              return;
+            }
+
+            pendingMessageDraftPositionRef.current = undefined;
+            event.preventDefault();
+            createMessageDraft(draftPosition);
+          }}
           onMessageSelect={handleMessageSelect}
           onReactionSelect={handleReactionSelect}
         />
