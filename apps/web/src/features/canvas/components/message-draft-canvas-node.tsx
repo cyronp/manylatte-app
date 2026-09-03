@@ -52,9 +52,9 @@ export const MessageDraftCanvasNode = ({
       </div>
       <PopoverPrimitive.Portal>
         <PopoverPrimitive.Content
-          align="start"
+          align="center"
           aria-label="New message"
-          className="z-50 w-72 rounded-2xl border border-border bg-popover p-2 text-popover-foreground shadow-lg outline-none"
+          className="z-50 w-72 rounded-full border border-border bg-popover p-2 text-popover-foreground shadow-lg outline-none"
           collisionPadding={12}
           onCloseAutoFocus={(event) => event.preventDefault()}
           side="right"
