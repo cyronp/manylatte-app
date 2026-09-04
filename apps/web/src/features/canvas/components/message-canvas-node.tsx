@@ -17,10 +17,10 @@ import { Marker, MarkerContent } from '@/components/ui/marker';
 import { useSocket } from '@/components/socket-provider';
 import { cn } from '@/lib/utils';
 import {
+  ArrowUpIcon,
   CircleDashedIcon,
   DotsThreeVerticalIcon,
   MinusIcon,
-  PaperPlaneRightIcon,
 } from '@phosphor-icons/react';
 import { Popover as PopoverPrimitive } from 'radix-ui';
 import {
@@ -292,12 +292,12 @@ export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
                   aria-label="Send message"
                   className="rounded-full"
                   disabled={!draft.trim() || !user || status !== 'connected'}
-                  size="icon-sm"
+                  size="icon-xs"
                   title="Send message"
                   type="submit"
                   variant="default"
                 >
-                  <PaperPlaneRightIcon />
+                  <ArrowUpIcon />
                 </InputGroupButton>
               </InputGroupAddon>
             </InputGroup>
