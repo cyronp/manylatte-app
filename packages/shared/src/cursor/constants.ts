@@ -10,7 +10,7 @@ export const CURSOR_IDLE_TIMEOUT_MS = 15_000;
 export const CURSOR_CONNECTION_IDLE_TIMEOUT_MS = 5 * 60_000;
 
 const cursorPalette = [
-  '#2563eb',
+  '#1447e6',
   '#e11d48',
   '#059669',
   '#7c3aed',

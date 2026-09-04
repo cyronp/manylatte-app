@@ -7,7 +7,7 @@ import {
 } from './cursor-label-color';
 
 const cursorPalette = [
-  '#2563eb',
+  '#1447e6',
   '#e11d48',
   '#059669',
   '#7c3aed',
@@ -35,7 +35,7 @@ describe('cursor label color', () => {
   });
 
   it('uses white on dark colors and black on light colors', () => {
-    expect(getCursorLabelTextColor(hexColorSchema.parse('#2563eb'))).toBe(
+    expect(getCursorLabelTextColor(hexColorSchema.parse('#1447e6'))).toBe(
       '#ffffff',
     );
     expect(getCursorLabelTextColor(hexColorSchema.parse('#d97706'))).toBe(
