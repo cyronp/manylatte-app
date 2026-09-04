@@ -18,6 +18,7 @@ import { useSocket } from '@/components/socket-provider';
 import { cn } from '@/lib/utils';
 import {
   CircleDashedIcon,
+  DotsThreeVerticalIcon,
   MinusIcon,
   PaperPlaneRightIcon,
 } from '@phosphor-icons/react';
@@ -181,18 +182,23 @@ export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
         >
           <div className="flex w-full items-center justify-between gap-2 bg-background border-b border-border p-2 pl-4">
             <span className="text-sm font-medium">Messages</span>
-            <PopoverPrimitive.Close asChild>
-              <Button
-                aria-label="Close messages"
-                className="nodrag"
-                size="icon-sm"
-                title="Close messages"
-                type="button"
-                variant="ghost"
-              >
-                <MinusIcon />
+            <div className="flex flex-row gap-2">
+              <Button variant="ghost" size="icon-sm" className='nodrag'>
+                <DotsThreeVerticalIcon />
               </Button>
-            </PopoverPrimitive.Close>
+              <PopoverPrimitive.Close asChild>
+                <Button
+                  aria-label="Close messages"
+                  className="nodrag"
+                  size="icon-sm"
+                  title="Close messages"
+                  type="button"
+                  variant="ghost"
+                >
+                  <MinusIcon />
+                </Button>
+              </PopoverPrimitive.Close>
+            </div>
           </div>
           <div
             className="nowheel flex flex-1 flex-col gap-6 overflow-y-auto p-4"
