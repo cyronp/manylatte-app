@@ -11,6 +11,8 @@
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
+    "db:deploy": "npm run prisma:deploy --workspace=@app/db",
+    "db:studio": "npm run prisma:studio --workspace=@app/db",
     "lint": "turbo lint",
     "security:audit": "npm audit --audit-level=high",
     "format": "prettier --write .",

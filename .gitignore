@@ -11,4 +11,7 @@ packages/db/src/generated/prisma/
 
 .DS_Store
 *.log
-
+*.db
+*.db-shm
+*.db-wal
+*.db-journal

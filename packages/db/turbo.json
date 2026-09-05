@@ -2,6 +2,7 @@
   "extends": ["//"],
   "tasks": {
     "build": {
+      "outputs": ["dist/**", "src/generated/prisma/**"],
       "passThroughEnv": ["DATABASE_URL"]
     }
   }
