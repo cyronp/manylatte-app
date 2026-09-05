@@ -22,6 +22,7 @@ import { io as createClient, type Socket } from 'socket.io-client';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createApp, type CreateAppOptions } from '../app.js';
+import { createTestDatabase } from '../../test/database.js';
 
 type TestSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
@@ -114,6 +115,7 @@ describe('cursor socket server', () => {
 
   const startServer = async (options: CreateAppOptions = {}) => {
     const app = await createApp({
+      database: await createTestDatabase(),
       cursorIdleTimeoutMs: 5000,
       logger: false,
       ...options,

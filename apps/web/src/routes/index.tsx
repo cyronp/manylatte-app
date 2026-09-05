@@ -44,6 +44,15 @@ function CanvasPage() {
     >
       <InfiniteCanvas />
 
+      {status === 'connected' && error && (
+        <div
+          role="alert"
+          className="absolute bottom-4 left-4 right-4 z-60 rounded-lg bg-destructive p-3 text-sm text-white"
+        >
+          {error}
+        </div>
+      )}
+
       {status !== 'connected' && (
         <div
           aria-live="polite"

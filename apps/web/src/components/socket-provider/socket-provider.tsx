@@ -1,4 +1,5 @@
 import {
+  CANVAS_EVENTS,
   CURSOR_EVENTS,
   DEFAULT_CURSOR_ROOM_ID,
   hexColorSchema,
@@ -112,6 +113,8 @@ export const SocketProvider = ({ children, username }: SocketProviderProps) => {
       setError(connectionError.message);
       setStatus('disconnected');
     };
+    const handleCanvasError = ({ message }: { message: string }) =>
+      setError(message);
     const handleReconnectAttempt = () => {
       setStatus('connecting');
     };
@@ -169,6 +172,7 @@ export const SocketProvider = ({ children, username }: SocketProviderProps) => {
     };
 
     socket.on('connect', handleConnect);
+    socket.on(CANVAS_EVENTS.error, handleCanvasError);
     socket.on('disconnect', handleDisconnect);
     socket.on('connect_error', handleConnectError);
     socket.io.on('reconnect_attempt', handleReconnectAttempt);
@@ -191,6 +195,7 @@ export const SocketProvider = ({ children, username }: SocketProviderProps) => {
 
     return () => {
       socket.off('connect', handleConnect);
+      socket.off(CANVAS_EVENTS.error, handleCanvasError);
       socket.off('disconnect', handleDisconnect);
       socket.off('connect_error', handleConnectError);
       socket.io.off('reconnect_attempt', handleReconnectAttempt);
