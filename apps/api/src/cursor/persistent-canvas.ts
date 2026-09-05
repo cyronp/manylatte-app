@@ -1,10 +1,12 @@
-import type { CanvasMessage, CanvasNodeMutation } from '@app/shared';
+import type {
+  CanvasMessage,
+  CanvasNodeMutation,
+  CursorUser,
+} from '@app/shared';
 
 import type { CanvasPersistence } from './canvas-persistence.js';
 import { CanvasState } from './canvas-state.js';
 
-// One queue per room preserves command order while SQLite writes are in flight.
-// A candidate state only becomes visible after its write has committed.
 export class PersistentCanvas {
   #state: CanvasState | undefined;
   #tail = Promise.resolve();
@@ -21,7 +23,6 @@ export class PersistentCanvas {
       });
       return operation(this.#state);
     });
-    // A failed command must not poison subsequent commands or prevent shutdown.
     this.#tail = result.then(
       () => undefined,
       () => undefined,
@@ -29,12 +30,12 @@ export class PersistentCanvas {
     return result;
   }
 
-  applyMutation(mutation: CanvasNodeMutation) {
+  applyMutation(mutation: CanvasNodeMutation, user: CursorUser) {
     return this.#enqueue(async (state) => {
       const candidate = state.fork();
-      const result = candidate.applyMutation(mutation);
+      const result = candidate.applyMutation(mutation, user);
       if (result.status === 'rejected') return result;
-      await this.persistence.mutate(this.roomId, mutation);
+      await this.persistence.mutate(this.roomId, mutation, user);
       this.#state = candidate;
       return result;
     });

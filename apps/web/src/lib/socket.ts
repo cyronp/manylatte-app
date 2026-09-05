@@ -77,4 +77,6 @@ export const createCursorSocket = (
       username,
     },
     autoConnect: false,
+    reconnection: true,
+    reconnectionAttempts: Infinity,
   });

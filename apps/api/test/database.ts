@@ -3,13 +3,23 @@ import { createDatabase } from '@app/db';
 
 export const createTestDatabase = async (url = 'file::memory:') => {
   const database = createDatabase(url);
-  const sql = await readFile(
-    new URL(
-      '../../../packages/db/prisma/migrations/20260905000000_initial_sqlite/migration.sql',
-      import.meta.url,
-    ),
-    'utf8',
-  );
+  const migrations = [
+    '20260905000000_initial_sqlite',
+    '20260905010000_add_emoji_author',
+  ];
+  const sql = (
+    await Promise.all(
+      migrations.map((migration) =>
+        readFile(
+          new URL(
+            `../../../packages/db/prisma/migrations/${migration}/migration.sql`,
+            import.meta.url,
+          ),
+          'utf8',
+        ),
+      ),
+    )
+  ).join('\n');
   for (const statement of sql
     .split(';')
     .map((part) => part.trim())

@@ -1,4 +1,5 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { createDatabase } from '@app/db';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -84,14 +85,33 @@ describe('persistent API lifecycle', () => {
       text: 'Survives restart',
     });
     const expectedNode = await saved;
+    const reactionCreated = nextEvent<CanvasNode>((resolve) =>
+      first.socket.once('canvas:node-upsert', resolve),
+    );
+    first.socket.emit('canvas:mutation', {
+      action: 'create',
+      node: {
+        id: randomUUID(),
+        type: 'emoji',
+        position: { x: 70, y: 80 },
+        data: { emoji: '☕', label: 'Coffee' },
+      },
+    });
+    const expectedReaction = await reactionCreated;
+    expect(expectedReaction).toMatchObject({
+      data: { user: { username: 'Persistence test' } },
+    });
     first.socket.disconnect();
     const second = await connect();
-    expect(second.snapshot.nodes).toEqual([expectedNode]);
+    expect(second.snapshot.nodes).toEqual([expectedNode, expectedReaction]);
     second.socket.disconnect();
     await app.close();
     app = await createApp({ databaseUrl, logger: false });
     await app.listen({ host: '127.0.0.1', port: 0 });
-    expect((await connect()).snapshot.nodes).toEqual([expectedNode]);
+    expect((await connect()).snapshot.nodes).toEqual([
+      expectedNode,
+      expectedReaction,
+    ]);
     expect((await app.inject('/healthz')).statusCode).toBe(200);
     expect((await app.inject('/readyz')).statusCode).toBe(200);
   });
@@ -103,5 +123,29 @@ describe('persistent API lifecycle', () => {
     await expect(
       createApp({ redisUrl: 'redis://localhost:6379', logger: false }),
     ).rejects.toThrow(/single-instance SQLite/);
+  });
+
+  it('rejects a database missing the author migration at startup', async () => {
+    const database = createDatabase('file::memory:');
+    try {
+      const sql = await readFile(
+        new URL(
+          '../../../packages/db/prisma/migrations/20260905000000_initial_sqlite/migration.sql',
+          import.meta.url,
+        ),
+        'utf8',
+      );
+      for (const statement of sql
+        .split(';')
+        .map((part) => part.trim())
+        .filter(Boolean)) {
+        await database.$executeRawUnsafe(statement);
+      }
+      await expect(createApp({ database, logger: false })).rejects.toThrow(
+        /db:deploy/,
+      );
+    } finally {
+      await database.$disconnect();
+    }
   });
 });

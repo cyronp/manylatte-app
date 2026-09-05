@@ -4,6 +4,7 @@ import {
   type CanvasNode,
   type CanvasNodeCreate,
   type CanvasNodeMutation,
+  type CursorUser,
 } from '@app/shared';
 
 const DEFAULT_MAX_CANVAS_NODES = 500;
@@ -12,7 +13,11 @@ export type CanvasMutationResult =
   | { nodeId: string; status: 'deleted' }
   | { node: CanvasNode; status: 'applied' }
   | {
-      reason: 'node-already-exists' | 'node-limit' | 'node-missing';
+      reason:
+        | 'node-already-exists'
+        | 'node-limit'
+        | 'node-missing'
+        | 'not-emoji-node';
       status: 'rejected';
     };
 
@@ -30,8 +35,13 @@ interface CanvasStateOptions {
   maxNodes?: number;
 }
 
-const createCanvasNode = (node: CanvasNodeCreate): CanvasNode =>
-  node.type === 'message' ? { ...node, data: { messages: [] } } : node;
+const createCanvasNode = (
+  node: CanvasNodeCreate,
+  user: CursorUser,
+): CanvasNode => {
+  if (node.type === 'message') return { ...node, data: { messages: [] } };
+  return { ...node, data: { ...node.data, user } };
+};
 
 export class CanvasState {
   readonly #maxMessagesPerNode: number;
@@ -56,20 +66,32 @@ export class CanvasState {
     });
   }
 
-  applyMutation(mutation: CanvasNodeMutation): CanvasMutationResult {
+  applyMutation(
+    mutation: CanvasNodeMutation,
+    user: CursorUser,
+  ): CanvasMutationResult {
     if (mutation.action === 'delete') {
       this.#nodes.delete(mutation.nodeId);
       return { nodeId: mutation.nodeId, status: 'deleted' };
     }
 
-    if (mutation.action === 'move') {
+    if (mutation.action === 'move' || mutation.action === 'update-reaction') {
       const node = this.#nodes.get(mutation.nodeId);
 
       if (!node) {
         return { reason: 'node-missing', status: 'rejected' };
       }
 
-      const nextNode = { ...node, position: mutation.position };
+      if (mutation.action === 'move') {
+        const nextNode = { ...node, position: mutation.position };
+        this.#nodes.set(nextNode.id, nextNode);
+        return { node: nextNode, status: 'applied' };
+      }
+
+      if (node.type !== 'emoji') {
+        return { reason: 'not-emoji-node', status: 'rejected' };
+      }
+      const nextNode = { ...node, data: { ...node.data, ...mutation.data } };
       this.#nodes.set(nextNode.id, nextNode);
       return { node: nextNode, status: 'applied' };
     }
@@ -82,7 +104,7 @@ export class CanvasState {
       return { reason: 'node-limit', status: 'rejected' };
     }
 
-    const nextNode = createCanvasNode(mutation.node);
+    const nextNode = createCanvasNode(mutation.node, user);
     this.#nodes.set(nextNode.id, nextNode);
     return { node: nextNode, status: 'applied' };
   }
