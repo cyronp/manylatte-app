@@ -9,6 +9,40 @@ import {
 } from './schemas.js';
 
 describe('canvas node contract', () => {
+  it('accepts reaction edits but strips client-supplied authors and rejects invalid data', () => {
+    const mutation = {
+      action: 'update-reaction',
+      nodeId: 'd599a14f-1078-4c17-b809-f7fe3e9902ec',
+      data: { emoji: '☕', label: 'Coffee' },
+    };
+    expect(
+      canvasNodeMutationSchema.parse({
+        ...mutation,
+        data: { ...mutation.data, user: { username: 'Forged author' } },
+      }),
+    ).toEqual(mutation);
+    expect(
+      canvasNodeMutationSchema.safeParse({
+        ...mutation,
+        data: { emoji: '', label: 'Coffee' },
+      }).success,
+    ).toBe(false);
+    expect(
+      canvasNodeMutationSchema.safeParse({ ...mutation, nodeId: 'invalid' })
+        .success,
+    ).toBe(false);
+    expect(
+      canvasNodeMutationSchema.parse({
+        action: 'create',
+        node: {
+          id: mutation.nodeId,
+          type: 'emoji',
+          position: { x: 20, y: 30 },
+          data: { ...mutation.data, user: { username: 'Forged author' } },
+        },
+      }),
+    ).toMatchObject({ node: { data: mutation.data } });
+  });
   it('accepts emoji and message nodes', () => {
     expect(
       canvasNodeSchema.safeParse({

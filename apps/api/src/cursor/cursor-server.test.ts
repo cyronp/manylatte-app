@@ -175,8 +175,20 @@ describe('cursor socket server', () => {
     await expect(firstUpdate).resolves.toEqual(authoredNode);
     await expect(secondUpdate).resolves.toEqual(authoredNode);
 
+    const edits = [first.socket, second.socket].map(waitForCanvasNode);
+    second.socket.emit(CANVAS_EVENTS.mutation, {
+      action: 'update-reaction',
+      nodeId: node.id,
+      data: { emoji: '❤️', label: 'Heart' },
+    });
+    const editedNode = {
+      ...authoredNode,
+      data: { emoji: '❤️', label: 'Heart', user: first.session.self },
+    };
+    for (const edit of edits) await expect(edit).resolves.toEqual(editedNode);
+
     const third = await connect(url);
-    expect(third.snapshot.nodes).toContainEqual(authoredNode);
+    expect(third.snapshot.nodes).toContainEqual(editedNode);
   });
 
   it('attributes canvas messages to their sender and broadcasts them', async () => {

@@ -93,6 +93,11 @@ export type CanvasNodeCreate = z.infer<typeof canvasNodeCreateSchema>;
 
 export const canvasNodeMutationSchema = z.discriminatedUnion('action', [
   z.strictObject({
+    action: z.literal('update-reaction'),
+    nodeId: z.uuidv4(),
+    data: canvasEmojiInputDataSchema,
+  }),
+  z.strictObject({
     action: z.literal('delete'),
     nodeId: z.uuidv4(),
   }),

@@ -12,7 +12,7 @@ export interface CanvasPersistence {
   mutate: (
     roomId: string,
     mutation: CanvasNodeMutation,
-    user?: CursorUser,
+    user: CursorUser,
   ) => Promise<void>;
   appendMessage: (
     roomId: string,
@@ -78,6 +78,13 @@ export const createCanvasPersistence = (
       });
       return;
     }
+    if (mutation.action === 'update-reaction') {
+      await database.canvasNode.update({
+        where: { id: mutation.nodeId, roomId, type: 'emoji' },
+        data: { emoji: mutation.data.emoji, label: mutation.data.label },
+      });
+      return;
+    }
     const { node } = mutation;
     await database.canvasNode.create({
       data: {
@@ -90,9 +97,9 @@ export const createCanvasPersistence = (
           ? {
               emoji: node.data.emoji,
               label: node.data.label,
-              authorId: user?.userId,
-              authorUsername: user?.username,
-              authorColor: user?.color,
+              authorId: user.userId,
+              authorUsername: user.username,
+              authorColor: user.color,
             }
           : {}),
       },

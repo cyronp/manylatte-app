@@ -32,14 +32,14 @@ const message: CanvasMessage = {
 describe('CanvasState', () => {
   it('deletes message history, frees capacity, and tolerates repeated deletion', () => {
     const canvas = new CanvasState({ maxNodes: 1 });
-    canvas.applyMutation(createMessageNode);
+    canvas.applyMutation(createMessageNode, message.author);
     canvas.appendMessage(MESSAGE_NODE_ID, message);
 
     const deletion: CanvasNodeMutation = {
       action: 'delete',
       nodeId: MESSAGE_NODE_ID,
     };
-    expect(canvas.applyMutation(deletion)).toEqual({
+    expect(canvas.applyMutation(deletion, message.author)).toEqual({
       nodeId: MESSAGE_NODE_ID,
       status: 'deleted',
     });
@@ -49,14 +49,18 @@ describe('CanvasState', () => {
       reason: 'message-node-missing',
       status: 'rejected',
     });
-    expect(canvas.applyMutation(deletion).status).toBe('deleted');
-    expect(canvas.applyMutation(createMessageNode).status).toBe('applied');
+    expect(canvas.applyMutation(deletion, message.author).status).toBe(
+      'deleted',
+    );
+    expect(canvas.applyMutation(createMessageNode, message.author).status).toBe(
+      'applied',
+    );
   });
 
   it('creates server-authored message nodes without client message data', () => {
     const canvas = new CanvasState();
 
-    expect(canvas.applyMutation(createMessageNode)).toEqual({
+    expect(canvas.applyMutation(createMessageNode, message.author)).toEqual({
       node: {
         ...createMessageNode.node,
         data: { messages: [] },
@@ -67,15 +71,18 @@ describe('CanvasState', () => {
 
   it('moves a message node without changing its history', () => {
     const canvas = new CanvasState();
-    canvas.applyMutation(createMessageNode);
+    canvas.applyMutation(createMessageNode, message.author);
     canvas.appendMessage(MESSAGE_NODE_ID, message);
 
     expect(
-      canvas.applyMutation({
-        action: 'move',
-        nodeId: MESSAGE_NODE_ID,
-        position: { x: 300, y: 400 },
-      }),
+      canvas.applyMutation(
+        {
+          action: 'move',
+          nodeId: MESSAGE_NODE_ID,
+          position: { x: 300, y: 400 },
+        },
+        message.author,
+      ),
     ).toEqual({
       node: {
         ...createMessageNode.node,
@@ -88,35 +95,41 @@ describe('CanvasState', () => {
 
   it('rejects duplicate node creation and movement of missing nodes', () => {
     const canvas = new CanvasState();
-    canvas.applyMutation(createMessageNode);
+    canvas.applyMutation(createMessageNode, message.author);
 
-    expect(canvas.applyMutation(createMessageNode)).toEqual({
+    expect(canvas.applyMutation(createMessageNode, message.author)).toEqual({
       reason: 'node-already-exists',
       status: 'rejected',
     });
     expect(
-      canvas.applyMutation({
-        action: 'move',
-        nodeId: EMOJI_NODE_ID,
-        position: { x: 300, y: 400 },
-      }),
+      canvas.applyMutation(
+        {
+          action: 'move',
+          nodeId: EMOJI_NODE_ID,
+          position: { x: 300, y: 400 },
+        },
+        message.author,
+      ),
     ).toEqual({ reason: 'node-missing', status: 'rejected' });
   });
 
   it('enforces node and message limits', () => {
     const canvas = new CanvasState({ maxMessagesPerNode: 1, maxNodes: 1 });
-    canvas.applyMutation(createMessageNode);
+    canvas.applyMutation(createMessageNode, message.author);
 
     expect(
-      canvas.applyMutation({
-        action: 'create',
-        node: {
-          data: { emoji: '☕', label: 'Coffee' },
-          id: EMOJI_NODE_ID,
-          position: { x: 300, y: 400 },
-          type: 'emoji',
+      canvas.applyMutation(
+        {
+          action: 'create',
+          node: {
+            data: { emoji: '☕', label: 'Coffee' },
+            id: EMOJI_NODE_ID,
+            position: { x: 300, y: 400 },
+            type: 'emoji',
+          },
         },
-      }),
+        message.author,
+      ),
     ).toEqual({ reason: 'node-limit', status: 'rejected' });
     expect(canvas.appendMessage(MESSAGE_NODE_ID, message).status).toBe(
       'applied',
@@ -131,7 +144,7 @@ describe('CanvasState', () => {
 
   it('ignores duplicate messages', () => {
     const canvas = new CanvasState();
-    canvas.applyMutation(createMessageNode);
+    canvas.applyMutation(createMessageNode, message.author);
     canvas.appendMessage(MESSAGE_NODE_ID, message);
 
     expect(canvas.appendMessage(MESSAGE_NODE_ID, message)).toEqual({

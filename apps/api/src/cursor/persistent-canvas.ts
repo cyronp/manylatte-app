@@ -30,7 +30,7 @@ export class PersistentCanvas {
     return result;
   }
 
-  applyMutation(mutation: CanvasNodeMutation, user?: CursorUser) {
+  applyMutation(mutation: CanvasNodeMutation, user: CursorUser) {
     return this.#enqueue(async (state) => {
       const candidate = state.fork();
       const result = candidate.applyMutation(mutation, user);
