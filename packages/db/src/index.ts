@@ -16,9 +16,9 @@ export const connectDatabase = async (database: PrismaClient) => {
     await database.$connect();
     await database.$queryRawUnsafe('PRAGMA journal_mode = WAL');
     await database.$queryRawUnsafe('PRAGMA foreign_keys = ON');
-    // Fail at startup with an actionable error if migrations were not deployed.
-    await database.canvasNode.count();
-    await database.canvasMessage.count();
+    // Select all model columns so missing migrations fail before accepting clients.
+    await database.canvasNode.findFirst();
+    await database.canvasMessage.findFirst();
   } catch (cause) {
     await database.$disconnect();
     throw new Error(
