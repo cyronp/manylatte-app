@@ -681,6 +681,15 @@ export const registerCursorServer = (
 
       const change = room.canvas.applyMutation(result.data);
 
+      if (change.status === 'deleted') {
+        for (const typingParticipant of room.participants.values()) {
+          typingParticipant.typingNodeIds.delete(change.nodeId);
+        }
+        participant.lastActivityAt = acceptedAt;
+        io.to(roomId).emit(CANVAS_EVENTS.nodeRemove, { nodeId: change.nodeId });
+        return;
+      }
+
       if (change.status === 'rejected') {
         recordViolation(
           socket,

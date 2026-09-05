@@ -9,6 +9,7 @@ import {
 const DEFAULT_MAX_CANVAS_NODES = 500;
 
 export type CanvasMutationResult =
+  | { nodeId: string; status: 'deleted' }
   | { node: CanvasNode; status: 'applied' }
   | {
       reason: 'node-already-exists' | 'node-limit' | 'node-missing';
@@ -45,6 +46,11 @@ export class CanvasState {
   }
 
   applyMutation(mutation: CanvasNodeMutation): CanvasMutationResult {
+    if (mutation.action === 'delete') {
+      this.#nodes.delete(mutation.nodeId);
+      return { nodeId: mutation.nodeId, status: 'deleted' };
+    }
+
     if (mutation.action === 'move') {
       const node = this.#nodes.get(mutation.nodeId);
 

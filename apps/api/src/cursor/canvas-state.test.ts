@@ -30,6 +30,29 @@ const message: CanvasMessage = {
 };
 
 describe('CanvasState', () => {
+  it('deletes message history, frees capacity, and tolerates repeated deletion', () => {
+    const canvas = new CanvasState({ maxNodes: 1 });
+    canvas.applyMutation(createMessageNode);
+    canvas.appendMessage(MESSAGE_NODE_ID, message);
+
+    const deletion: CanvasNodeMutation = {
+      action: 'delete',
+      nodeId: MESSAGE_NODE_ID,
+    };
+    expect(canvas.applyMutation(deletion)).toEqual({
+      nodeId: MESSAGE_NODE_ID,
+      status: 'deleted',
+    });
+    expect(canvas.snapshot()).toEqual([]);
+    expect(canvas.hasMessageNode(MESSAGE_NODE_ID)).toBe(false);
+    expect(canvas.appendMessage(MESSAGE_NODE_ID, message)).toEqual({
+      reason: 'message-node-missing',
+      status: 'rejected',
+    });
+    expect(canvas.applyMutation(deletion).status).toBe('deleted');
+    expect(canvas.applyMutation(createMessageNode).status).toBe('applied');
+  });
+
   it('creates server-authored message nodes without client message data', () => {
     const canvas = new CanvasState();
 

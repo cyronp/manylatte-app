@@ -232,6 +232,26 @@ describe('cursor socket server', () => {
 
     const third = await connect(url);
     expect(third.snapshot.nodes).toContainEqual(movedNode);
+
+    const removals = [first.socket, second.socket, third.socket].map((socket) =>
+      withTimeout(
+        new Promise<{ nodeId: string }>((resolve) => {
+          socket.once(CANVAS_EVENTS.nodeRemove, resolve);
+        }),
+        CANVAS_EVENTS.nodeRemove,
+      ),
+    );
+    first.socket.emit(CANVAS_EVENTS.mutation, {
+      action: 'delete',
+      nodeId: node.id,
+    });
+    await expect(Promise.all(removals)).resolves.toEqual([
+      { nodeId: node.id },
+      { nodeId: node.id },
+      { nodeId: node.id },
+    ]);
+    const fourth = await connect(url);
+    expect(fourth.snapshot.nodes).toEqual([]);
   });
 
   it('broadcasts typing users and clears them on disconnect', async () => {
