@@ -6,7 +6,7 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from '@/components/ui/input-group';
-import { ChatIcon, PaperPlaneRightIcon } from '@phosphor-icons/react';
+import { ArrowUpIcon, ChatIcon } from '@phosphor-icons/react';
 import { type Node, type NodeProps, useStore } from '@xyflow/react';
 import { Popover as PopoverPrimitive } from 'radix-ui';
 import { useState } from 'react';
@@ -52,9 +52,9 @@ export const MessageDraftCanvasNode = ({
       </div>
       <PopoverPrimitive.Portal>
         <PopoverPrimitive.Content
-          align="start"
+          align="center"
           aria-label="New message"
-          className="z-50 w-72 rounded-2xl border border-border bg-popover p-2 text-popover-foreground shadow-lg outline-none"
+          className="z-50 w-72 rounded-full border border-border bg-popover p-2 text-popover-foreground shadow-lg outline-none"
           collisionPadding={12}
           onCloseAutoFocus={(event) => event.preventDefault()}
           side="right"
@@ -89,12 +89,12 @@ export const MessageDraftCanvasNode = ({
                   aria-label="Create message"
                   className="rounded-full"
                   disabled={!draft.trim() || !user || status !== 'connected'}
-                  size="icon-sm"
+                  size="icon-xs"
                   title="Create message"
                   type="submit"
                   variant="default"
                 >
-                  <PaperPlaneRightIcon />
+                  <ArrowUpIcon />
                 </InputGroupButton>
               </InputGroupAddon>
             </InputGroup>

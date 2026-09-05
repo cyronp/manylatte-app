@@ -167,11 +167,21 @@ export const InfiniteCanvas = () => {
       );
     };
 
+    const handleNodeRemove: Parameters<
+      typeof socket.on<'canvas:node-remove'>
+    >[1] = ({ nodeId }) => {
+      setNodes((currentNodes) =>
+        currentNodes.filter((node) => node.id !== nodeId),
+      );
+    };
+
+    socket.on(CANVAS_EVENTS.nodeRemove, handleNodeRemove);
     socket.on(CANVAS_EVENTS.snapshot, handleSnapshot);
     socket.on(CANVAS_EVENTS.nodeUpsert, handleNodeUpsert);
     socket.on(CANVAS_EVENTS.typing, handleTyping);
 
     return () => {
+      socket.off(CANVAS_EVENTS.nodeRemove, handleNodeRemove);
       socket.off(CANVAS_EVENTS.snapshot, handleSnapshot);
       socket.off(CANVAS_EVENTS.nodeUpsert, handleNodeUpsert);
       socket.off(CANVAS_EVENTS.typing, handleTyping);

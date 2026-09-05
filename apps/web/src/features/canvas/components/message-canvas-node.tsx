@@ -17,9 +17,11 @@ import { Marker, MarkerContent } from '@/components/ui/marker';
 import { useSocket } from '@/components/socket-provider';
 import { cn } from '@/lib/utils';
 import {
+  ArrowUpIcon,
   CircleDashedIcon,
+  DotsThreeVerticalIcon,
   MinusIcon,
-  PaperPlaneRightIcon,
+  TrashIcon,
 } from '@phosphor-icons/react';
 import { Popover as PopoverPrimitive } from 'radix-ui';
 import {
@@ -36,6 +38,12 @@ import {
   useRef,
   useState,
 } from 'react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 const TYPING_IDLE_TIMEOUT_MS = 1_500;
 
@@ -142,9 +150,9 @@ export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
           <Button
             aria-label={isOpen ? 'Close messages' : 'Open messages'}
             className={cn(
-              'nodrag nowheel group/message h-9 w-9 justify-start overflow-hidden rounded-[18px] rounded-bl-none border-2 border-background bg-background p-0 shadow transition-all duration-200 ease-out',
+              'nowheel group/message h-9 w-9 cursor-grab active:cursor-grabbing justify-start overflow-hidden rounded-[18px] rounded-bl-none border-2 border-background bg-background p-0 shadow transition-all duration-200 ease-out',
               !isOpen &&
-                'hover:h-16 hover:w-60 hover:bg-background hover:shadow-lg focus-visible:h-16 focus-visible:w-60 hover:p-2 hover: gap-2 dark:hover:bg-background',
+                'hover:h-16 hover:w-60 hover:bg-background hover:shadow-lg focus-visible:h-16 focus-visible:w-60 hover:p-2 gap-2 dark:hover:bg-background',
             )}
             size="icon"
             type="button"
@@ -181,18 +189,48 @@ export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
         >
           <div className="flex w-full items-center justify-between gap-2 bg-background border-b border-border p-2 pl-4">
             <span className="text-sm font-medium">Messages</span>
-            <PopoverPrimitive.Close asChild>
-              <Button
-                aria-label="Close messages"
-                className="nodrag"
-                size="icon-sm"
-                title="Close messages"
-                type="button"
-                variant="ghost"
-              >
-                <MinusIcon />
-              </Button>
-            </PopoverPrimitive.Close>
+            <div className="flex flex-row gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    aria-label="Message options"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="nodrag"
+                  >
+                    <DotsThreeVerticalIcon />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem
+                    disabled={status !== 'connected'}
+                    onSelect={() => {
+                      if (!socket.connected) return;
+                      stopTyping();
+                      socket.emit(CANVAS_EVENTS.mutation, {
+                        action: 'delete',
+                        nodeId: id,
+                      });
+                    }}
+                    variant="destructive"
+                  >
+                    <TrashIcon /> Delete message
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <PopoverPrimitive.Close asChild>
+                <Button
+                  aria-label="Close messages"
+                  className="nodrag"
+                  size="icon-sm"
+                  title="Close messages"
+                  type="button"
+                  variant="ghost"
+                >
+                  <MinusIcon />
+                </Button>
+              </PopoverPrimitive.Close>
+            </div>
           </div>
           <div
             className="nowheel flex flex-1 flex-col gap-6 overflow-y-auto p-4"
@@ -286,12 +324,12 @@ export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
                   aria-label="Send message"
                   className="rounded-full"
                   disabled={!draft.trim() || !user || status !== 'connected'}
-                  size="icon-sm"
+                  size="icon-xs"
                   title="Send message"
                   type="submit"
                   variant="default"
                 >
-                  <PaperPlaneRightIcon />
+                  <ArrowUpIcon />
                 </InputGroupButton>
               </InputGroupAddon>
             </InputGroup>
