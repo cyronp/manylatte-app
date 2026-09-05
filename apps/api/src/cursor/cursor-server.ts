@@ -704,7 +704,11 @@ export const registerCursorServer = (
           return;
         }
 
-        const change = await room.canvas.applyMutation(result.data);
+        const change = await room.canvas.applyMutation(result.data, {
+          color: participant.color,
+          username: participant.username,
+          userId: participant.userId,
+        });
 
         if (change.status === 'deleted') {
           for (const typingParticipant of room.participants.values()) {

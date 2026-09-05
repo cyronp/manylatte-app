@@ -85,7 +85,7 @@ const toCanvasMoveMutation = (
 });
 
 export const InfiniteCanvas = () => {
-  const { socket } = useSocket();
+  const { socket, user } = useSocket();
   const { screenToFlowPosition } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowCanvasNode>([]);
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
@@ -197,7 +197,7 @@ export const InfiniteCanvas = () => {
       const position = screenToFlowPosition(contextMenuPosition);
 
       const node: SyncedCanvasNode = {
-        data: { emoji, label },
+        data: { emoji, label, ...(user ? { user } : {}) },
         id: crypto.randomUUID(),
         position,
         type: 'emoji',
@@ -206,11 +206,14 @@ export const InfiniteCanvas = () => {
       setNodes((currentNodes) => [...currentNodes, toFlowCanvasNode(node)]);
       socket.emit(CANVAS_EVENTS.mutation, {
         action: 'create',
-        node,
+        node: {
+          ...node,
+          data: { emoji, label },
+        },
       });
       setEmojiPickerOpen(false);
     },
-    [contextMenuPosition, screenToFlowPosition, setNodes, socket],
+    [contextMenuPosition, screenToFlowPosition, setNodes, socket, user],
   );
 
   const handleReactionSelect = useCallback(() => {

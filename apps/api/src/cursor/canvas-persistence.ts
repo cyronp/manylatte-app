@@ -4,11 +4,16 @@ import {
   type CanvasMessage,
   type CanvasNode,
   type CanvasNodeMutation,
+  type CursorUser,
 } from '@app/shared';
 
 export interface CanvasPersistence {
   load: (roomId: string) => Promise<CanvasNode[]>;
-  mutate: (roomId: string, mutation: CanvasNodeMutation) => Promise<void>;
+  mutate: (
+    roomId: string,
+    mutation: CanvasNodeMutation,
+    user?: CursorUser,
+  ) => Promise<void>;
   appendMessage: (
     roomId: string,
     nodeId: string,
@@ -32,7 +37,19 @@ export const createCanvasPersistence = (
         position: { x: node.x, y: node.y },
         data:
           node.type === 'emoji'
-            ? { emoji: node.emoji, label: node.label }
+            ? {
+                emoji: node.emoji,
+                label: node.label,
+                ...(node.authorId && node.authorUsername && node.authorColor
+                  ? {
+                      user: {
+                        userId: node.authorId,
+                        username: node.authorUsername,
+                        color: node.authorColor,
+                      },
+                    }
+                  : {}),
+              }
             : {
                 messages: node.messages.map((message) => ({
                   id: message.id,
@@ -47,7 +64,7 @@ export const createCanvasPersistence = (
       }),
     );
   },
-  async mutate(roomId, mutation) {
+  async mutate(roomId, mutation, user) {
     if (mutation.action === 'delete') {
       await database.canvasNode.deleteMany({
         where: { id: mutation.nodeId, roomId },
@@ -70,7 +87,13 @@ export const createCanvasPersistence = (
         x: node.position.x,
         y: node.position.y,
         ...(node.type === 'emoji'
-          ? { emoji: node.data.emoji, label: node.data.label }
+          ? {
+              emoji: node.data.emoji,
+              label: node.data.label,
+              authorId: user?.userId,
+              authorUsername: user?.username,
+              authorColor: user?.color,
+            }
           : {}),
       },
     });

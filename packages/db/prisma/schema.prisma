@@ -16,15 +16,18 @@ model User {
 }
 
 model CanvasNode {
-  id        String          @id
-  roomId    String
-  type      String
-  x         Float
-  y         Float
-  emoji     String?
-  label     String?
-  createdAt DateTime        @default(now())
-  messages  CanvasMessage[]
+  id             String          @id
+  roomId         String
+  type           String
+  x              Float
+  y              Float
+  emoji          String?
+  label          String?
+  authorId       String?
+  authorUsername String?
+  authorColor    String?
+  createdAt      DateTime        @default(now())
+  messages       CanvasMessage[]
 
   @@index([roomId, createdAt, id])
 }

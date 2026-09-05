@@ -4,6 +4,7 @@ import {
   type CanvasNode,
   type CanvasNodeCreate,
   type CanvasNodeMutation,
+  type CursorUser,
 } from '@app/shared';
 
 const DEFAULT_MAX_CANVAS_NODES = 500;
@@ -30,8 +31,13 @@ interface CanvasStateOptions {
   maxNodes?: number;
 }
 
-const createCanvasNode = (node: CanvasNodeCreate): CanvasNode =>
-  node.type === 'message' ? { ...node, data: { messages: [] } } : node;
+const createCanvasNode = (
+  node: CanvasNodeCreate,
+  user?: CursorUser,
+): CanvasNode => {
+  if (node.type === 'message') return { ...node, data: { messages: [] } };
+  return user ? { ...node, data: { ...node.data, user } } : node;
+};
 
 export class CanvasState {
   readonly #maxMessagesPerNode: number;
@@ -56,7 +62,10 @@ export class CanvasState {
     });
   }
 
-  applyMutation(mutation: CanvasNodeMutation): CanvasMutationResult {
+  applyMutation(
+    mutation: CanvasNodeMutation,
+    user?: CursorUser,
+  ): CanvasMutationResult {
     if (mutation.action === 'delete') {
       this.#nodes.delete(mutation.nodeId);
       return { nodeId: mutation.nodeId, status: 'deleted' };
@@ -82,7 +91,7 @@ export class CanvasState {
       return { reason: 'node-limit', status: 'rejected' };
     }
 
-    const nextNode = createCanvasNode(mutation.node);
+    const nextNode = createCanvasNode(mutation.node, user);
     this.#nodes.set(nextNode.id, nextNode);
     return { node: nextNode, status: 'applied' };
   }

@@ -51,9 +51,13 @@ const canvasNodeBaseSchema = z.object({
   position: canvasPositionSchema,
 });
 
-const canvasEmojiDataSchema = z.object({
+const canvasEmojiInputDataSchema = z.object({
   emoji: z.string().min(1).max(32),
   label: z.string().min(1).max(128),
+});
+
+const canvasEmojiDataSchema = canvasEmojiInputDataSchema.extend({
+  user: cursorUserSchema.optional(),
 });
 
 export const canvasNodeSchema = z.discriminatedUnion('type', [
@@ -73,7 +77,7 @@ export type CanvasNode = z.infer<typeof canvasNodeSchema>;
 
 export const canvasNodeCreateSchema = z.discriminatedUnion('type', [
   z.strictObject({
-    data: canvasEmojiDataSchema,
+    data: canvasEmojiInputDataSchema,
     id: z.uuidv4(),
     position: canvasPositionSchema,
     type: z.literal('emoji'),

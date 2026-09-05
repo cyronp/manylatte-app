@@ -167,11 +167,16 @@ describe('cursor socket server', () => {
       node,
     });
 
-    await expect(firstUpdate).resolves.toEqual(node);
-    await expect(secondUpdate).resolves.toEqual(node);
+    const authoredNode: CanvasNode = {
+      ...node,
+      data: { ...node.data, user: first.session.self },
+    };
+
+    await expect(firstUpdate).resolves.toEqual(authoredNode);
+    await expect(secondUpdate).resolves.toEqual(authoredNode);
 
     const third = await connect(url);
-    expect(third.snapshot.nodes).toContainEqual(node);
+    expect(third.snapshot.nodes).toContainEqual(authoredNode);
   });
 
   it('attributes canvas messages to their sender and broadcasts them', async () => {
