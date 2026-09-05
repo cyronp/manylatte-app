@@ -27,6 +27,7 @@ export interface ClientToServerEvents {
 }
 
 export interface ServerToClientEvents {
+  'canvas:error': (error: { message: string }) => void;
   'canvas:node-upsert': (node: CanvasNode) => void;
   'canvas:node-remove': (removal: { nodeId: string }) => void;
   'canvas:snapshot': (snapshot: CanvasSnapshot) => void;

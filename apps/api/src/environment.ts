@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DEFAULT_DATABASE_URL, resolveDatabaseUrl } from '@app/db';
 
 import {
   DEFAULT_ALLOWED_ORIGINS,
@@ -22,6 +23,7 @@ const redisUrlSchema = z
   }, 'must be a valid redis:// or rediss:// URL');
 
 const rawApiEnvironmentSchema = z.object({
+  DATABASE_URL: z.string().default(DEFAULT_DATABASE_URL),
   ALLOWED_ORIGINS: z.string().optional(),
   CURSOR_CONNECTION_IDLE_TIMEOUT_MS: z.coerce
     .number()
@@ -132,6 +134,7 @@ export const readApiEnvironment = (
   }
 
   return {
+    databaseUrl: resolveDatabaseUrl(result.data.DATABASE_URL),
     allowedOrigins: parseAllowedOrigins(
       result.data.ALLOWED_ORIGINS,
       result.data.NODE_ENV,

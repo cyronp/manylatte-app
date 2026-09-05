@@ -3,6 +3,7 @@
   "tasks": {
     "dev": {
       "passThroughEnv": [
+        "DATABASE_URL",
         "ALLOWED_ORIGINS",
         "CURSOR_CONNECTION_IDLE_TIMEOUT_MS",
         "CURSOR_MAX_CONNECTIONS_PER_IP",

@@ -4,7 +4,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
 }
 
 model User {
@@ -13,4 +13,32 @@ model User {
   name      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model CanvasNode {
+  id        String          @id
+  roomId    String
+  type      String
+  x         Float
+  y         Float
+  emoji     String?
+  label     String?
+  createdAt DateTime        @default(now())
+  messages  CanvasMessage[]
+
+  @@index([roomId, createdAt, id])
+}
+
+model CanvasMessage {
+  sequence       Int        @id @default(autoincrement())
+  id             String     @unique
+  nodeId         String
+  node           CanvasNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  text           String
+  authorId       String
+  authorUsername String
+  authorColor    String
+  createdAt      DateTime   @default(now())
+
+  @@index([nodeId, createdAt, id])
 }

@@ -25,6 +25,7 @@ export type CanvasMessageResult =
     };
 
 interface CanvasStateOptions {
+  nodes?: readonly CanvasNode[];
   maxMessagesPerNode?: number;
   maxNodes?: number;
 }
@@ -38,11 +39,21 @@ export class CanvasState {
   readonly #nodes = new Map<string, CanvasNode>();
 
   constructor({
+    nodes = [],
     maxMessagesPerNode = MAX_CANVAS_MESSAGES_PER_NODE,
     maxNodes = DEFAULT_MAX_CANVAS_NODES,
   }: CanvasStateOptions = {}) {
     this.#maxMessagesPerNode = maxMessagesPerNode;
     this.#maxNodes = maxNodes;
+    for (const node of nodes) this.#nodes.set(node.id, node);
+  }
+
+  fork() {
+    return new CanvasState({
+      nodes: this.snapshot(),
+      maxMessagesPerNode: this.#maxMessagesPerNode,
+      maxNodes: this.#maxNodes,
+    });
   }
 
   applyMutation(mutation: CanvasNodeMutation): CanvasMutationResult {

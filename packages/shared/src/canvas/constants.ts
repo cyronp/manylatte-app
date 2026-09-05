@@ -8,6 +8,7 @@ export const CANVAS_HEIGHT = CANVAS_REGION_HEIGHT * CANVAS_ROW_COUNT;
 export const MAX_CANVAS_MESSAGES_PER_NODE = 200;
 
 export const CANVAS_EVENTS = {
+  error: 'canvas:error',
   messageSend: 'canvas:message-send',
   mutation: 'canvas:mutation',
   nodeRemove: 'canvas:node-remove',

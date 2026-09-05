@@ -10,6 +10,16 @@ describe('API environment', () => {
     expect(environment.allowedOrigins).toEqual(DEFAULT_ALLOWED_ORIGINS);
     expect(environment.maxHttpBufferBytes).toBe(4_096);
     expect(environment.port).toBe(3_000);
+    expect(environment.databaseUrl).toMatch(/^file:.*manylatte\.db$/);
+  });
+
+  it('rejects non-SQLite database URLs', () => {
+    expect(() =>
+      readApiEnvironment({ DATABASE_URL: 'postgresql://localhost/old' }),
+    ).toThrow(/SQLite/);
+    expect(() => readApiEnvironment({ DATABASE_URL: 'file:' })).toThrow(
+      /SQLite/,
+    );
   });
 
   it('parses explicit production security settings', () => {
