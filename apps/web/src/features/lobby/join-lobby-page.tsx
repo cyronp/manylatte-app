@@ -55,7 +55,10 @@ export function JoinLobbyPage() {
             Enter a lobby code or create a space of your own.
           </p>
         </div>
-        <form onSubmit={join} className="flex w-full flex-col gap-4">
+        <form
+          onSubmit={join}
+          className="flex w-full flex-col gap-4 justify-center"
+        >
           <Field className="items-center">
             <FieldLabel htmlFor="join-lobby-code">Lobby code</FieldLabel>
             <InputOTP
