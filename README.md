@@ -69,9 +69,21 @@ SQLite-aware backup tool; copying only the live `.db` file can omit committed WA
 data. Restore into an empty destination while the API is stopped, then run
 `db:deploy` before restarting. Test restoration periodically.
 
-The lobby is still public and collaboratively editable, including deletion.
-Persistence does not introduce authentication, ownership permissions, undo, or
-delivery acknowledgements. Those audit findings remain separate work.
+## Lobbies and invites
+
+The home page opens the public lobby. Choose **Create lobby**, enter a name,
+then use **Invite friends** to copy its link. Friends open the link and enter a
+username to join the same canvas. **Leave lobby** in the user menu returns to the
+public lobby. Refreshing or reopening an invite restores that lobby; names and
+canvas content survive API restarts, including lobbies with no content yet.
+
+Invites use `/?lobby=<random-id>`. Lobbies are accessible to anyone with their
+link and collaboratively editable, including deletion. There are no accounts,
+owner permissions, or invite revocation. Canvas content and presence are scoped
+to each lobby. Invalid or unknown invites show an error instead of joining the
+public lobby. Creation is limited to 10 requests per IP per minute.
+
+Run `npm run db:deploy` before starting the updated API to add the lobby table.
 
 ## Checks
 

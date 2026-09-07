@@ -1,7 +1,7 @@
 import {
   CANVAS_EVENTS,
   CURSOR_EVENTS,
-  DEFAULT_CURSOR_ROOM_ID,
+  type CursorRoomId,
   hexColorSchema,
   type CursorUser,
 } from '@app/shared';
@@ -32,15 +32,20 @@ interface SocketContextValue {
 }
 
 interface SocketProviderProps extends PropsWithChildren {
+  roomId: CursorRoomId;
   username: string;
 }
 
 const SocketContext = createContext<SocketContextValue | undefined>(undefined);
 
-export const SocketProvider = ({ children, username }: SocketProviderProps) => {
+export const SocketProvider = ({
+  children,
+  roomId,
+  username,
+}: SocketProviderProps) => {
   const socket = useMemo(
-    () => createCursorSocket(DEFAULT_CURSOR_ROOM_ID, username),
-    [username],
+    () => createCursorSocket(roomId, username),
+    [roomId, username],
   );
   const [status, setStatus] = useState<SocketStatus>('connecting');
   const [error, setError] = useState<string>();

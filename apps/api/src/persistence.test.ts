@@ -39,12 +39,12 @@ describe('persistent API lifecycle', () => {
     if (directory) await rm(directory, { recursive: true, force: true });
   });
 
-  const connect = async () => {
+  const connect = async (roomId = 'lobby') => {
     const address = app!.server.address();
     if (!address || typeof address === 'string')
       throw new Error('Missing server address');
     const socket: Client = io(`http://127.0.0.1:${address.port}`, {
-      auth: { roomId: 'lobby', username: 'Persistence test' },
+      auth: { roomId, username: 'Persistence test' },
       autoConnect: false,
       reconnection: false,
       // Cover the polling transport as well as the existing WebSocket tests.
@@ -58,63 +58,87 @@ describe('persistent API lifecycle', () => {
     return { socket, snapshot: await snapshot };
   };
 
-  it('keeps content after the last disconnect and after closing/reopening the database', async () => {
-    directory = await mkdtemp(join(tmpdir(), 'manylatte-sqlite-test-'));
-    const databaseUrl = `file:${join(directory, 'canvas.db')}`;
-    app = await createApp({
-      database: await createTestDatabase(databaseUrl),
-      logger: false,
-    });
-    await app.listen({ host: '127.0.0.1', port: 0 });
-    const first = await connect();
-    const nodeId = randomUUID();
-    const created = nextEvent<CanvasNode>((resolve) =>
-      first.socket.once('canvas:node-upsert', resolve),
-    );
-    first.socket.emit('canvas:mutation', {
-      action: 'create',
-      node: { id: nodeId, type: 'message', position: { x: 50, y: 60 } },
-    });
-    await created;
-    const saved = nextEvent<CanvasNode>((resolve) =>
-      first.socket.once('canvas:node-upsert', resolve),
-    );
-    first.socket.emit('canvas:message-send', {
-      nodeId,
-      id: randomUUID(),
-      text: 'Survives restart',
-    });
-    const expectedNode = await saved;
-    const reactionCreated = nextEvent<CanvasNode>((resolve) =>
-      first.socket.once('canvas:node-upsert', resolve),
-    );
-    first.socket.emit('canvas:mutation', {
-      action: 'create',
-      node: {
+  it.each(['public', 'invite'])(
+    'keeps %s lobby content after the last disconnect and API restart',
+    async (kind) => {
+      directory = await mkdtemp(join(tmpdir(), 'manylatte-sqlite-test-'));
+      const databaseUrl = `file:${join(directory, 'canvas.db')}`;
+      app = await createApp({
+        database: await createTestDatabase(databaseUrl),
+        logger: false,
+      });
+      await app.listen({ host: '127.0.0.1', port: 0 });
+      const lobby =
+        kind === 'invite'
+          ? (
+              await app.inject({
+                method: 'POST',
+                url: '/lobbies',
+                payload: { name: 'Friends' },
+              })
+            ).json<{ id: string; name: string }>()
+          : { id: 'lobby', name: 'Public lobby' };
+      const emptyLobby = (
+        await app.inject({
+          method: 'POST',
+          url: '/lobbies',
+          payload: { name: 'Empty lobby' },
+        })
+      ).json<{ id: string; name: string }>();
+      const first = await connect(lobby.id);
+      const nodeId = randomUUID();
+      const created = nextEvent<CanvasNode>((resolve) =>
+        first.socket.once('canvas:node-upsert', resolve),
+      );
+      first.socket.emit('canvas:mutation', {
+        action: 'create',
+        node: { id: nodeId, type: 'message', position: { x: 50, y: 60 } },
+      });
+      await created;
+      const saved = nextEvent<CanvasNode>((resolve) =>
+        first.socket.once('canvas:node-upsert', resolve),
+      );
+      first.socket.emit('canvas:message-send', {
+        nodeId,
         id: randomUUID(),
-        type: 'emoji',
-        position: { x: 70, y: 80 },
-        data: { emoji: '☕', label: 'Coffee' },
-      },
-    });
-    const expectedReaction = await reactionCreated;
-    expect(expectedReaction).toMatchObject({
-      data: { user: { username: 'Persistence test' } },
-    });
-    first.socket.disconnect();
-    const second = await connect();
-    expect(second.snapshot.nodes).toEqual([expectedNode, expectedReaction]);
-    second.socket.disconnect();
-    await app.close();
-    app = await createApp({ databaseUrl, logger: false });
-    await app.listen({ host: '127.0.0.1', port: 0 });
-    expect((await connect()).snapshot.nodes).toEqual([
-      expectedNode,
-      expectedReaction,
-    ]);
-    expect((await app.inject('/healthz')).statusCode).toBe(200);
-    expect((await app.inject('/readyz')).statusCode).toBe(200);
-  });
+        text: 'Survives restart',
+      });
+      const expectedNode = await saved;
+      const reactionCreated = nextEvent<CanvasNode>((resolve) =>
+        first.socket.once('canvas:node-upsert', resolve),
+      );
+      first.socket.emit('canvas:mutation', {
+        action: 'create',
+        node: {
+          id: randomUUID(),
+          type: 'emoji',
+          position: { x: 70, y: 80 },
+          data: { emoji: '☕', label: 'Coffee' },
+        },
+      });
+      const expectedReaction = await reactionCreated;
+      expect(expectedReaction).toMatchObject({
+        data: { user: { username: 'Persistence test' } },
+      });
+      first.socket.disconnect();
+      const second = await connect(lobby.id);
+      expect(second.snapshot.nodes).toEqual([expectedNode, expectedReaction]);
+      second.socket.disconnect();
+      await app.close();
+      app = await createApp({ databaseUrl, logger: false });
+      await app.listen({ host: '127.0.0.1', port: 0 });
+      expect((await connect(lobby.id)).snapshot.nodes).toEqual([
+        expectedNode,
+        expectedReaction,
+      ]);
+      expect((await app.inject(`/lobbies/${lobby.id}`)).json()).toEqual(lobby);
+      expect((await app.inject(`/lobbies/${emptyLobby.id}`)).json()).toEqual(
+        emptyLobby,
+      );
+      expect((await app.inject('/healthz')).statusCode).toBe(200);
+      expect((await app.inject('/readyz')).statusCode).toBe(200);
+    },
+  );
 
   it('fails closed for a database without migrations or unsupported Redis scaling', async () => {
     await expect(

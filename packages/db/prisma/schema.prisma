@@ -15,6 +15,12 @@ model User {
   updatedAt DateTime @updatedAt
 }
 
+model Lobby {
+  id        String   @id
+  name      String
+  createdAt DateTime @default(now())
+}
+
 model CanvasNode {
   id             String          @id
   roomId         String

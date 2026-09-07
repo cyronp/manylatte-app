@@ -1,6 +1,6 @@
 import { createRootRoute, Outlet } from '@tanstack/react-router';
 import { type SubmitEvent, useState } from 'react';
-import { cursorUsernameSchema } from '@app/shared';
+import { cursorUsernameSchema, DEFAULT_CURSOR_ROOM_ID } from '@app/shared';
 
 import { SocketProvider } from '../components/socket-provider';
 import UserMenu from '../components/user-menu/user-menu';
@@ -8,18 +8,24 @@ import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { LobbySession } from '../features/lobby/lobby-session';
+import { LobbyControls } from '../features/lobby/lobby-controls';
+import { lobbySearch } from '../lib/lobby';
 import {
   readStoredCursorUsername,
   writeStoredCursorUsername,
 } from '@/lib/username-storage';
 
 export const Route = createRootRoute({
+  validateSearch: lobbySearch,
   component: RootLayout,
 });
 
 const USERNAME_ERROR_ID = 'username-error';
 
 function RootLayout() {
+  const search = Route.useSearch();
+  const roomId = search.lobby ?? DEFAULT_CURSOR_ROOM_ID;
   const [username, setUsername] = useState(readStoredCursorUsername);
 
   return (
@@ -32,20 +38,25 @@ function RootLayout() {
           }}
         />
       ) : (
-        <SocketProvider username={username}>
-          <div className="relative min-h-screen bg-background">
-            <div className="absolute top-4 right-4 z-50">
-              <UserMenu
-                onUsernameChange={(nextUsername) => {
-                  writeStoredCursorUsername(nextUsername);
-                  setUsername(nextUsername);
-                }}
-                username={username}
-              />
-            </div>
-            <Outlet />
-          </div>
-        </SocketProvider>
+        <LobbySession key={roomId} roomId={roomId}>
+          {(lobby) => (
+            <SocketProvider roomId={lobby.id} username={username}>
+              <div className="relative min-h-screen bg-background">
+                <LobbyControls lobby={lobby} />
+                <div className="absolute top-4 right-4 z-50">
+                  <UserMenu
+                    onUsernameChange={(nextUsername) => {
+                      writeStoredCursorUsername(nextUsername);
+                      setUsername(nextUsername);
+                    }}
+                    username={username}
+                  />
+                </div>
+                <Outlet />
+              </div>
+            </SocketProvider>
+          )}
+        </LobbySession>
       )}
     </TooltipProvider>
   );

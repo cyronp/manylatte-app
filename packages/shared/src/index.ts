@@ -66,3 +66,4 @@ export {
   type RemoteCursor,
 } from './cursor/index.js';
 export { hexColorSchema, type HexColor } from './schemas/color.js';
+export { createLobbySchema, lobbySchema, type Lobby } from './lobby.js';
