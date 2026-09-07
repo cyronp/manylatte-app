@@ -13,6 +13,7 @@ import {
 } from '../../components/ui/input-otp';
 import { loadLobby } from '../../lib/lobby';
 import { LobbyControls } from './lobby-controls';
+import { DecorativeCursors } from './decorative-cursors';
 
 export function JoinLobbyPage() {
   const navigate = useNavigate();
@@ -46,15 +47,16 @@ export function JoinLobbyPage() {
 
   return (
     <main
-      className="flex min-h-screen items-center justify-center bg-background px-4 py-8"
+      className="relative isolate flex min-h-screen items-center justify-center bg-background px-4 py-8"
       style={{
         backgroundImage:
           'radial-gradient(circle, var(--canvas-grid) 1.5px, transparent 1.5px)',
         backgroundSize: '32px 32px',
       }}
     >
-      <div className="flex w-full max-w-lg flex-col items-center gap-8 rounded-2xl border border-border bg-background px-6 py-16 shadow sm:px-10">
-        <div className='flex flex-col gap-4 items-center justify-center'>
+      <DecorativeCursors />
+      <div className="relative z-20 flex w-full max-w-120 flex-col items-center gap-8 rounded-2xl border border-border bg-background/95 px-6 py-16 shadow sm:px-10">
+        <div className="flex flex-col gap-4 items-center justify-center">
           <h1 className="text-5xl font-bold">ManyLatte</h1>
           <p className="text-sm text-muted-foreground">
             Enter a lobby code or create a space of your own.
