@@ -64,7 +64,7 @@ function CanvasPage() {
             weight="bold"
             size={18}
           />
-          {status === 'connecting' ? 'Connecting…' : 'Reconnecting…'}
+          {error ?? (status === 'connecting' ? 'Connecting…' : 'Reconnecting…')}
         </div>
       )}
 

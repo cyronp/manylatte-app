@@ -19,6 +19,7 @@ export const connectDatabase = async (database: PrismaClient) => {
     // Select all model columns so missing migrations fail before accepting clients.
     await database.canvasNode.findFirst();
     await database.canvasMessage.findFirst();
+    await database.lobby.findFirst();
   } catch (cause) {
     await database.$disconnect();
     throw new Error(

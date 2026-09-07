@@ -4,7 +4,7 @@ import {
   CANVAS_EVENTS,
   CANVAS_WIDTH,
   CURSOR_EVENTS,
-  DEFAULT_CURSOR_ROOM_ID,
+  cursorRoomIdSchema,
   hexColorSchema,
   type CanvasNode,
   type CanvasSnapshot,
@@ -25,6 +25,7 @@ import { createApp, type CreateAppOptions } from '../app.js';
 import { createTestDatabase } from '../../test/database.js';
 
 type TestSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
+const TEST_ROOM_ID = cursorRoomIdSchema.parse('test-room');
 
 const withTimeout = <Value>(promise: Promise<Value>, label: string) => {
   let timer: NodeJS.Timeout;
@@ -114,8 +115,12 @@ describe('cursor socket server', () => {
   });
 
   const startServer = async (options: CreateAppOptions = {}) => {
+    const database = await createTestDatabase();
+    await database.lobby.create({
+      data: { id: TEST_ROOM_ID, code: 'TEST-0001', name: 'Test lobby' },
+    });
     const app = await createApp({
-      database: await createTestDatabase(),
+      database,
       cursorIdleTimeoutMs: 5000,
       logger: false,
       ...options,
@@ -128,7 +133,7 @@ describe('cursor socket server', () => {
 
   const connect = async (
     url: string,
-    roomId = DEFAULT_CURSOR_ROOM_ID,
+    roomId = TEST_ROOM_ID,
     username: string | null = `Player ${sockets.length + 1}`,
   ) => {
     const socket: TestSocket = createClient(url, {
@@ -475,7 +480,7 @@ describe('cursor socket server', () => {
       allowedOrigins: ['https://app.example'],
     });
     const socket: TestSocket = createClient(url, {
-      auth: { roomId: DEFAULT_CURSOR_ROOM_ID, username: 'Player' },
+      auth: { roomId: TEST_ROOM_ID, username: 'Player' },
       autoConnect: false,
       extraHeaders: { Origin: 'https://malicious.example' },
       forceNew: true,
@@ -527,7 +532,7 @@ describe('cursor socket server', () => {
     const url = await startServer({ maxParticipantsPerRoom: 1 });
     await connect(url);
     const socket: TestSocket = createClient(url, {
-      auth: { roomId: DEFAULT_CURSOR_ROOM_ID, username: 'Second player' },
+      auth: { roomId: TEST_ROOM_ID, username: 'Second player' },
       autoConnect: false,
       forceNew: true,
       reconnection: false,
@@ -582,7 +587,7 @@ describe('cursor socket server', () => {
 
   it('assigns a coffee guest name to legacy clients', async () => {
     const url = await startServer();
-    const legacyClient = await connect(url, DEFAULT_CURSOR_ROOM_ID, null);
+    const legacyClient = await connect(url, TEST_ROOM_ID, null);
 
     expect(legacyClient.session.self.username).toMatch(
       /^(Affogato|Americano|Cappuccino|Cortado|Espresso|Latte|Macchiato|Mocha)-\d{4}$/,
@@ -594,7 +599,7 @@ describe('cursor socket server', () => {
     async (username) => {
       const url = await startServer();
       const socket: TestSocket = createClient(url, {
-        auth: { roomId: DEFAULT_CURSOR_ROOM_ID, username },
+        auth: { roomId: TEST_ROOM_ID, username },
         autoConnect: false,
         forceNew: true,
         reconnection: false,

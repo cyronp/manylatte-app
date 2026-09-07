@@ -1,7 +1,4 @@
-import type { CursorRoomId } from './schemas.js';
 import { hexColorSchema, type HexColor } from '../schemas/color.js';
-
-export const DEFAULT_CURSOR_ROOM_ID = 'lobby' as CursorRoomId;
 
 export const CURSOR_MOVE_FPS = 30;
 export const CURSOR_MOVE_INTERVAL_MS = 1000 / CURSOR_MOVE_FPS;

@@ -39,12 +39,12 @@ describe('persistent API lifecycle', () => {
     if (directory) await rm(directory, { recursive: true, force: true });
   });
 
-  const connect = async () => {
+  const connect = async (roomId: string) => {
     const address = app!.server.address();
     if (!address || typeof address === 'string')
       throw new Error('Missing server address');
     const socket: Client = io(`http://127.0.0.1:${address.port}`, {
-      auth: { roomId: 'lobby', username: 'Persistence test' },
+      auth: { roomId, username: 'Persistence test' },
       autoConnect: false,
       reconnection: false,
       // Cover the polling transport as well as the existing WebSocket tests.
@@ -58,7 +58,7 @@ describe('persistent API lifecycle', () => {
     return { socket, snapshot: await snapshot };
   };
 
-  it('keeps content after the last disconnect and after closing/reopening the database', async () => {
+  it('keeps lobby codes and content after the last disconnect and API restart', async () => {
     directory = await mkdtemp(join(tmpdir(), 'manylatte-sqlite-test-'));
     const databaseUrl = `file:${join(directory, 'canvas.db')}`;
     app = await createApp({
@@ -66,7 +66,21 @@ describe('persistent API lifecycle', () => {
       logger: false,
     });
     await app.listen({ host: '127.0.0.1', port: 0 });
-    const first = await connect();
+    const lobby = (
+      await app.inject({
+        method: 'POST',
+        url: '/lobbies',
+        payload: { name: 'Friends' },
+      })
+    ).json<{ id: string; code: string; name: string }>();
+    const emptyLobby = (
+      await app.inject({
+        method: 'POST',
+        url: '/lobbies',
+        payload: { name: 'Empty lobby' },
+      })
+    ).json<{ id: string; name: string }>();
+    const first = await connect(lobby.id);
     const nodeId = randomUUID();
     const created = nextEvent<CanvasNode>((resolve) =>
       first.socket.once('canvas:node-upsert', resolve),
@@ -102,16 +116,21 @@ describe('persistent API lifecycle', () => {
       data: { user: { username: 'Persistence test' } },
     });
     first.socket.disconnect();
-    const second = await connect();
+    const second = await connect(lobby.id);
     expect(second.snapshot.nodes).toEqual([expectedNode, expectedReaction]);
     second.socket.disconnect();
     await app.close();
     app = await createApp({ databaseUrl, logger: false });
     await app.listen({ host: '127.0.0.1', port: 0 });
-    expect((await connect()).snapshot.nodes).toEqual([
+    expect((await connect(lobby.id)).snapshot.nodes).toEqual([
       expectedNode,
       expectedReaction,
     ]);
+    expect((await app.inject(`/lobbies/${lobby.id}`)).json()).toEqual(lobby);
+    expect((await app.inject(`/lobbies/${lobby.code}`)).json()).toEqual(lobby);
+    expect((await app.inject(`/lobbies/${emptyLobby.id}`)).json()).toEqual(
+      emptyLobby,
+    );
     expect((await app.inject('/healthz')).statusCode).toBe(200);
     expect((await app.inject('/readyz')).statusCode).toBe(200);
   });

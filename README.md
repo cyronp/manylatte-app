@@ -69,9 +69,26 @@ SQLite-aware backup tool; copying only the live `.db` file can omit committed WA
 data. Restore into an empty destination while the API is stopped, then run
 `db:deploy` before restarting. Test restoration periodically.
 
-The lobby is still public and collaboratively editable, including deletion.
-Persistence does not introduce authentication, ownership permissions, undo, or
-delivery acknowledgements. Those audit findings remain separate work.
+## Lobbies and invites
+
+The home page lets you join a lobby using the shadcn Input OTP field or choose
+**Create lobby** to start one. Codes contain eight random letters and numbers,
+formatted as `AB12-CD34`. Code entry accepts lowercase and pasting with the dash.
+Use **Invite friends** to copy the code or invite link. Friends enter the code
+or open the link, then choose a username to join the same canvas.
+**Leave lobby** returns to the code entry page and disconnects from the canvas.
+There is no public lobby. Refreshing or reopening an invite restores that lobby; names and
+canvas content survive API restarts, including lobbies with no content yet.
+
+Invites use `/?lobby=AB12-CD34`. Lobbies are accessible to anyone with their
+link and collaboratively editable, including deletion. There are no accounts,
+owner permissions, or invite revocation. Canvas content and presence are scoped
+to each lobby. Invalid or unknown invites show an error. Creation is limited to
+10 requests per IP per minute.
+
+Run `npm run db:deploy` before starting the updated API to add lobby codes.
+Existing lobbies receive a code and retain their content and original invite
+links. Old public canvas data remains stored but is no longer accessible.
 
 ## Checks
 

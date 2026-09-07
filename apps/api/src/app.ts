@@ -1,6 +1,4 @@
 import {
-  DEFAULT_CURSOR_ROOM_ID,
-  cursorRoomIdSchema,
   type ClientToServerEvents,
   type ServerToClientEvents,
 } from '@app/shared';
@@ -16,6 +14,7 @@ import {
   type CursorSocketData,
 } from './cursor/cursor-server.js';
 import { createCanvasPersistence } from './cursor/canvas-persistence.js';
+import { registerLobbyRoutes } from './lobbies.js';
 import {
   DEFAULT_ALLOWED_ORIGINS,
   DEFAULT_CURSOR_CONNECTION_IDLE_TIMEOUT_MS,
@@ -74,6 +73,7 @@ export const createApp = async ({
     await app.register(cors, {
       origin: (origin, callback) => callback(null, isOriginAllowed(origin)),
     });
+    await registerLobbyRoutes(app, database, isOriginAllowed);
     const io: CursorIo = new SocketServer<
       ClientToServerEvents,
       ServerToClientEvents,
@@ -88,10 +88,13 @@ export const createApp = async ({
       maxHttpBufferSize: maxHttpBufferBytes,
       serveClient: false,
     });
-    const publicRoomId = cursorRoomIdSchema.parse(DEFAULT_CURSOR_ROOM_ID);
     const cursorServer = registerCursorServer(io, {
       canvasPersistence: createCanvasPersistence(database),
-      authorizeRoom: (roomId) => roomId === publicRoomId,
+      authorizeRoom: async (roomId) =>
+        (await database.lobby.findUnique({
+          where: { id: roomId },
+          select: { id: true },
+        })) !== null,
       connectionIdleTimeoutMs,
       idleTimeoutMs: cursorIdleTimeoutMs,
       logger: app.log,
