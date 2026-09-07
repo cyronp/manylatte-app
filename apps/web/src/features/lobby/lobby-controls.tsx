@@ -15,14 +15,16 @@ import { Field, FieldLabel } from '../../components/ui/field';
 import { Input } from '../../components/ui/input';
 import { createLobby, lobbyInviteUrl } from '../../lib/lobby';
 
-export function LobbyControls({ lobby }: { lobby: Lobby }) {
+export function LobbyControls({ lobby }: { lobby?: Lobby }) {
   const navigate = useNavigate();
   const [dialog, setDialog] = useState<'create' | 'share' | null>(null);
   const [name, setName] = useState('');
   const [error, setError] = useState<string>();
   const [pending, setPending] = useState(false);
   const [copyStatus, setCopyStatus] = useState('');
-  const inviteUrl = lobbyInviteUrl(window.location.href, lobby.id);
+  const inviteUrl = lobby
+    ? lobbyInviteUrl(window.location.href, lobby.code)
+    : '';
 
   const submit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -36,7 +38,7 @@ export function LobbyControls({ lobby }: { lobby: Lobby }) {
     setError(undefined);
     try {
       const created = await createLobby(result.data.name);
-      await navigate({ to: '/', search: { lobby: created.id } });
+      await navigate({ to: '/', search: { lobby: created.code } });
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -48,37 +50,50 @@ export function LobbyControls({ lobby }: { lobby: Lobby }) {
     }
   };
 
-  const copyInvite = async () => {
+  const copyInvite = async (codeOnly = false) => {
     try {
-      await navigator.clipboard.writeText(inviteUrl);
-      setCopyStatus('Invite link copied!');
+      await navigator.clipboard.writeText(codeOnly ? lobby!.code : inviteUrl);
+      setCopyStatus(codeOnly ? 'Lobby code copied!' : 'Invite link copied!');
     } catch {
       setCopyStatus(
-        'Select the link above and copy it to share with your friends.',
+        'Select the code or link above and copy it to share with your friends.',
       );
     }
   };
 
   return (
     <>
-      <div className="absolute top-4 left-4 z-50 flex max-w-[calc(100%-10rem)] flex-wrap items-center gap-2">
-        <span
-          title={lobby.name}
-          className="max-w-48 truncate rounded-full border bg-popover px-3 py-1.5 text-sm shadow-sm"
-        >
-          {lobby.name}
-        </span>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            setCopyStatus('');
-            setDialog('share');
-          }}
-        >
-          <LinkIcon />
-          Invite friends
-        </Button>
+      <div
+        className={
+          lobby
+            ? 'absolute top-4 left-4 z-50 flex max-w-[calc(100%-10rem)] flex-wrap items-center gap-2'
+            : ''
+        }
+      >
+        {lobby && (
+          <>
+            <span
+              title={lobby.name}
+              className="max-w-48 truncate rounded-full border bg-popover px-3 py-1.5 text-sm shadow-sm"
+            >
+              {lobby.name}
+            </span>
+            <span className="rounded-full border bg-popover px-3 py-1.5 font-mono text-sm tracking-wider">
+              {lobby.code}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setCopyStatus('');
+                setDialog('share');
+              }}
+            >
+              <LinkIcon />
+              Invite friends
+            </Button>
+          </>
+        )}
         <Button
           variant="outline"
           size="sm"
@@ -146,10 +161,23 @@ export function LobbyControls({ lobby }: { lobby: Lobby }) {
           <DialogHeader>
             <DialogTitle>Invite friends</DialogTitle>
             <DialogDescription>
-              Share this link to join {lobby.name}. Anyone with the link can
-              view and edit this canvas.
+              Share this code or link to join {lobby?.name}. Anyone with the
+              invite can view and edit this canvas.
             </DialogDescription>
           </DialogHeader>
+          <Field>
+            <FieldLabel htmlFor="lobby-code">Lobby code</FieldLabel>
+            <Input
+              id="lobby-code"
+              readOnly
+              value={lobby?.code ?? ''}
+              className="font-mono tracking-widest"
+              onFocus={(event) => event.target.select()}
+            />
+          </Field>
+          <Button variant="outline" onClick={() => copyInvite(true)}>
+            Copy lobby code
+          </Button>
           <Field>
             <FieldLabel htmlFor="lobby-invite">Invite link</FieldLabel>
             <Input
@@ -159,7 +187,7 @@ export function LobbyControls({ lobby }: { lobby: Lobby }) {
               onFocus={(event) => event.target.select()}
             />
           </Field>
-          <Button onClick={copyInvite}>Copy invite link</Button>
+          <Button onClick={() => copyInvite()}>Copy invite link</Button>
           <p role="status" className="text-sm text-muted-foreground">
             {copyStatus}
           </p>

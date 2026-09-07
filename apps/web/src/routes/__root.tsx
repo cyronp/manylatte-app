@@ -1,6 +1,6 @@
 import { createRootRoute, Outlet } from '@tanstack/react-router';
 import { type SubmitEvent, useState } from 'react';
-import { cursorUsernameSchema, DEFAULT_CURSOR_ROOM_ID } from '@app/shared';
+import { cursorUsernameSchema } from '@app/shared';
 
 import { SocketProvider } from '../components/socket-provider';
 import UserMenu from '../components/user-menu/user-menu';
@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { LobbySession } from '../features/lobby/lobby-session';
 import { LobbyControls } from '../features/lobby/lobby-controls';
+import { JoinLobbyPage } from '../features/lobby/join-lobby-page';
 import { lobbySearch } from '../lib/lobby';
 import {
   readStoredCursorUsername,
@@ -25,12 +26,14 @@ const USERNAME_ERROR_ID = 'username-error';
 
 function RootLayout() {
   const search = Route.useSearch();
-  const roomId = search.lobby ?? DEFAULT_CURSOR_ROOM_ID;
+  const roomId = search.lobby;
   const [username, setUsername] = useState(readStoredCursorUsername);
 
   return (
     <TooltipProvider>
-      {!username ? (
+      {roomId === undefined ? (
+        <JoinLobbyPage />
+      ) : !username ? (
         <UsernamePrompt
           onSubmit={(nextUsername) => {
             writeStoredCursorUsername(nextUsername);

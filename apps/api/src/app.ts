@@ -1,6 +1,4 @@
 import {
-  DEFAULT_CURSOR_ROOM_ID,
-  cursorRoomIdSchema,
   type ClientToServerEvents,
   type ServerToClientEvents,
 } from '@app/shared';
@@ -90,11 +88,9 @@ export const createApp = async ({
       maxHttpBufferSize: maxHttpBufferBytes,
       serveClient: false,
     });
-    const publicRoomId = cursorRoomIdSchema.parse(DEFAULT_CURSOR_ROOM_ID);
     const cursorServer = registerCursorServer(io, {
       canvasPersistence: createCanvasPersistence(database),
       authorizeRoom: async (roomId) =>
-        roomId === publicRoomId ||
         (await database.lobby.findUnique({
           where: { id: roomId },
           select: { id: true },

@@ -71,9 +71,21 @@ describe('lobbies', () => {
     const response = await create('  Coffee friends  ');
     expect(response.statusCode).toBe(201);
     const lobby = response.json();
-    expect(lobby).toEqual({ id: expect.any(String), name: 'Coffee friends' });
+    expect(lobby).toEqual({
+      id: expect.any(String),
+      code: expect.stringMatching(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/),
+      name: 'Coffee friends',
+    });
     expect((await create()).json().id).not.toBe(lobby.id);
     expect((await app.inject(`/lobbies/${lobby.id}`)).json()).toEqual(lobby);
+    expect((await app.inject(`/lobbies/${lobby.code}`)).json()).toEqual(lobby);
+    expect(
+      (
+        await app.inject(
+          `/lobbies/${lobby.code.toLowerCase().replace('-', '')}`,
+        )
+      ).json(),
+    ).toEqual(lobby);
     expect((await create('  ')).statusCode).toBe(400);
     expect((await create('a'.repeat(65))).statusCode).toBe(400);
     expect((await create('bad\u202ename')).statusCode).toBe(400);
@@ -84,6 +96,17 @@ describe('lobbies', () => {
       invalid.once('connect_error', resolve),
     );
     invalid.connect();
+    expect((await error).message).toBe('Cursor room access denied');
+  });
+
+  it('rejects the retired public lobby over HTTP and sockets', async () => {
+    await start();
+    expect((await app.inject('/lobbies/lobby')).statusCode).toBe(404);
+    const client = clientFor('lobby');
+    const error = nextEvent<Error>((resolve) =>
+      client.once('connect_error', resolve),
+    );
+    client.connect();
     expect((await error).message).toBe('Cursor room access denied');
   });
 
@@ -112,20 +135,15 @@ describe('lobbies', () => {
     const secondId = (await create()).json().id as string;
     const first = await join(firstId);
     const other = await join(secondId);
-    const publicLobby = await join('lobby');
     const otherPresence = vi.fn();
-    const publicPresence = vi.fn();
     other.client.on('cursor:presence', otherPresence);
-    publicLobby.client.on('cursor:presence', publicPresence);
     const friend = await join(firstId);
     expect(friend.session.users).toHaveLength(2);
     expect(friend.session.users.map((user) => user.userId)).toContain(
       first.session.self.userId,
     );
     const otherUpdates = vi.fn();
-    const publicUpdates = vi.fn();
     other.client.on('canvas:node-upsert', otherUpdates);
-    publicLobby.client.on('canvas:node-upsert', publicUpdates);
     const friendUpdate = nextEvent<CanvasNode>((resolve) =>
       friend.client.once('canvas:node-upsert', resolve),
     );
@@ -137,14 +155,10 @@ describe('lobbies', () => {
     expect((await friendUpdate).id).toBe(id);
     expect((await join(firstId)).snapshot.nodes).toHaveLength(1);
     expect((await join(secondId)).snapshot.nodes).toEqual([]);
-    expect((await join('lobby')).snapshot.nodes).toEqual([]);
     expect(otherUpdates).not.toHaveBeenCalled();
-    expect(publicUpdates).not.toHaveBeenCalled();
     // Later joins in the other rooms generate presence, but never for first-lobby users.
-    for (const spy of [otherPresence, publicPresence]) {
-      expect(spy.mock.calls.flat().map((user) => user.userId)).not.toContain(
-        friend.session.self.userId,
-      );
-    }
+    expect(
+      otherPresence.mock.calls.flat().map((user) => user.userId),
+    ).not.toContain(friend.session.self.userId);
   });
 });

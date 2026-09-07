@@ -7,8 +7,7 @@ import {
   UsersIcon,
 } from '@phosphor-icons/react';
 import { useState } from 'react';
-import { Link, useSearch } from '@tanstack/react-router';
-import { DEFAULT_CURSOR_ROOM_ID } from '@app/shared';
+import { Link } from '@tanstack/react-router';
 
 import { Button } from '../ui/button';
 import { HexColorPicker } from '../ui/hex-color-picker';
@@ -43,7 +42,6 @@ export default function UserMenu({
   username,
 }: UserMenuProps) {
   const { setUserColor, user, users } = useSocket();
-  const { lobby } = useSearch({ from: '__root__' });
   const [activeDialog, setActiveDialog] = useState<ActiveDialog>(null);
   const hasUserOverflow = users.length > MAX_VISIBLE_USERS;
   const visibleUserLimit = hasUserOverflow
@@ -137,14 +135,12 @@ export default function UserMenu({
               <GearIcon />
               Settings
             </DropdownMenuItem>
-            {lobby && lobby !== DEFAULT_CURSOR_ROOM_ID && (
-              <DropdownMenuItem asChild>
-                <Link to="/" search={{}}>
-                  <DoorOpenIcon />
-                  Leave lobby
-                </Link>
-              </DropdownMenuItem>
-            )}
+            <DropdownMenuItem asChild>
+              <Link to="/" search={{}}>
+                <DoorOpenIcon />
+                Leave lobby
+              </Link>
+            </DropdownMenuItem>
           </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>

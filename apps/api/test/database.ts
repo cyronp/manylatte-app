@@ -7,6 +7,7 @@ export const createTestDatabase = async (url = 'file::memory:') => {
     '20260905000000_initial_sqlite',
     '20260905010000_add_emoji_author',
     '20260907000000_add_lobbies',
+    '20260907010000_add_lobby_codes',
   ];
   const sql = (
     await Promise.all(

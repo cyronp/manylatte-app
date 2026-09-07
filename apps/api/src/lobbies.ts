@@ -1,12 +1,12 @@
-import { randomUUID } from 'node:crypto';
 import type { Database } from '@app/db';
 import {
   createLobbySchema,
   cursorRoomIdSchema,
-  DEFAULT_CURSOR_ROOM_ID,
+  lobbyCodeSchema,
 } from '@app/shared';
 import rateLimit from '@fastify/rate-limit';
 import type { FastifyInstance } from 'fastify';
+import { persistLobby } from './lobby-code.js';
 
 export const registerLobbyRoutes = async (
   app: FastifyInstance,
@@ -31,10 +31,7 @@ export const registerLobbyRoutes = async (
           message: 'Enter a lobby name with 1–64 visible characters.',
         });
       }
-      const lobby = await database.lobby.create({
-        data: { id: randomUUID(), name: result.data.name },
-        select: { id: true, name: true },
-      });
+      const lobby = await persistLobby(database, result.data.name);
       return reply.code(201).send(lobby);
     },
   );
@@ -50,12 +47,10 @@ export const registerLobbyRoutes = async (
       if (!result.success) {
         return reply.code(400).send({ message: 'Invalid lobby link.' });
       }
-      if (result.data === DEFAULT_CURSOR_ROOM_ID) {
-        return { id: DEFAULT_CURSOR_ROOM_ID, name: 'Public lobby' };
-      }
+      const code = lobbyCodeSchema.safeParse(result.data);
       const lobby = await database.lobby.findUnique({
-        where: { id: result.data },
-        select: { id: true, name: true },
+        where: code.success ? { code: code.data } : { id: result.data },
+        select: { id: true, code: true, name: true },
       });
       if (!lobby)
         return reply.code(404).send({

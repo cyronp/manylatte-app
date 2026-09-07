@@ -61,9 +61,13 @@ export {
   type CursorUser,
   ClientToServerEvents,
   ServerToClientEvents,
-  DEFAULT_CURSOR_ROOM_ID,
   remoteCursorSchema,
   type RemoteCursor,
 } from './cursor/index.js';
 export { hexColorSchema, type HexColor } from './schemas/color.js';
-export { createLobbySchema, lobbySchema, type Lobby } from './lobby.js';
+export {
+  createLobbySchema,
+  lobbyCodeSchema,
+  lobbySchema,
+  type Lobby,
+} from './lobby.js';

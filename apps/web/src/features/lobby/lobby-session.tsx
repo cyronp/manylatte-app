@@ -50,7 +50,7 @@ export function LobbySession({
             </Button>
             <Button asChild variant="outline">
               <Link to="/" search={{}}>
-                Go to public lobby
+                Enter a lobby code
               </Link>
             </Button>
           </div>

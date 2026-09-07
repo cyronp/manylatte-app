@@ -8,16 +8,15 @@ describe('lobby invites', () => {
   it('round-trips invite IDs and removes unrelated search and hash data', () => {
     const invite = lobbyInviteUrl(
       'https://manylatte.example/?lobby=old&extra=secret#canvas',
-      'friends-id',
+      'AB12-CD34',
     );
-    expect(invite).toBe('https://manylatte.example/?lobby=friends-id');
+    expect(invite).toBe('https://manylatte.example/?lobby=AB12-CD34');
     expect(
       lobbySearch(Object.fromEntries(new URL(invite).searchParams)),
-    ).toEqual({ lobby: 'friends-id' });
-    expect(lobbyInviteUrl(invite, 'lobby')).toBe('https://manylatte.example/');
+    ).toEqual({ lobby: 'AB12-CD34' });
   });
 
-  it('keeps malformed invites from silently joining the public lobby', async () => {
+  it('keeps the home page disconnected and rejects malformed invites', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     expect(lobbySearch({})).toEqual({ lobby: undefined });
@@ -34,14 +33,18 @@ describe('lobby invites', () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ id: 'friends', name: 'Friends' }), {
-          status: 201,
-        }),
+        new Response(
+          JSON.stringify({ id: 'friends', code: 'AB12-CD34', name: 'Friends' }),
+          {
+            status: 201,
+          },
+        ),
       )
       .mockResolvedValueOnce(new Response('{}', { status: 404 }));
     vi.stubGlobal('fetch', fetchMock);
     expect(await createLobby('Friends')).toEqual({
       id: 'friends',
+      code: 'AB12-CD34',
       name: 'Friends',
     });
     expect(fetchMock).toHaveBeenCalledWith(

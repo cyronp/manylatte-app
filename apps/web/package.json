@@ -21,6 +21,7 @@
     "clsx": "^2.1.1",
     "cn": "^0.2.5",
     "emoji-picker-react": "^4.19.1",
+    "input-otp": "^1.5.0",
     "radix-ui": "^1.6.7",
     "react": "^19.2.8",
     "react-colorful": "^5.8.0",

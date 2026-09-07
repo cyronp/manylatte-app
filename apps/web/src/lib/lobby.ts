@@ -1,8 +1,4 @@
-import {
-  DEFAULT_CURSOR_ROOM_ID,
-  cursorRoomIdSchema,
-  lobbySchema,
-} from '@app/shared';
+import { cursorRoomIdSchema, lobbySchema } from '@app/shared';
 
 import { resolveCursorApiUrl } from './socket';
 
@@ -21,7 +17,7 @@ export const lobbyInviteUrl = (pageUrl: string, roomId: string) => {
   const url = new URL(pageUrl);
   url.search = '';
   url.hash = '';
-  if (roomId !== DEFAULT_CURSOR_ROOM_ID) url.searchParams.set('lobby', roomId);
+  url.searchParams.set('lobby', roomId);
   return url.href;
 };
 
@@ -49,12 +45,6 @@ export const loadLobby = (roomId: string, signal: AbortSignal) => {
     return Promise.reject(
       new Error('Invalid lobby link. Ask your friend for a new invite.'),
     );
-  if (result.data === DEFAULT_CURSOR_ROOM_ID) {
-    return Promise.resolve({
-      id: DEFAULT_CURSOR_ROOM_ID,
-      name: 'Public lobby',
-    });
-  }
   return requestLobby(`/${encodeURIComponent(result.data)}`, {
     signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
   });
