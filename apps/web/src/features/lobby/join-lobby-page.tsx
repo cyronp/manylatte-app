@@ -60,6 +60,7 @@ export function JoinLobbyPage() {
             <FieldLabel htmlFor="join-lobby-code">Lobby code</FieldLabel>
             <InputOTP
               id="join-lobby-code"
+              containerClassName="justify-center"
               maxLength={8}
               pattern={REGEXP_ONLY_DIGITS_AND_CHARS}
               inputMode="text"
