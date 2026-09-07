@@ -9,7 +9,6 @@ import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { LobbySession } from '../features/lobby/lobby-session';
-import { LobbyControls } from '../features/lobby/lobby-controls';
 import { JoinLobbyPage } from '../features/lobby/join-lobby-page';
 import { lobbySearch } from '../lib/lobby';
 import {
@@ -45,9 +44,9 @@ function RootLayout() {
           {(lobby) => (
             <SocketProvider roomId={lobby.id} username={username}>
               <div className="relative min-h-screen bg-background">
-                <LobbyControls lobby={lobby} />
                 <div className="absolute top-4 right-4 z-50">
                   <UserMenu
+                    lobby={lobby}
                     onUsernameChange={(nextUsername) => {
                       writeStoredCursorUsername(nextUsername);
                       setUsername(nextUsername);

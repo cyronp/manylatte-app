@@ -45,22 +45,29 @@ export function JoinLobbyPage() {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-4 py-8">
-      <div className="flex w-full max-w-sm flex-col items-center gap-6">
-        <div className="space-y-2 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Join your friends
-          </h1>
+    <main
+      className="flex min-h-screen items-center justify-center bg-background px-4 py-8"
+      style={{
+        backgroundImage:
+          'radial-gradient(circle, var(--canvas-grid) 1.5px, transparent 1.5px)',
+        backgroundSize: '32px 32px',
+      }}
+    >
+      <div className="flex w-full max-w-lg flex-col items-center gap-8 rounded-2xl border border-border bg-background px-6 py-16 shadow sm:px-10">
+        <div className='flex flex-col gap-4 items-center justify-center'>
+          <h1 className="text-5xl font-bold">ManyLatte</h1>
           <p className="text-sm text-muted-foreground">
             Enter a lobby code or create a space of your own.
           </p>
         </div>
         <form
           onSubmit={join}
-          className="flex w-full flex-col gap-4 justify-center"
+          className="flex w-full max-w-lg flex-col justify-center gap-6"
         >
           <Field className="items-center">
-            <FieldLabel htmlFor="join-lobby-code">Lobby code</FieldLabel>
+            <FieldLabel className="text-base" htmlFor="join-lobby-code">
+              Lobby code
+            </FieldLabel>
             <InputOTP
               id="join-lobby-code"
               containerClassName="justify-center"
@@ -88,6 +95,7 @@ export function JoinLobbyPage() {
                   <InputOTPSlot
                     key={index}
                     index={index}
+                    className="h-12 w-9 text-base sm:h-14 sm:w-12 sm:text-lg"
                     aria-invalid={!!error}
                   />
                 ))}
@@ -98,12 +106,13 @@ export function JoinLobbyPage() {
                   <InputOTPSlot
                     key={index}
                     index={index}
+                    className="h-12 w-9 text-base sm:h-14 sm:w-12 sm:text-lg"
                     aria-invalid={!!error}
                   />
                 ))}
               </InputOTPGroup>
             </InputOTP>
-            <p id="join-lobby-hint" className="text-xs text-muted-foreground">
+            <p id="join-lobby-hint" className="text-sm text-muted-foreground">
               8 letters and numbers, like AB12-CD34
             </p>
           </Field>
@@ -116,7 +125,11 @@ export function JoinLobbyPage() {
               {error}
             </p>
           )}
-          <Button type="submit" disabled={pending || code.length !== 8}>
+          <Button
+            className="h-11 text-base"
+            type="submit"
+            disabled={pending || code.length !== 8}
+          >
             {pending ? 'Joining…' : 'Join lobby'}
           </Button>
         </form>

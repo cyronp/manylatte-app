@@ -2,12 +2,15 @@ import {
   CaretDownIcon,
   DoorOpenIcon,
   GearIcon,
+  LinkIcon,
   PaintBrushIcon,
+  PlusIcon,
   UserIcon,
   UsersIcon,
 } from '@phosphor-icons/react';
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
+import type { Lobby } from '@app/shared';
 
 import { Button } from '../ui/button';
 import { HexColorPicker } from '../ui/hex-color-picker';
@@ -28,16 +31,21 @@ import { LatteUserIcon } from '../icons/user-icon';
 import { LobbyUsersDialog } from './lobby-users-dialog';
 import { SettingsDialog } from './settings-dialog';
 import { UsernameDialog } from './username-dialog';
+import { CreateLobbyDialog } from './create-lobby-dialog';
+import { InviteFriendsDialog } from './invite-friends-dialog';
 
 interface UserMenuProps {
+  lobby: Lobby;
   onUsernameChange: (username: string) => void;
   username: string;
 }
 
 const MAX_VISIBLE_USERS = 3;
-type ActiveDialog = 'lobbyusers' | 'settings' | 'username' | null;
+type ActiveDialog =
+  'lobbyusers' | 'settings' | 'username' | 'create' | 'invite' | null;
 
 export default function UserMenu({
+  lobby,
   onUsernameChange,
   username,
 }: UserMenuProps) {
@@ -113,6 +121,15 @@ export default function UserMenu({
               </div>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => setActiveDialog('invite')}>
+              <LinkIcon />
+              Invite friends
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setActiveDialog('create')}>
+              <PlusIcon />
+              Create lobby
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={() => setActiveDialog('username')}>
               <UserIcon />
               Change Username
@@ -135,7 +152,7 @@ export default function UserMenu({
               <GearIcon />
               Settings
             </DropdownMenuItem>
-            <DropdownMenuItem asChild>
+            <DropdownMenuItem asChild variant='destructive'>
               <Link to="/" search={{}}>
                 <DoorOpenIcon />
                 Leave lobby
@@ -144,6 +161,19 @@ export default function UserMenu({
           </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>
+      {activeDialog === 'create' && (
+        <CreateLobbyDialog
+          open
+          onOpenChange={(open) => setActiveDialog(open ? 'create' : null)}
+        />
+      )}
+      {activeDialog === 'invite' && (
+        <InviteFriendsDialog
+          lobby={lobby}
+          open
+          onOpenChange={(open) => setActiveDialog(open ? 'invite' : null)}
+        />
+      )}
       <UsernameDialog
         open={activeDialog === 'username'}
         onOpenChange={(isOpen) => setActiveDialog(isOpen ? 'username' : null)}
