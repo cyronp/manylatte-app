@@ -7,21 +7,13 @@ import {
   CURSOR_IDLE_TIMEOUT_MS,
   CURSOR_MOVE_FPS,
   CURSOR_MOVE_INTERVAL_MS,
-  canvasMessageInputSchema,
-  canvasNodeMutationSchema,
-  canvasTypingInputSchema,
   cursorColorInputSchema,
   cursorInputSchema,
-  type CanvasMessage,
-  type ClientToServerEvents,
   type CursorRoomId,
   type CursorUpdate,
   type CursorUser,
-  type HexColor,
   type RemoteCursor,
-  type ServerToClientEvents,
 } from '@app/shared';
-import type { Server, Socket } from 'socket.io';
 
 import { registerAdmission } from './register-admission.js';
 import type { TrustedProxies } from '../client-address.js';
@@ -35,8 +27,6 @@ import {
   DEFAULT_CURSOR_MAX_TOTAL_CONNECTIONS,
 } from '../security-config.js';
 
-type InterServerEvents = Record<never, never>;
-
 const CURSOR_COLOR_UPDATES_PER_SECOND = 8;
 const SOCKET_MESSAGE_BURST = 60;
 const SOCKET_MESSAGES_PER_SECOND = 45;
@@ -44,58 +34,17 @@ const ABUSE_DISCONNECT_THRESHOLD = 20;
 const ABUSE_WINDOW_MS = 10_000;
 const ABUSE_LOG_INTERVAL_MS = 5_000;
 
-export interface CursorSocketData {
-  cursorColor?: HexColor;
-  cursorIpAddress: string;
-  cursorLastPosition?: RemoteCursor;
-  cursorRoomId: CursorRoomId;
-  cursorUsername: string;
-  cursorUserId?: string;
-}
-
-export type CursorIo = Server<
-  ClientToServerEvents,
-  ServerToClientEvents,
-  InterServerEvents,
-  CursorSocketData
->;
-
-type CursorSocket = Socket<
-  ClientToServerEvents,
-  ServerToClientEvents,
-  InterServerEvents,
-  CursorSocketData
->;
-
-interface CursorLogger {
-  error: (context: object, message: string) => void;
-  warn: (context: object, message: string) => void;
-}
-
-interface Participant {
-  clickLimiter: TokenBucket;
-  color: HexColor;
-  colorLimiter: TokenBucket;
-  lastActivityAt: number;
-  lastCursor?: RemoteCursor;
-  lastSequence: number;
-  lastViolationLogAt?: number;
-  messageLimiter: TokenBucket;
-  moveLimiter: TokenBucket;
-  socketId: string;
-  typingNodeIds: Set<string>;
-  username: string;
-  userId: string;
-  violationCount: number;
-  violationWindowStartedAt: number;
-}
-
-interface CursorRoom {
-  canvas: PersistentCanvas;
-  participants: Map<string, Participant>;
-  pendingMoves: Map<string, CursorUpdate>;
-}
-
+export type { CursorIo, CursorSocketData } from './cursor-types.js';
+import type {
+  CursorIo,
+  CursorSocket,
+  Participant,
+  CursorRoom,
+  CursorLogger,
+} from './cursor-types.js';
+import { registerCanvasCommands } from './register-canvas-commands.js';
+import { registerTyping, clearTyping } from './typing-presence.js';
+import { WorkBudget } from './work-budget.js';
 export interface CursorServerOptions {
   canvasPersistence: CanvasPersistence;
   authorizeRoom: (roomId: CursorRoomId) => boolean | Promise<boolean>;
@@ -134,6 +83,7 @@ export const registerCursorServer = (
     logger,
   });
   const rooms = new Map<CursorRoomId, CursorRoom>();
+  const workBudget = new WorkBudget();
 
   const getRoom = (roomId: CursorRoomId) => {
     const existingRoom = rooms.get(roomId);
@@ -143,7 +93,7 @@ export const registerCursorServer = (
     }
 
     const room: CursorRoom = {
-      canvas: new PersistentCanvas(roomId, canvasPersistence),
+      canvas: new PersistentCanvas(roomId, canvasPersistence, workBudget),
       participants: new Map(),
       pendingMoves: new Map(),
     };
@@ -459,210 +409,19 @@ export const registerCursorServer = (
       socket.to(roomId).volatile.emit(CURSOR_EVENTS.click, update);
     });
 
-    const runCanvasCommand = (operation: () => Promise<void>) => {
-      void operation().catch((error: unknown) => {
-        logger.error(
-          { err: error, socketId: socket.id, roomId },
-          'Canvas persistence operation failed',
-        );
-        socket.emit(CANVAS_EVENTS.error, {
-          message:
-            'The board could not be saved. Please reconnect and try again.',
-        });
-      });
-    };
-
-    socket.on(CANVAS_EVENTS.messageSend, (input) =>
-      runCanvasCommand(async () => {
-        const acceptedAt = acceptMessageBudget(
-          socket,
-          participant,
-          CANVAS_EVENTS.messageSend,
-        );
-
-        if (acceptedAt === undefined) {
-          return;
-        }
-
-        const result = canvasMessageInputSchema.safeParse(input);
-
-        if (!result.success) {
-          recordViolation(
-            socket,
-            participant,
-            `invalid:${CANVAS_EVENTS.messageSend}`,
-            result.error.issues.map((issue) => issue.code),
-          );
-          return;
-        }
-
-        const message: CanvasMessage = {
-          author: {
-            color: participant.color,
-            username: participant.username,
-            userId: participant.userId,
-          },
-          id: result.data.id,
-          text: result.data.text,
-        };
-        const change = await room.canvas.appendMessage(
-          result.data.nodeId,
-          message,
-        );
-
-        if (change.status === 'ignored') {
-          return;
-        }
-
-        if (change.status === 'rejected') {
-          recordViolation(
-            socket,
-            participant,
-            change.reason === 'message-limit'
-              ? 'limit:canvas-messages'
-              : 'invalid:canvas-message-node',
-          );
-          return;
-        }
-
-        if (participant.typingNodeIds.delete(result.data.nodeId)) {
-          socket.to(roomId).emit(CANVAS_EVENTS.typing, {
-            isTyping: false,
-            nodeId: result.data.nodeId,
-            user: {
-              color: participant.color,
-              username: participant.username,
-              userId: participant.userId,
-            },
-          });
-        }
-
-        participant.lastActivityAt = acceptedAt;
-        io.to(roomId).emit(CANVAS_EVENTS.nodeUpsert, change.node);
-      }),
-    );
-
-    socket.on(CANVAS_EVENTS.typing, (input) =>
-      runCanvasCommand(async () => {
-        const acceptedAt = acceptMessageBudget(
-          socket,
-          participant,
-          CANVAS_EVENTS.typing,
-        );
-
-        if (acceptedAt === undefined) {
-          return;
-        }
-
-        const result = canvasTypingInputSchema.safeParse(input);
-
-        if (!result.success) {
-          recordViolation(
-            socket,
-            participant,
-            `invalid:${CANVAS_EVENTS.typing}`,
-            result.error.issues.map((issue) => issue.code),
-          );
-          return;
-        }
-
-        if (
-          result.data.isTyping &&
-          !(await room.canvas.hasMessageNode(result.data.nodeId))
-        ) {
-          recordViolation(socket, participant, 'invalid:canvas-typing-node');
-          return;
-        }
-
-        if (result.data.isTyping) {
-          for (const previousNodeId of participant.typingNodeIds) {
-            if (previousNodeId === result.data.nodeId) {
-              continue;
-            }
-
-            participant.typingNodeIds.delete(previousNodeId);
-            socket.to(roomId).emit(CANVAS_EVENTS.typing, {
-              isTyping: false,
-              nodeId: previousNodeId,
-              user: {
-                color: participant.color,
-                username: participant.username,
-                userId: participant.userId,
-              },
-            });
-          }
-          participant.typingNodeIds.add(result.data.nodeId);
-        } else {
-          participant.typingNodeIds.delete(result.data.nodeId);
-        }
-
-        participant.lastActivityAt = acceptedAt;
-        socket.to(roomId).emit(CANVAS_EVENTS.typing, {
-          ...result.data,
-          user: {
-            color: participant.color,
-            username: participant.username,
-            userId: participant.userId,
-          },
-        });
-      }),
-    );
-
-    socket.on(CANVAS_EVENTS.mutation, (input) =>
-      runCanvasCommand(async () => {
-        const acceptedAt = acceptMessageBudget(
-          socket,
-          participant,
-          CANVAS_EVENTS.mutation,
-        );
-
-        if (acceptedAt === undefined) {
-          return;
-        }
-
-        const result = canvasNodeMutationSchema.safeParse(input);
-
-        if (!result.success) {
-          recordViolation(
-            socket,
-            participant,
-            `invalid:${CANVAS_EVENTS.mutation}`,
-            result.error.issues.map((issue) => issue.code),
-          );
-          return;
-        }
-
-        const change = await room.canvas.applyMutation(result.data, {
-          color: participant.color,
-          username: participant.username,
-          userId: participant.userId,
-        });
-
-        if (change.status === 'deleted') {
-          for (const typingParticipant of room.participants.values()) {
-            typingParticipant.typingNodeIds.delete(change.nodeId);
-          }
-          participant.lastActivityAt = acceptedAt;
-          io.to(roomId).emit(CANVAS_EVENTS.nodeRemove, {
-            nodeId: change.nodeId,
-          });
-          return;
-        }
-
-        if (change.status === 'rejected') {
-          recordViolation(
-            socket,
-            participant,
-            change.reason === 'node-limit'
-              ? 'limit:canvas-nodes'
-              : 'invalid:canvas-node-mutation',
-          );
-          return;
-        }
-
-        participant.lastActivityAt = acceptedAt;
-        io.to(roomId).emit(CANVAS_EVENTS.nodeUpsert, change.node);
-      }),
+    registerCanvasCommands(io, socket, room, participant, {
+      acceptMessageBudget: (event) =>
+        acceptMessageBudget(socket, participant, event),
+      recordViolation: (reason) => recordViolation(socket, participant, reason),
+      logger,
+    });
+    registerTyping(
+      socket,
+      room,
+      participant,
+      now,
+      (event) => acceptMessageBudget(socket, participant, event),
+      logger,
     );
 
     socket.on('disconnect', () => {
@@ -713,6 +472,11 @@ export const registerCursorServer = (
 
       for (const [roomId, room] of rooms) {
         for (const participant of room.participants.values()) {
+          if (
+            participant.typingExpiresAt &&
+            currentTime >= participant.typingExpiresAt
+          )
+            clearTyping(io, roomId, participant);
           if (
             currentTime - participant.lastActivityAt >=
             connectionIdleTimeoutMs

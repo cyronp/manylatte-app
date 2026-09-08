@@ -167,11 +167,20 @@ describe('SQLite canvas persistence', () => {
     ]);
     const reloaded = new PersistentCanvas('lobby', persistence);
     expect(await reloaded.snapshot()).toEqual([
-      { id, type: 'message', position: { x: 40, y: 50 }, data: { messages } },
+      {
+        id,
+        type: 'message',
+        position: { x: 40, y: 50 },
+        data: { messages: messages.slice(-1), messageCount: 2, textBytes: 11 },
+      },
     ]);
     expect(await new PersistentCanvas('other', persistence).snapshot()).toEqual(
       [],
     );
+    expect(await reloaded.history({ nodeId: id })).toEqual({
+      messages,
+      hasMore: false,
+    });
     await reloaded.appendMessage(id, messages[0]!);
     expect(await database.canvasMessage.count()).toBe(2);
     await reloaded.applyMutation({ action: 'delete', nodeId: id }, author);

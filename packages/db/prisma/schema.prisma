@@ -33,6 +33,8 @@ model CanvasNode {
   authorId       String?
   authorUsername String?
   authorColor    String?
+  messageCount   Int             @default(0)
+  textBytes      Int             @default(0)
   createdAt      DateTime        @default(now())
   messages       CanvasMessage[]
 
@@ -50,5 +52,16 @@ model CanvasMessage {
   authorColor    String
   createdAt      DateTime   @default(now())
 
-  @@index([nodeId, createdAt, id])
+  @@index([nodeId, sequence])
+}
+
+model CanvasOperation {
+  roomId    String
+  id        String
+  hash      String
+  result    String
+  createdAt DateTime @default(now())
+
+  @@id([roomId, id])
+  @@index([createdAt])
 }

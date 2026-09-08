@@ -1,4 +1,16 @@
 export { z } from 'zod';
+export * from './canvas/commands.js';
+export {
+  canvasMessageTextSchema,
+  canvasPositionSchema,
+} from './canvas/schemas.js';
+export {
+  CANVAS_HISTORY_PAGE_SIZE,
+  CANVAS_PREVIEW_MESSAGES,
+  MAX_CANVAS_ROOM_TEXT_BYTES,
+  MAX_CANVAS_ROOM_MESSAGES,
+  MAX_CANVAS_MESSAGE_LENGTH,
+} from './canvas/constants.js';
 export type { ZodType } from 'zod';
 
 export {

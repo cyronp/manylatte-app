@@ -7,7 +7,7 @@ import {
 } from './constants.js';
 import { cursorUserSchema } from '../cursor/schemas.js';
 
-const canvasMessageTextSchema = z
+export const canvasMessageTextSchema = z
   .string()
   .transform((text) => text.trim().normalize('NFC'))
   .pipe(z.string().min(1).max(1_000));
@@ -41,7 +41,7 @@ export const canvasTypingUpdateSchema = canvasTypingInputSchema.extend({
 
 export type CanvasTypingUpdate = z.infer<typeof canvasTypingUpdateSchema>;
 
-const canvasPositionSchema = z.object({
+export const canvasPositionSchema = z.object({
   x: z.number().finite().min(0).max(CANVAS_WIDTH),
   y: z.number().finite().min(0).max(CANVAS_HEIGHT),
 });
@@ -68,6 +68,8 @@ export const canvasNodeSchema = z.discriminatedUnion('type', [
   canvasNodeBaseSchema.extend({
     data: z.object({
       messages: z.array(canvasMessageSchema).max(MAX_CANVAS_MESSAGES_PER_NODE),
+      messageCount: z.number().int().nonnegative().optional(),
+      textBytes: z.number().int().nonnegative().optional(),
     }),
     type: z.literal('message'),
   }),
