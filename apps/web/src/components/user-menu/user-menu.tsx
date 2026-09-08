@@ -152,7 +152,7 @@ export default function UserMenu({
               <GearIcon />
               Settings
             </DropdownMenuItem>
-            <DropdownMenuItem asChild variant='destructive'>
+            <DropdownMenuItem asChild variant="destructive">
               <Link to="/" search={{}}>
                 <DoorOpenIcon />
                 Leave lobby
