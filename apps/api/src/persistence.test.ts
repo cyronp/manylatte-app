@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { createDatabase } from '@app/db';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -14,7 +14,7 @@ import type {
 import type { Socket } from 'socket.io-client';
 
 import { createApp } from './app.js';
-import { createTestDatabase } from '../test/database.js';
+import { createTestDatabase, readMigrations } from '../test/database.js';
 
 type Client = Socket<ServerToClientEvents, ClientToServerEvents>;
 const nextEvent = <T>(subscribe: (resolve: (value: T) => void) => void) =>
@@ -145,21 +145,11 @@ describe('persistent API lifecycle', () => {
   });
 
   it('rejects a database missing the author migration at startup', async () => {
-    const database = createDatabase('file::memory:');
+    const database = createDatabase(
+      'file::memory:',
+      await readMigrations(['20260905000000_initial_sqlite']),
+    );
     try {
-      const sql = await readFile(
-        new URL(
-          '../../../packages/db/prisma/migrations/20260905000000_initial_sqlite/migration.sql',
-          import.meta.url,
-        ),
-        'utf8',
-      );
-      for (const statement of sql
-        .split(';')
-        .map((part) => part.trim())
-        .filter(Boolean)) {
-        await database.$executeRawUnsafe(statement);
-      }
       await expect(createApp({ database, logger: false })).rejects.toThrow(
         /db:deploy/,
       );

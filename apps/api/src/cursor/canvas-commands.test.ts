@@ -23,6 +23,9 @@ const thread = (): CanvasCommand => ({
 
 it('commits a thread and message atomically, and retries safely after reload', async () => {
   const database = await createTestDatabase();
+  await database.lobby.create({
+    data: { id: 'room', code: 'TEST-0001', name: 'Test' },
+  });
   try {
     const persistence = createCanvasPersistence(database);
     const canvas = new PersistentCanvas('room', persistence);
@@ -54,6 +57,9 @@ it('commits a thread and message atomically, and retries safely after reload', a
 
 it('keeps snapshots compact while returning complete ordered history in pages', async () => {
   const database = await createTestDatabase();
+  await database.lobby.create({
+    data: { id: 'room', code: 'TEST-0001', name: 'Test' },
+  });
   try {
     const canvas = new PersistentCanvas(
       'room',
@@ -103,6 +109,9 @@ it('keeps snapshots compact while returning complete ordered history in pages', 
 
 it('bounds outstanding work and releases capacity after stalled storage resumes', async () => {
   const database = await createTestDatabase();
+  await database.lobby.create({
+    data: { id: 'room', code: 'TEST-0001', name: 'Test' },
+  });
   try {
     const persistence = createCanvasPersistence(database);
     let resume!: () => void;

@@ -57,7 +57,7 @@ export const cursorColorInputSchema = z.object({
 export type CursorColorInput = z.infer<typeof cursorColorInputSchema>;
 
 export const cursorDisconnectNoticeSchema = z.object({
-  reason: z.enum(['abuse', 'idle']),
+  reason: z.enum(['abuse', 'idle', 'restarting', 'unavailable']),
 });
 
 export type CursorDisconnectNotice = z.infer<

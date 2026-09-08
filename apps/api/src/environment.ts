@@ -24,6 +24,7 @@ const redisUrlSchema = z
   }, 'must be a valid redis:// or rediss:// URL');
 
 const rawApiEnvironmentSchema = z.object({
+  MAX_LOBBIES: z.coerce.number().int().min(1).max(1_000_000).default(10_000),
   DATABASE_URL: z.string().default(DEFAULT_DATABASE_URL),
   ALLOWED_ORIGINS: z.string().optional(),
   CURSOR_CONNECTION_IDLE_TIMEOUT_MS: z.coerce
@@ -132,6 +133,7 @@ export const readApiEnvironment = (
   }
 
   return {
+    maxLobbies: result.data.MAX_LOBBIES,
     databaseUrl: resolveDatabaseUrl(result.data.DATABASE_URL),
     allowedOrigins: parseAllowedOrigins(
       result.data.ALLOWED_ORIGINS,

@@ -34,6 +34,9 @@ describe('SQLite canvas persistence', () => {
 
   it('preserves reaction authors through reload, movement, and edits by another user', async () => {
     database = await createTestDatabase();
+    await database.lobby.create({
+      data: { id: 'lobby', code: 'TEST-0001', name: 'Test' },
+    });
     const persistence = createCanvasPersistence(database);
     const canvas = new PersistentCanvas('lobby', persistence);
     const id = randomUUID();
@@ -89,6 +92,9 @@ describe('SQLite canvas persistence', () => {
 
   it('loads and edits legacy reactions without inventing an author', async () => {
     database = await createTestDatabase();
+    await database.lobby.create({
+      data: { id: 'lobby', code: 'TEST-0001', name: 'Test' },
+    });
     const id = randomUUID();
     await database.canvasNode.create({
       data: {
@@ -122,6 +128,9 @@ describe('SQLite canvas persistence', () => {
 
   it('rejects reaction edits on missing nodes and message nodes', async () => {
     database = await createTestDatabase();
+    await database.lobby.create({
+      data: { id: 'lobby', code: 'TEST-0001', name: 'Test' },
+    });
     const canvas = new PersistentCanvas(
       'lobby',
       createCanvasPersistence(database),
@@ -148,6 +157,9 @@ describe('SQLite canvas persistence', () => {
 
   it('reloads nodes, ordered messages, and positions; deletion cascades to history', async () => {
     database = await createTestDatabase();
+    await database.lobby.create({
+      data: { id: 'lobby', code: 'TEST-0001', name: 'Test' },
+    });
     const persistence = createCanvasPersistence(database);
     const canvas = new PersistentCanvas('lobby', persistence);
     const id = randomUUID();
@@ -192,6 +204,9 @@ describe('SQLite canvas persistence', () => {
 
   it('keeps failed writes out of visible state and permits a later retry', async () => {
     database = await createTestDatabase();
+    await database.lobby.create({
+      data: { id: 'lobby', code: 'TEST-0001', name: 'Test' },
+    });
     const persistence = createCanvasPersistence(database);
     const mutate = vi
       .spyOn(persistence, 'mutate')

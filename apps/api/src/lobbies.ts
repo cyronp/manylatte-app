@@ -6,12 +6,13 @@ import {
 } from '@app/shared';
 import rateLimit from '@fastify/rate-limit';
 import type { FastifyInstance } from 'fastify';
-import { persistLobby } from './lobby-code.js';
+import { persistLobby, LobbyCapacityError } from './lobby-code.js';
 
 export const registerLobbyRoutes = async (
   app: FastifyInstance,
   database: Database,
   isOriginAllowed: (origin: string | undefined) => boolean,
+  maxLobbies = 10_000,
 ) => {
   await app.register(rateLimit, { global: false });
 
@@ -31,8 +32,18 @@ export const registerLobbyRoutes = async (
           message: 'Enter a lobby name with 1–64 visible characters.',
         });
       }
-      const lobby = await persistLobby(database, result.data.name);
-      return reply.code(201).send(lobby);
+      try {
+        const lobby = await persistLobby(
+          database,
+          result.data.name,
+          maxLobbies,
+        );
+        return reply.code(201).send(lobby);
+      } catch (error) {
+        if (error instanceof LobbyCapacityError)
+          return reply.code(503).send({ message: error.message });
+        throw error;
+      }
     },
   );
 
@@ -49,7 +60,10 @@ export const registerLobbyRoutes = async (
       }
       const code = lobbyCodeSchema.safeParse(result.data);
       const lobby = await database.lobby.findUnique({
-        where: code.success ? { code: code.data } : { id: result.data },
+        where: {
+          ...(code.success ? { code: code.data } : { id: result.data }),
+          archivedAt: null,
+        },
         select: { id: true, code: true, name: true },
       });
       if (!lobby)

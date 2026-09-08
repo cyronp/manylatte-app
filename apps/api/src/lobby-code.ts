@@ -11,12 +11,24 @@ export const generateLobbyCode = () => {
   return `${code.slice(0, 4)}-${code.slice(4)}`;
 };
 
-export const persistLobby = async (database: Database, name: string) => {
+export class LobbyCapacityError extends Error {}
+
+export const persistLobby = async (
+  database: Database,
+  name: string,
+  maxLobbies = 10_000,
+) => {
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
-      return await database.lobby.create({
-        data: { id: randomUUID(), code: generateLobbyCode(), name },
-        select: { id: true, code: true, name: true },
+      return await database.$transaction(async (tx) => {
+        if ((await tx.lobby.count()) >= maxLobbies)
+          throw new LobbyCapacityError(
+            'Lobby capacity reached. Contact the operator to archive or remove unused lobbies.',
+          );
+        return tx.lobby.create({
+          data: { id: randomUUID(), code: generateLobbyCode(), name },
+          select: { id: true, code: true, name: true },
+        });
       });
     } catch (error) {
       if (

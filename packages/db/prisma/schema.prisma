@@ -20,11 +20,17 @@ model Lobby {
   code      String   @unique
   name      String
   createdAt DateTime @default(now())
+  archivedAt DateTime?
+  lastActivityAt DateTime @default(now())
+  nodes CanvasNode[]
+  operations CanvasOperation[]
+  @@index([archivedAt, lastActivityAt])
 }
 
 model CanvasNode {
   id             String          @id
   roomId         String
+  room           Lobby @relation(fields: [roomId], references: [id], onDelete: Cascade)
   type           String
   x              Float
   y              Float
@@ -57,6 +63,7 @@ model CanvasMessage {
 
 model CanvasOperation {
   roomId    String
+  room      Lobby @relation(fields: [roomId], references: [id], onDelete: Cascade)
   id        String
   hash      String
   result    String

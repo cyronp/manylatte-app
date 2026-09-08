@@ -14,6 +14,7 @@ import type {
   Participant,
   CursorLogger,
 } from './cursor-types.js';
+import type { OperationMetrics } from './operation-metrics.js';
 import { CanvasBusyError } from './work-budget.js';
 
 export function registerCanvasCommands(
@@ -25,6 +26,7 @@ export function registerCanvasCommands(
     acceptMessageBudget: (event: string) => number | undefined;
     recordViolation: (reason: string) => void;
     logger: CursorLogger;
+    metrics: OperationMetrics;
   },
 ) {
   const roomId = socket.data.cursorRoomId;
@@ -64,6 +66,7 @@ export function registerCanvasCommands(
           'Check the message length (1–1,000 characters) and board position.',
       });
     }
+    const started = performance.now();
     try {
       const { result, replayed } = await room.canvas.execute(parsed.data, {
         color: participant.color,
@@ -98,20 +101,21 @@ export function registerCanvasCommands(
           body.type === 'message' &&
           participant.typingNodeIds.delete(body.input.nodeId)
         )
-          socket
-            .to(roomId)
-            .emit(CANVAS_EVENTS.typing, {
-              isTyping: false,
-              nodeId: body.input.nodeId,
-              user: {
-                color: participant.color,
-                username: participant.username,
-                userId: participant.userId,
-              },
-            });
+          socket.to(roomId).emit(CANVAS_EVENTS.typing, {
+            isTyping: false,
+            nodeId: body.input.nodeId,
+            user: {
+              color: participant.color,
+              username: participant.username,
+              userId: participant.userId,
+            },
+          });
       }
+      options.metrics.record(performance.now() - started);
       reply(result);
     } catch (error) {
+      if (error instanceof CanvasBusyError) options.metrics.busy++;
+      else options.metrics.writeFailures++;
       const busy = error instanceof CanvasBusyError;
       if (!busy)
         options.logger.error(

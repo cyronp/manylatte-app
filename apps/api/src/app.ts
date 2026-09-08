@@ -1,8 +1,10 @@
 import {
+  CURSOR_EVENTS,
   type ClientToServerEvents,
   type ServerToClientEvents,
 } from '@app/shared';
 import cors from '@fastify/cors';
+import { createStorageHealth } from './storage-health.js';
 import type { TrustedProxies } from './client-address.js';
 import { connectDatabase, createDatabase, type Database } from '@app/db';
 import helmet from '@fastify/helmet';
@@ -34,6 +36,7 @@ export interface CreateAppOptions {
   connectionIdleTimeoutMs?: number;
   cursorIdleTimeoutMs?: number;
   logger?: boolean;
+  maxLobbies?: number;
   maxConnectionsPerIp?: number;
   maxHttpBufferBytes?: number;
   maxParticipantsPerRoom?: number;
@@ -49,6 +52,7 @@ export const createApp = async ({
   connectionIdleTimeoutMs = DEFAULT_CURSOR_CONNECTION_IDLE_TIMEOUT_MS,
   cursorIdleTimeoutMs,
   logger = true,
+  maxLobbies = 10_000,
   maxConnectionsPerIp = DEFAULT_CURSOR_MAX_CONNECTIONS_PER_IP,
   maxHttpBufferBytes = DEFAULT_SOCKET_MAX_HTTP_BUFFER_BYTES,
   maxParticipantsPerRoom = DEFAULT_CURSOR_MAX_PARTICIPANTS_PER_ROOM,
@@ -63,7 +67,28 @@ export const createApp = async ({
   }
   const database = suppliedDatabase ?? createDatabase(databaseUrl);
   await connectDatabase(database);
-  const app = Fastify({ logger, trustProxy });
+  const app = Fastify({
+    logger: logger
+      ? {
+          serializers: {
+            req: (request) => ({
+              method: request.method,
+              url: request.url?.startsWith('/lobbies/')
+                ? '/lobbies/:invite'
+                : request.url?.split('?')[0],
+              remoteAddress: request.ip,
+            }),
+            err: (error) => ({
+              type: error.name,
+              code: error.code,
+              message: 'Request failed',
+              stack: '',
+            }),
+          },
+        }
+      : false,
+    trustProxy,
+  });
   app.addHook('onClose', async () => database.$disconnect());
   try {
     const allowedOriginSet = new Set(allowedOrigins);
@@ -74,7 +99,7 @@ export const createApp = async ({
     await app.register(cors, {
       origin: (origin, callback) => callback(null, isOriginAllowed(origin)),
     });
-    await registerLobbyRoutes(app, database, isOriginAllowed);
+    await registerLobbyRoutes(app, database, isOriginAllowed, maxLobbies);
     const io: CursorIo = new SocketServer<
       ClientToServerEvents,
       ServerToClientEvents,
@@ -93,7 +118,7 @@ export const createApp = async ({
       canvasPersistence: createCanvasPersistence(database),
       authorizeRoom: async (roomId) =>
         (await database.lobby.findUnique({
-          where: { id: roomId },
+          where: { id: roomId, archivedAt: null },
           select: { id: true },
         })) !== null,
       connectionIdleTimeoutMs,
@@ -105,15 +130,50 @@ export const createApp = async ({
       trustProxy,
     });
     app.addHook('preClose', async () => {
+      io.emit(CURSOR_EVENTS.disconnect, { reason: 'restarting' });
       io.local.disconnectSockets(true);
       await cursorServer.close();
-      await new Promise<void>((resolve) => io.close(() => resolve()));
+      io.engine.close();
+      app.server.closeIdleConnections();
     });
+
+    app.addHook('onClose', async () => {
+      await io.close();
+    });
+
+    const storage = createStorageHealth(
+      database,
+      suppliedDatabase ? 'file::memory:' : databaseUrl,
+    );
+    await storage.check();
+    const storageTimer = setInterval(() => {
+      void storage.check();
+    }, 30_000);
+    storageTimer.unref();
+    app.addHook('onClose', async () => {
+      clearInterval(storageTimer);
+    });
+    const metricsTimer = setInterval(
+      () =>
+        app.log.info(
+          {
+            ...cursorServer.metrics(),
+            ...storage.snapshot(),
+            heapBytes: process.memoryUsage().heapUsed,
+          },
+          'Canvas operational metrics',
+        ),
+      60_000,
+    );
+    metricsTimer.unref();
+    app.addHook('onClose', async () => clearInterval(metricsTimer));
 
     app.get('/healthz', async () => ({ status: 'ok' }));
     app.get('/readyz', async (_request, reply) => {
       try {
         await database.$queryRawUnsafe('SELECT 1');
+        if (!storage.snapshot().storageReady)
+          return reply.code(503).send({ status: 'unavailable' });
         return { status: 'ready' };
       } catch {
         return reply.code(503).send({ status: 'unavailable' });

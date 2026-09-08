@@ -16,7 +16,7 @@ describe('lobby code allocation', () => {
   it('retries a uniqueness collision without losing the requested name', async () => {
     const database = await createTestDatabase();
     try {
-      const create = vi.spyOn(database.lobby, 'create').mockRejectedValueOnce(
+      const create = vi.spyOn(database, '$transaction').mockRejectedValueOnce(
         new Prisma.PrismaClientKnownRequestError('Duplicate code', {
           code: 'P2002',
           clientVersion: 'test',
@@ -37,7 +37,7 @@ describe('lobby code allocation', () => {
     const database = await createTestDatabase();
     try {
       const create = vi
-        .spyOn(database.lobby, 'create')
+        .spyOn(database, '$transaction')
         .mockRejectedValue(new Error('Database unavailable'));
       await expect(persistLobby(database, 'Friends')).rejects.toThrow(
         'Database unavailable',

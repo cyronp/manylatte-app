@@ -251,6 +251,10 @@ export const createCanvasPersistence = (
           author: user,
         });
       }
+      await tx.lobby.update({
+        where: { id: roomId },
+        data: { lastActivityAt: new Date() },
+      });
       await tx.canvasOperation.create({
         data: { roomId, id: command.id, hash, result: JSON.stringify(result) },
       });

@@ -52,13 +52,11 @@ export function registerTyping(
       for (const previous of participant.typingNodeIds) {
         if (previous !== nodeId || !isTyping) {
           participant.typingNodeIds.delete(previous);
-          socket
-            .to(socket.data.cursorRoomId)
-            .emit(CANVAS_EVENTS.typing, {
-              isTyping: false,
-              nodeId: previous,
-              user,
-            });
+          socket.to(socket.data.cursorRoomId).emit(CANVAS_EVENTS.typing, {
+            isTyping: false,
+            nodeId: previous,
+            user,
+          });
         }
       }
       if (isTyping) participant.typingNodeIds.add(nodeId);
