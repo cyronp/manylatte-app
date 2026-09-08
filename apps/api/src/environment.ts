@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { parseTrustedProxies } from './client-address.js';
 import { DEFAULT_DATABASE_URL, resolveDatabaseUrl } from '@app/db';
 
 import {
@@ -59,10 +60,7 @@ const rawApiEnvironmentSchema = z.object({
     .min(512)
     .max(65_536)
     .default(DEFAULT_SOCKET_MAX_HTTP_BUFFER_BYTES),
-  TRUST_PROXY: z
-    .enum(['true', 'false'])
-    .default('false')
-    .transform((value) => value === 'true'),
+  TRUST_PROXY: z.string().default('false'),
 });
 
 const parseAllowedOrigins = (
@@ -147,6 +145,6 @@ export const readApiEnvironment = (
     nodeEnvironment: result.data.NODE_ENV,
     port: result.data.PORT,
     redisUrl: result.data.REDIS_URL,
-    trustProxy: result.data.TRUST_PROXY,
+    trustProxy: parseTrustedProxies(result.data.TRUST_PROXY),
   };
 };

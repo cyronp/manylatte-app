@@ -3,6 +3,7 @@ import {
   type ServerToClientEvents,
 } from '@app/shared';
 import cors from '@fastify/cors';
+import type { TrustedProxies } from './client-address.js';
 import { connectDatabase, createDatabase, type Database } from '@app/db';
 import helmet from '@fastify/helmet';
 import Fastify from 'fastify';
@@ -38,7 +39,7 @@ export interface CreateAppOptions {
   maxParticipantsPerRoom?: number;
   maxTotalConnections?: number;
   redisUrl?: string;
-  trustProxy?: boolean;
+  trustProxy?: TrustedProxies;
 }
 
 export const createApp = async ({

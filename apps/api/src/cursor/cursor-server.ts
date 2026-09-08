@@ -12,7 +12,6 @@ import {
   canvasTypingInputSchema,
   cursorColorInputSchema,
   cursorInputSchema,
-  cursorSocketAuthSchema,
   type CanvasMessage,
   type ClientToServerEvents,
   type CursorRoomId,
@@ -24,7 +23,8 @@ import {
 } from '@app/shared';
 import type { Server, Socket } from 'socket.io';
 
-import { createCoffeeGuestUsername } from './guest-username.js';
+import { registerAdmission } from './register-admission.js';
+import type { TrustedProxies } from '../client-address.js';
 import { selectCursorColor } from './palette.js';
 import { TokenBucket } from './token-bucket.js';
 import { PersistentCanvas } from './persistent-canvas.js';
@@ -43,7 +43,6 @@ const SOCKET_MESSAGES_PER_SECOND = 45;
 const ABUSE_DISCONNECT_THRESHOLD = 20;
 const ABUSE_WINDOW_MS = 10_000;
 const ABUSE_LOG_INTERVAL_MS = 5_000;
-const CONNECTION_ATTEMPT_RETENTION_MS = 10 * 60_000;
 
 export interface CursorSocketData {
   cursorColor?: HexColor;
@@ -91,11 +90,6 @@ interface Participant {
   violationWindowStartedAt: number;
 }
 
-interface ConnectionAttemptState {
-  lastSeenAt: number;
-  limiter: TokenBucket;
-}
-
 interface CursorRoom {
   canvas: PersistentCanvas;
   participants: Map<string, Participant>;
@@ -112,7 +106,7 @@ export interface CursorServerOptions {
   maxParticipantsPerRoom?: number;
   maxTotalConnections?: number;
   now?: () => number;
-  trustProxy?: boolean;
+  trustProxy?: TrustedProxies;
 }
 
 export const registerCursorServer = (
@@ -130,8 +124,15 @@ export const registerCursorServer = (
     trustProxy = false,
   }: CursorServerOptions,
 ) => {
-  const connectionAttemptsByIp = new Map<string, ConnectionAttemptState>();
-  const connectionCountsByIp = new Map<string, number>();
+  const admission = registerAdmission(io, {
+    authorizeRoom,
+    maxConnectionsPerIp,
+    maxTotalConnections,
+    maxParticipantsPerRoom,
+    trustProxy,
+    now,
+    logger,
+  });
   const rooms = new Map<CursorRoomId, CursorRoom>();
 
   const getRoom = (roomId: CursorRoomId) => {
@@ -149,75 +150,6 @@ export const registerCursorServer = (
     rooms.set(roomId, room);
     return room;
   };
-
-  io.use(async (socket, next) => {
-    try {
-      const authResult = cursorSocketAuthSchema.safeParse(
-        socket.handshake.auth,
-      );
-
-      if (!authResult.success) {
-        next(new Error('Invalid cursor connection'));
-        return;
-      }
-
-      if (!(await authorizeRoom(authResult.data.roomId))) {
-        next(new Error('Cursor room access denied'));
-        return;
-      }
-
-      const currentTime = now();
-      const forwardedFor = socket.handshake.headers['x-forwarded-for'];
-      const forwardedAddress = Array.isArray(forwardedFor)
-        ? forwardedFor[0]
-        : forwardedFor?.split(',')[0]?.trim();
-      const ipAddress =
-        trustProxy && forwardedAddress
-          ? forwardedAddress
-          : socket.handshake.address;
-      const existingAttemptState = connectionAttemptsByIp.get(ipAddress);
-      const attemptState = existingAttemptState ?? {
-        lastSeenAt: currentTime,
-        limiter: new TokenBucket(
-          maxConnectionsPerIp,
-          Math.max(1, maxConnectionsPerIp / 10),
-          currentTime,
-        ),
-      };
-      attemptState.lastSeenAt = currentTime;
-      connectionAttemptsByIp.set(ipAddress, attemptState);
-
-      if (!attemptState.limiter.take(currentTime)) {
-        next(new Error('Cursor connection rate limit exceeded'));
-        return;
-      }
-
-      if ((connectionCountsByIp.get(ipAddress) ?? 0) >= maxConnectionsPerIp) {
-        next(new Error('Cursor connection limit exceeded'));
-        return;
-      }
-
-      if (io.of('/').sockets.size >= maxTotalConnections) {
-        next(new Error('Cursor server connection limit reached'));
-        return;
-      }
-
-      const roomSocketIds = await io.in(authResult.data.roomId).allSockets();
-
-      if (roomSocketIds.size >= maxParticipantsPerRoom) {
-        next(new Error('Cursor room is full'));
-        return;
-      }
-
-      socket.data.cursorIpAddress = ipAddress;
-      socket.data.cursorRoomId = authResult.data.roomId;
-      socket.data.cursorUsername =
-        authResult.data.username ?? createCoffeeGuestUsername();
-      next();
-    } catch {
-      next(new Error('Cursor connection unavailable'));
-    }
-  });
 
   const recordViolation = (
     socket: CursorSocket,
@@ -343,10 +275,6 @@ export const registerCursorServer = (
       violationWindowStartedAt: connectedAt,
     };
 
-    connectionCountsByIp.set(
-      socket.data.cursorIpAddress,
-      (connectionCountsByIp.get(socket.data.cursorIpAddress) ?? 0) + 1,
-    );
     room.participants.set(socket.id, participant);
     socket.data.cursorColor = participant.color;
     socket.data.cursorUsername = participant.username;
@@ -738,18 +666,6 @@ export const registerCursorServer = (
     );
 
     socket.on('disconnect', () => {
-      const ipConnectionCount =
-        connectionCountsByIp.get(socket.data.cursorIpAddress) ?? 0;
-
-      if (ipConnectionCount <= 1) {
-        connectionCountsByIp.delete(socket.data.cursorIpAddress);
-      } else {
-        connectionCountsByIp.set(
-          socket.data.cursorIpAddress,
-          ipConnectionCount - 1,
-        );
-      }
-
       room.participants.delete(socket.id);
       room.pendingMoves.delete(participant.userId);
       for (const nodeId of participant.typingNodeIds) {
@@ -834,14 +750,7 @@ export const registerCursorServer = (
         }
       }
 
-      for (const [ipAddress, attemptState] of connectionAttemptsByIp) {
-        if (
-          currentTime - attemptState.lastSeenAt >=
-          CONNECTION_ATTEMPT_RETENTION_MS
-        ) {
-          connectionAttemptsByIp.delete(ipAddress);
-        }
-      }
+      admission.sweep();
     },
     Math.max(10, Math.min(1_000, idleTimeoutMs, connectionIdleTimeoutMs)),
   );
@@ -856,8 +765,6 @@ export const registerCursorServer = (
       await Promise.all(
         Array.from(rooms.values(), (room) => room.canvas.drain()),
       );
-      connectionAttemptsByIp.clear();
-      connectionCountsByIp.clear();
       rooms.clear();
     },
   };
