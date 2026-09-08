@@ -8,12 +8,16 @@ import {
   UserIcon,
   UsersIcon,
 } from '@phosphor-icons/react';
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import type { Lobby } from '@app/shared';
 
 import { Button } from '../ui/button';
-import { HexColorPicker } from '../ui/hex-color-picker';
+const HexColorPicker = lazy(() =>
+  import('../ui/hex-color-picker').then((module) => ({
+    default: module.HexColorPicker,
+  })),
+);
 import { useSocket } from '../socket-provider';
 import {
   DropdownMenu,
@@ -28,11 +32,31 @@ import {
 } from '../ui/dropdown-menu';
 
 import { LatteUserIcon } from '../icons/user-icon';
-import { LobbyUsersDialog } from './lobby-users-dialog';
-import { SettingsDialog } from './settings-dialog';
-import { UsernameDialog } from './username-dialog';
-import { CreateLobbyDialog } from './create-lobby-dialog';
-import { InviteFriendsDialog } from './invite-friends-dialog';
+const LobbyUsersDialog = lazy(() =>
+  import('./lobby-users-dialog').then((module) => ({
+    default: module.LobbyUsersDialog,
+  })),
+);
+const SettingsDialog = lazy(() =>
+  import('./settings-dialog').then((module) => ({
+    default: module.SettingsDialog,
+  })),
+);
+const UsernameDialog = lazy(() =>
+  import('./username-dialog').then((module) => ({
+    default: module.UsernameDialog,
+  })),
+);
+const CreateLobbyDialog = lazy(() =>
+  import('./create-lobby-dialog').then((module) => ({
+    default: module.CreateLobbyDialog,
+  })),
+);
+const InviteFriendsDialog = lazy(() =>
+  import('./invite-friends-dialog').then((module) => ({
+    default: module.InviteFriendsDialog,
+  })),
+);
 
 interface UserMenuProps {
   lobby: Lobby;
@@ -67,7 +91,7 @@ export default function UserMenu({
   const overflowCount = users.length - visibleUsers.length;
 
   return (
-    <>
+    <Suspense fallback={<span role="status">Loading menu…</span>}>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
@@ -140,7 +164,9 @@ export default function UserMenu({
                 Change Color
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="p-2">
-                <HexColorPicker color={user?.color} onChange={setUserColor} />
+                <Suspense fallback={<span role="status">Loading colors…</span>}>
+                  <HexColorPicker color={user?.color} onChange={setUserColor} />
+                </Suspense>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
             <DropdownMenuItem onSelect={() => setActiveDialog('lobbyusers')}>
@@ -174,22 +200,30 @@ export default function UserMenu({
           onOpenChange={(open) => setActiveDialog(open ? 'invite' : null)}
         />
       )}
-      <UsernameDialog
-        open={activeDialog === 'username'}
-        onOpenChange={(isOpen) => setActiveDialog(isOpen ? 'username' : null)}
-        onUsernameChange={onUsernameChange}
-        username={username}
-      />
-      <LobbyUsersDialog
-        open={activeDialog === 'lobbyusers'}
-        onOpenChange={(isOpen) => setActiveDialog(isOpen ? 'lobbyusers' : null)}
-        users={users}
-        userID={user?.userId}
-      />
-      <SettingsDialog
-        onOpenChange={(isOpen) => setActiveDialog(isOpen ? 'settings' : null)}
-        open={activeDialog === 'settings'}
-      />
-    </>
+      {activeDialog === 'username' && (
+        <UsernameDialog
+          open={activeDialog === 'username'}
+          onOpenChange={(isOpen) => setActiveDialog(isOpen ? 'username' : null)}
+          onUsernameChange={onUsernameChange}
+          username={username}
+        />
+      )}
+      {activeDialog === 'lobbyusers' && (
+        <LobbyUsersDialog
+          open={activeDialog === 'lobbyusers'}
+          onOpenChange={(isOpen) =>
+            setActiveDialog(isOpen ? 'lobbyusers' : null)
+          }
+          users={users}
+          userID={user?.userId}
+        />
+      )}
+      {activeDialog === 'settings' && (
+        <SettingsDialog
+          onOpenChange={(isOpen) => setActiveDialog(isOpen ? 'settings' : null)}
+          open={activeDialog === 'settings'}
+        />
+      )}
+    </Suspense>
   );
 }

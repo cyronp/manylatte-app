@@ -56,3 +56,13 @@ describe('cursor API URL', () => {
     ).toThrow(/credentials/);
   });
 });
+
+it.each([
+  'https://api.example.com/path',
+  'https://api.example.com?x=1',
+  'https://api.example.com#fragment',
+])('rejects a URL that is not an origin: %s', (url) => {
+  expect(() => resolveCursorApiUrl({ VITE_LOCAL_API_URL: url })).toThrow(
+    /origin/,
+  );
+});

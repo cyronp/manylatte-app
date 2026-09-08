@@ -1,9 +1,9 @@
 import { createRootRoute, Outlet } from '@tanstack/react-router';
-import { type SubmitEvent, useState } from 'react';
+import { type SubmitEvent, useState, lazy, Suspense } from 'react';
 import { cursorUsernameSchema } from '@app/shared';
 
 import { SocketProvider } from '../components/socket-provider';
-import UserMenu from '../components/user-menu/user-menu';
+const UserMenu = lazy(() => import('../components/user-menu/user-menu'));
 import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -45,14 +45,16 @@ function RootLayout() {
             <SocketProvider roomId={lobby.id} username={username}>
               <div className="relative min-h-screen bg-background">
                 <div className="absolute top-4 right-4 z-50">
-                  <UserMenu
-                    lobby={lobby}
-                    onUsernameChange={(nextUsername) => {
-                      writeStoredCursorUsername(nextUsername);
-                      setUsername(nextUsername);
-                    }}
-                    username={username}
-                  />
+                  <Suspense fallback={null}>
+                    <UserMenu
+                      lobby={lobby}
+                      onUsernameChange={(nextUsername) => {
+                        writeStoredCursorUsername(nextUsername);
+                        setUsername(nextUsername);
+                      }}
+                      username={username}
+                    />
+                  </Suspense>
                 </div>
                 <Outlet />
               </div>
