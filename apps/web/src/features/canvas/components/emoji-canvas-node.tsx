@@ -9,7 +9,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { CANVAS_EVENTS, type CursorUser } from '@app/shared';
+import { type CursorUser } from '@app/shared';
 import {
   DotsThreeIcon,
   SmileyMeltingIcon,
@@ -31,7 +31,7 @@ export type EmojiNode = Node<
 >;
 
 export const EmojiCanvasNode = ({ id, data }: NodeProps<EmojiNode>) => {
-  const { socket } = useSocket();
+  const { execute, status } = useSocket();
   const [isOpen, setIsOpen] = useState(false);
   const [pickerPosition, setPickerPosition] = useState<{
     x: number;
@@ -92,6 +92,7 @@ export const EmojiCanvasNode = ({ id, data }: NodeProps<EmojiNode>) => {
           }}
         >
           <DropdownMenuItem
+            disabled={status !== 'connected'}
             onSelect={() => {
               pendingPickerRef.current = true;
             }}
@@ -101,11 +102,15 @@ export const EmojiCanvasNode = ({ id, data }: NodeProps<EmojiNode>) => {
           </DropdownMenuItem>
 
           <DropdownMenuItem
+            disabled={status !== 'connected'}
             variant="destructive"
             onSelect={() => {
-              socket.emit(CANVAS_EVENTS.mutation, {
-                action: 'delete',
-                nodeId: id,
+              void execute({
+                type: 'mutation',
+                mutation: {
+                  action: 'delete',
+                  nodeId: id,
+                },
               });
             }}
           >
@@ -120,10 +125,13 @@ export const EmojiCanvasNode = ({ id, data }: NodeProps<EmojiNode>) => {
           onClose={closePicker}
           onCloseAutoFocus={() => triggerRef.current?.focus()}
           onEmojiSelect={(emoji, label) => {
-            socket.emit(CANVAS_EVENTS.mutation, {
-              action: 'update-reaction',
-              nodeId: id,
-              data: { emoji, label },
+            void execute({
+              type: 'mutation',
+              mutation: {
+                action: 'update-reaction',
+                nodeId: id,
+                data: { emoji, label },
+              },
             });
             closePicker();
           }}
