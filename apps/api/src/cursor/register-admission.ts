@@ -95,7 +95,10 @@ export function registerAdmission(
       next();
     } catch (error) {
       options.logger.error(
-        { errorType: error instanceof Error ? error.name : 'unknown', socketId: socket.id },
+        {
+          errorType: error instanceof Error ? error.name : 'unknown',
+          socketId: socket.id,
+        },
         'Room authorization failed',
       );
       deny('Cursor connection unavailable', true);

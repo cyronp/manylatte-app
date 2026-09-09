@@ -1,3 +1,4 @@
+import { io } from 'socket.io-client';
 import { test, expect, type Page } from '@playwright/test';
 
 async function join(page: Page, code: string, username: string) {
@@ -142,4 +143,98 @@ test('production CSP allows pickers and dialogs and the join screen fits 320px',
   await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
   expect(violations).toEqual([]);
+});
+
+test('group dragging persists every selected node', async ({
+  browser,
+  request,
+}) => {
+  const response = await request.post('http://127.0.0.1:3000/lobbies', {
+    data: { name: 'Group moves' },
+  });
+  const lobby = await response.json();
+  const publisher = io('http://127.0.0.1:3000', {
+    auth: { roomId: lobby.id, username: 'Seeder' },
+    autoConnect: false,
+  });
+  const ready = new Promise((resolve) =>
+    publisher.once('canvas:snapshot', resolve),
+  );
+  publisher.connect();
+  await ready;
+  for (const x of [700, 1000]) {
+    const result = await publisher.timeout(3000).emitWithAck('canvas:command', {
+      id: crypto.randomUUID(),
+      body: {
+        type: 'mutation',
+        mutation: {
+          action: 'create',
+          node: {
+            id: crypto.randomUUID(),
+            type: 'emoji',
+            position: { x, y: 500 },
+            data: { emoji: '☕', label: 'Coffee' },
+          },
+        },
+      },
+    });
+    expect(result.ok).toBe(true);
+  }
+  publisher.disconnect();
+  const first = await browser.newPage();
+  const second = await browser.newPage();
+  await join(first, lobby.code, 'Alice');
+  await join(second, lobby.code, 'Bob');
+  const nodes = first.locator('.react-flow__node-emoji');
+  await expect(nodes).toHaveCount(2);
+  const before = await nodes.evaluateAll((items) =>
+    items.map((node) => (node as HTMLElement).style.transform),
+  );
+  await nodes.nth(0).click();
+  await first.keyboard.down('Control');
+  await nodes.nth(1).click();
+  await first.keyboard.up('Control');
+  await expect(first.locator('.react-flow__node.selected')).toHaveCount(2);
+  const bounds = await nodes.nth(0).boundingBox();
+  if (!bounds) throw new Error('Missing reaction bounds');
+  await first.mouse.move(
+    bounds.x + bounds.width / 2,
+    bounds.y + bounds.height / 2,
+  );
+  await first.mouse.down();
+  await first.mouse.move(
+    bounds.x + bounds.width / 2 + 80,
+    bounds.y + bounds.height / 2 + 40,
+    { steps: 8 },
+  );
+  await first.mouse.up();
+  const after = await nodes.evaluateAll((items) =>
+    items.map((node) => (node as HTMLElement).style.transform),
+  );
+  expect(after[0]).not.toBe(before[0]);
+  expect(after[1]).not.toBe(before[1]);
+  await expect
+    .poll(() =>
+      second
+        .locator('.react-flow__node-emoji')
+        .evaluateAll((items) =>
+          items.map((node) => (node as HTMLElement).style.transform),
+        ),
+    )
+    .toEqual(after);
+  await second.reload();
+  await expect(
+    second.getByRole('button', { name: 'Add message', exact: true }),
+  ).toBeEnabled();
+  await expect
+    .poll(() =>
+      second
+        .locator('.react-flow__node-emoji')
+        .evaluateAll((items) =>
+          items.map((node) => (node as HTMLElement).style.transform),
+        ),
+    )
+    .toEqual(after);
+  await first.close();
+  await second.close();
 });
