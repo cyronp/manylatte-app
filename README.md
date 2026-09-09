@@ -133,7 +133,7 @@ include dependency builds so shared-contract changes invalidate consumer tests.
 
 ## Editing, identity and retention
 
-Use **Add message** or **Add reaction**, including with a keyboard or touch screen.
+Open the canvas context menu to add a message or reaction.
 Arrow keys move focused nodes; Enter selects them; Delete/Backspace deletes selected
 nodes. Group moves and deletion synchronize with other participants. Creation
 positions are constrained to the board. Editing waits for the initial snapshot;

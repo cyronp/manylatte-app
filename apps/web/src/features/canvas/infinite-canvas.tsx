@@ -151,55 +151,22 @@ export const InfiniteCanvas = () => {
 
   return (
     <>
-      <div
-        className="absolute left-3 top-3 z-20 flex max-w-[calc(100%-1.5rem)] flex-wrap gap-2"
-        aria-label="Canvas tools"
-      >
-        <Button
-          disabled={
-            status !== 'connected' ||
-            nodes.some((node) => node.type === 'messageDraft')
-          }
-          onClick={() =>
-            createMessageDraft(
-              screenToFlowPosition({
-                x: window.innerWidth / 2,
-                y: window.innerHeight / 2,
-              }),
-            )
-          }
-        >
-          Add message
-        </Button>
-        <Button
-          disabled={status !== 'connected'}
-          onClick={() => {
-            setContextMenuPosition({
-              x: window.innerWidth / 2,
-              y: window.innerHeight / 2,
-            });
-            setEmojiPickerOpen(true);
-          }}
-        >
-          Add reaction
-        </Button>
-        {status !== 'connected' && (
+      {status !== 'connected' && (
+        <div className="absolute left-3 top-3 z-20 flex max-w-[calc(100%-1.5rem)] flex-wrap gap-2">
           <Button variant="outline" onClick={retryConnect}>
             Reconnect
           </Button>
-        )}
-        <span
-          role="status"
-          className="basis-full text-sm bg-background rounded px-2"
-        >
-          {error ??
-            (status !== 'connected'
-              ? status === 'initializing'
+          <span
+            role="status"
+            className="basis-full rounded bg-background px-2 text-sm"
+          >
+            {error ??
+              (status === 'initializing'
                 ? 'Loading canvas…'
-                : 'Waiting for connection…'
-              : '')}
-        </span>
-      </div>
+                : 'Waiting for connection…')}
+          </span>
+        </div>
+      )}
       <ContextMenu open={contextMenuOpen} onOpenChange={setContextMenuOpen}>
         <ContextMenuTrigger asChild>
           <div

@@ -9,7 +9,20 @@ async function join(page: Page, code: string, username: string) {
   await page.goto(`/?lobby=${code}`);
   await expect(
     page.getByRole('button', { name: 'Add message', exact: true }),
-  ).toBeEnabled();
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Add reaction', exact: true }),
+  ).toHaveCount(0);
+  await openCanvasMenu(page);
+  await expect(page.getByRole('menuitem', { name: 'Message' })).toBeEnabled();
+  await page.keyboard.press('Escape');
+}
+
+async function openCanvasMenu(page: Page) {
+  await page.locator('.react-flow__pane').click({
+    button: 'right',
+    position: { x: 400, y: 300 },
+  });
 }
 
 test('two clients keep saved messages and keyboard moves/deletes in sync through restart', async ({
@@ -26,7 +39,8 @@ test('two clients keep saved messages and keyboard moves/deletes in sync through
   const second = await secondContext.newPage();
   await join(first, lobby.code, 'Alice');
   await join(second, lobby.code, 'Bob');
-  await first.getByRole('button', { name: 'Add message', exact: true }).click();
+  await openCanvasMenu(first);
+  await first.getByRole('menuitem', { name: 'Message' }).click();
   await first
     .getByRole('textbox', { name: 'First message', exact: true })
     .fill('Atomic first message');
@@ -56,9 +70,12 @@ test('two clients keep saved messages and keyboard moves/deletes in sync through
     .getByRole('textbox', { name: 'Message', exact: true })
     .fill('Draft survives reconnect');
   await request.post('/test/restart');
-  await expect(
-    second.getByRole('button', { name: 'Add message', exact: true }),
-  ).toBeEnabled({ timeout: 15_000 });
+  await expect(second.getByRole('button', { name: 'Reconnect' })).toHaveCount(
+    0,
+    {
+      timeout: 15_000,
+    },
+  );
   await expect(
     second.getByRole('textbox', { name: 'Message', exact: true }),
   ).toHaveValue('Draft survives reconnect');
@@ -90,9 +107,9 @@ test('two clients keep saved messages and keyboard moves/deletes in sync through
   await node.press('Delete');
   await expect(second.locator('.react-flow__node-message')).toHaveCount(0);
   await first.reload();
-  await expect(
-    first.getByRole('button', { name: 'Add message', exact: true }),
-  ).toBeEnabled();
+  await openCanvasMenu(first);
+  await expect(first.getByRole('menuitem', { name: 'Message' })).toBeEnabled();
+  await first.keyboard.press('Escape');
   await expect(first.locator('.react-flow__node-message')).toHaveCount(0);
   await firstContext.close();
   await secondContext.close();
@@ -121,7 +138,8 @@ test('production CSP allows pickers and dialogs and the join screen fits 320px',
   const lobby = await response.json();
   await page.setViewportSize({ width: 1280, height: 800 });
   await join(page, lobby.code, 'CSP user');
-  await page.getByRole('button', { name: 'Add reaction', exact: true }).click();
+  await openCanvasMenu(page);
+  await page.getByRole('menuitem', { name: 'Reaction' }).click();
   await expect(page.getByPlaceholder('Search emojis')).toBeVisible();
   expect(
     await page
@@ -223,9 +241,9 @@ test('group dragging persists every selected node', async ({
     )
     .toEqual(after);
   await second.reload();
-  await expect(
-    second.getByRole('button', { name: 'Add message', exact: true }),
-  ).toBeEnabled();
+  await openCanvasMenu(second);
+  await expect(second.getByRole('menuitem', { name: 'Message' })).toBeEnabled();
+  await second.keyboard.press('Escape');
   await expect
     .poll(() =>
       second
