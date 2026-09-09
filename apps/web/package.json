@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && tsc --noEmit",
+    "build": "vite build && tsc --noEmit && node scripts/csp-styles.mjs",
     "lint": "eslint .",
-    "test": "vitest run --config vitest.config.ts"
+    "test": "vitest run --config vitest.config.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@app/shared": "*",
@@ -31,11 +32,13 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "^4.3.3",
     "@tanstack/router-plugin": "^1.168.35",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
+    "jsdom": "^29.1.1",
     "tailwindcss": "^4.3.3",
     "vite": "^8.2.2"
   }

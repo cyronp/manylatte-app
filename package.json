@@ -29,11 +29,14 @@
     "security:audit": "npm audit --audit-level=high",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "turbo test"
+    "test": "turbo test",
+    "db:ops": "node packages/db/scripts/operations.mjs",
+    "test:migrations": "node packages/db/scripts/check-migrations.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.4.1",
     "eslint": "^10.10.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "prettier": "^3.9.6",
     "turbo": "^2.10.12",
     "typescript": "^6.0.3",

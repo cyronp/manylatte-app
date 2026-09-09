@@ -15,3 +15,6 @@ packages/db/src/generated/prisma/
 *.db-shm
 *.db-wal
 *.db-journal
+
+playwright-report/
+test-results/
