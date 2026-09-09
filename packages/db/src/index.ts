@@ -3,13 +3,31 @@ import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
 import { PrismaClient } from './generated/prisma/client.js';
 import { resolveDatabaseUrl } from './database-url.js';
 
-export const createDatabase = (url?: string) =>
-  new PrismaClient({
-    adapter: new PrismaBetterSqlite3({
-      url: resolveDatabaseUrl(url),
-      timeout: 5_000,
-    }),
+export const createDatabase = (url?: string, initializationSql?: string) => {
+  const factory = new PrismaBetterSqlite3({
+    url: resolveDatabaseUrl(url),
+    timeout: 5_000,
   });
+  return new PrismaClient({
+    adapter:
+      initializationSql === undefined
+        ? factory
+        : {
+            provider: factory.provider,
+            adapterName: factory.adapterName,
+            async connect() {
+              const adapter = await factory.connect();
+              try {
+                await adapter.executeScript(initializationSql);
+                return adapter;
+              } catch (error) {
+                await adapter.dispose();
+                throw error;
+              }
+            },
+          },
+  });
+};
 
 export const connectDatabase = async (database: PrismaClient) => {
   try {
@@ -20,6 +38,7 @@ export const connectDatabase = async (database: PrismaClient) => {
     await database.canvasNode.findFirst();
     await database.canvasMessage.findFirst();
     await database.lobby.findFirst();
+    await database.canvasOperation.findFirst();
   } catch (cause) {
     await database.$disconnect();
     throw new Error(

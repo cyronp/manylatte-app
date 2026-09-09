@@ -1,40 +1,31 @@
 import {
-  CANVAS_EVENTS,
   CANVAS_HEIGHT,
   CANVAS_REGION_HEIGHT,
   CANVAS_REGION_WIDTH,
   CANVAS_WIDTH,
   type CanvasNode as SyncedCanvasNode,
-  type CanvasNodeMutation,
 } from '@app/shared';
 import {
   ReactFlow,
   type CoordinateExtent,
   type ReactFlowInstance,
   type XYPosition,
-  useNodesState,
   useReactFlow,
 } from '@xyflow/react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import { useSocket } from '@/components/socket-provider';
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 
 import { CanvasContextMenu } from './components/canvas-context-menu';
 import { CanvasSurface } from './components/canvas-surface';
-import {
-  EmojiCanvasNode,
-  type EmojiNode,
-} from './components/emoji-canvas-node';
+import { EmojiCanvasNode } from './components/emoji-canvas-node';
 import { EmojiPickerPortal } from './components/emoji-picker-portal';
 import {
   MessageDraftCanvasNode,
   type MessageDraftNode,
 } from './components/message-draft-canvas-node';
-import {
-  MessageCanvasNode,
-  type MessageNode,
-} from './components/message-canvas-node';
+import { MessageCanvasNode } from './components/message-canvas-node';
 
 const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 2;
@@ -57,37 +48,14 @@ const NODE_TYPES = {
   messageDraft: MessageDraftCanvasNode,
 };
 
-type SyncedFlowCanvasNode = EmojiNode | MessageNode;
-type FlowCanvasNode = SyncedFlowCanvasNode | MessageDraftNode;
-
-const toFlowCanvasNode = (node: SyncedCanvasNode): SyncedFlowCanvasNode => {
-  if (node.type === 'emoji') {
-    return {
-      ...node,
-      ariaLabel: node.data.label,
-      origin: [0.5, 0.5],
-    };
-  }
-
-  return {
-    ...node,
-    data: { ...node.data, typingUsers: [] },
-    origin: [0.5, 0],
-  };
-};
-
-const toCanvasMoveMutation = (
-  node: SyncedFlowCanvasNode,
-): CanvasNodeMutation => ({
-  action: 'move',
-  nodeId: node.id,
-  position: node.position,
-});
+import { useCanvasSync, type FlowCanvasNode } from './use-canvas-sync';
+import { constrainCursorPosition } from '../cursors/cursor-position';
+import { Button } from '@/components/ui/button';
 
 export const InfiniteCanvas = () => {
-  const { socket, user } = useSocket();
+  const { execute, status, error, retryConnect } = useSocket();
   const { screenToFlowPosition } = useReactFlow();
-  const [nodes, setNodes, onNodesChange] = useNodesState<FlowCanvasNode>([]);
+  const { nodes, setNodes, onNodesChange } = useCanvasSync();
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState<XYPosition>();
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
@@ -100,120 +68,34 @@ export const InfiniteCanvas = () => {
     [],
   );
 
-  useEffect(() => {
-    const handleSnapshot: Parameters<
-      typeof socket.on<'canvas:snapshot'>
-    >[1] = ({ nodes: syncedNodes }) => {
-      setNodes((currentNodes) => [
-        ...syncedNodes.map(toFlowCanvasNode),
-        ...currentNodes.filter((node) => node.type === 'messageDraft'),
-      ]);
-    };
-    const handleNodeUpsert: Parameters<
-      typeof socket.on<'canvas:node-upsert'>
-    >[1] = (syncedNode) => {
-      const nextNode = toFlowCanvasNode(syncedNode);
-
-      setNodes((currentNodes) => {
-        const hasNode = currentNodes.some(({ id }) => id === nextNode.id);
-
-        if (!hasNode) {
-          return [...currentNodes, nextNode];
-        }
-
-        return currentNodes.map((currentNode) =>
-          currentNode.id === nextNode.id
-            ? currentNode.type === 'message' && nextNode.type === 'message'
-              ? {
-                  ...currentNode,
-                  ...nextNode,
-                  data: {
-                    ...nextNode.data,
-                    typingUsers: currentNode.data.typingUsers,
-                  },
-                }
-              : { ...currentNode, ...nextNode }
-            : currentNode,
-        );
-      });
-    };
-    const handleTyping: Parameters<typeof socket.on<'canvas:typing'>>[1] = ({
-      isTyping,
-      nodeId,
-      user: typingUser,
-    }) => {
-      setNodes((currentNodes) =>
-        currentNodes.map((currentNode) => {
-          if (currentNode.id !== nodeId || currentNode.type !== 'message') {
-            return currentNode;
-          }
-
-          const typingUsers = isTyping
-            ? [
-                ...currentNode.data.typingUsers.filter(
-                  ({ userId }) => userId !== typingUser.userId,
-                ),
-                typingUser,
-              ]
-            : currentNode.data.typingUsers.filter(
-                ({ userId }) => userId !== typingUser.userId,
-              );
-
-          return {
-            ...currentNode,
-            data: { ...currentNode.data, typingUsers },
-          };
-        }),
-      );
-    };
-
-    const handleNodeRemove: Parameters<
-      typeof socket.on<'canvas:node-remove'>
-    >[1] = ({ nodeId }) => {
-      setNodes((currentNodes) =>
-        currentNodes.filter((node) => node.id !== nodeId),
-      );
-    };
-
-    socket.on(CANVAS_EVENTS.nodeRemove, handleNodeRemove);
-    socket.on(CANVAS_EVENTS.snapshot, handleSnapshot);
-    socket.on(CANVAS_EVENTS.nodeUpsert, handleNodeUpsert);
-    socket.on(CANVAS_EVENTS.typing, handleTyping);
-
-    return () => {
-      socket.off(CANVAS_EVENTS.nodeRemove, handleNodeRemove);
-      socket.off(CANVAS_EVENTS.snapshot, handleSnapshot);
-      socket.off(CANVAS_EVENTS.nodeUpsert, handleNodeUpsert);
-      socket.off(CANVAS_EVENTS.typing, handleTyping);
-    };
-  }, [setNodes, socket]);
-
   const handleEmojiSelect = useCallback(
     (emoji: string, label: string) => {
       if (!contextMenuPosition) {
         return;
       }
 
-      const position = screenToFlowPosition(contextMenuPosition);
+      const position = constrainCursorPosition(
+        screenToFlowPosition(contextMenuPosition),
+      );
+      if (!position) return;
 
       const node: SyncedCanvasNode = {
-        data: { emoji, label, ...(user ? { user } : {}) },
+        data: { emoji, label },
         id: crypto.randomUUID(),
-        position,
+        position: constrainCursorPosition(position) ?? { x: 0, y: 0 },
         type: 'emoji',
       };
 
-      setNodes((currentNodes) => [...currentNodes, toFlowCanvasNode(node)]);
-      socket.emit(CANVAS_EVENTS.mutation, {
-        action: 'create',
-        node: {
-          ...node,
-          data: { emoji, label },
+      void execute({
+        type: 'mutation',
+        mutation: {
+          action: 'create',
+          node: { ...node, data: { emoji, label } },
         },
       });
       setEmojiPickerOpen(false);
     },
-    [contextMenuPosition, screenToFlowPosition, setNodes, socket, user],
+    [contextMenuPosition, screenToFlowPosition, execute],
   );
 
   const handleReactionSelect = useCallback(() => {
@@ -229,45 +111,17 @@ export const InfiniteCanvas = () => {
       const nodeId = crypto.randomUUID();
       const node: MessageDraftNode = {
         data: {
+          position: constrainCursorPosition(position) ?? { x: 0, y: 0 },
           onCancel: () => {
             setNodes((currentNodes) =>
               currentNodes.filter((currentNode) => currentNode.id !== nodeId),
             );
           },
-          onSubmit: (text) => {
-            const messageNode: SyncedCanvasNode = {
-              data: { messages: [] },
-              id: nodeId,
-              position,
-              type: 'message',
-            };
-
-            setNodes((currentNodes) =>
-              currentNodes.map((currentNode) =>
-                currentNode.id === nodeId
-                  ? toFlowCanvasNode(messageNode)
-                  : currentNode,
-              ),
-            );
-            socket.emit(CANVAS_EVENTS.mutation, {
-              action: 'create',
-              node: {
-                id: messageNode.id,
-                position: messageNode.position,
-                type: messageNode.type,
-              },
-            });
-            socket.emit(CANVAS_EVENTS.messageSend, {
-              id: crypto.randomUUID(),
-              nodeId,
-              text,
-            });
-          },
         },
         draggable: false,
         id: nodeId,
         origin: [0.5, 0],
-        position,
+        position: constrainCursorPosition(position) ?? { x: 0, y: 0 },
         type: 'messageDraft',
       };
 
@@ -278,7 +132,7 @@ export const InfiniteCanvas = () => {
         node,
       ]);
     },
-    [setNodes, socket],
+    [setNodes],
   );
 
   const handleMessageSelect = useCallback(() => {
@@ -297,6 +151,22 @@ export const InfiniteCanvas = () => {
 
   return (
     <>
+      {status !== 'connected' && (
+        <div className="absolute left-3 top-3 z-20 flex max-w-[calc(100%-1.5rem)] flex-wrap gap-2">
+          <Button variant="outline" onClick={retryConnect}>
+            Reconnect
+          </Button>
+          <span
+            role="status"
+            className="basis-full rounded bg-background px-2 text-sm"
+          >
+            {error ??
+              (status === 'initializing'
+                ? 'Loading canvas…'
+                : 'Waiting for connection…')}
+          </span>
+        </div>
+      )}
       <ContextMenu open={contextMenuOpen} onOpenChange={setContextMenuOpen}>
         <ContextMenuTrigger asChild>
           <div
@@ -308,6 +178,7 @@ export const InfiniteCanvas = () => {
             <ReactFlow
               aria-label="ManyLatte canvas"
               className="bg-canvas-surround"
+              deleteKeyCode={['Backspace', 'Delete']}
               elementsSelectable
               maxZoom={MAX_ZOOM}
               minZoom={MIN_ZOOM}
@@ -315,17 +186,8 @@ export const InfiniteCanvas = () => {
               nodeTypes={NODE_TYPES}
               nodes={nodes}
               nodesConnectable={false}
-              nodesDraggable
+              nodesDraggable={status === 'connected'}
               onInit={handleInit}
-              onNodeDragStop={(event, node) => {
-                void event;
-
-                if (node.type === 'messageDraft') {
-                  return;
-                }
-
-                socket.emit(CANVAS_EVENTS.mutation, toCanvasMoveMutation(node));
-              }}
               onNodesChange={onNodesChange}
               panActivationKeyCode="Space"
               panOnDrag={[1]}
@@ -352,6 +214,7 @@ export const InfiniteCanvas = () => {
             event.preventDefault();
             createMessageDraft(draftPosition);
           }}
+          disabled={status !== 'connected'}
           onMessageSelect={handleMessageSelect}
           onReactionSelect={handleReactionSelect}
         />

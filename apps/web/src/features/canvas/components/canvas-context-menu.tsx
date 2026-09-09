@@ -1,8 +1,4 @@
-import {
-  ChatIcon,
-  ScreencastIcon,
-  SmileyStickerIcon,
-} from '@phosphor-icons/react';
+import { ChatIcon, SmileyStickerIcon } from '@phosphor-icons/react';
 import type { ComponentProps } from 'react';
 
 import {
@@ -11,6 +7,7 @@ import {
 } from '@/components/ui/context-menu';
 
 interface CanvasContextMenuProps {
+  disabled?: boolean;
   onCloseAutoFocus?: ComponentProps<
     typeof ContextMenuContent
   >['onCloseAutoFocus'];
@@ -19,22 +16,19 @@ interface CanvasContextMenuProps {
 }
 
 export const CanvasContextMenu = ({
+  disabled,
   onCloseAutoFocus,
   onReactionSelect,
   onMessageSelect,
 }: CanvasContextMenuProps) => (
   <ContextMenuContent className="w-48" onCloseAutoFocus={onCloseAutoFocus}>
-    <ContextMenuItem onSelect={onReactionSelect}>
+    <ContextMenuItem disabled={disabled} onSelect={onReactionSelect}>
       <SmileyStickerIcon />
       Reaction
     </ContextMenuItem>
-    <ContextMenuItem onSelect={onMessageSelect}>
+    <ContextMenuItem disabled={disabled} onSelect={onMessageSelect}>
       <ChatIcon />
       Message
-    </ContextMenuItem>
-    <ContextMenuItem>
-      <ScreencastIcon />
-      ScreenShare
     </ContextMenuItem>
   </ContextMenuContent>
 );

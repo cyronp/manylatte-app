@@ -7,9 +7,16 @@ updates:
       day: monday
     open-pull-requests-limit: 10
     groups:
+      prisma:
+        patterns:
+          - 'prisma'
+          - '@prisma/*'
       compatible-updates:
         patterns:
           - '*'
+        exclude-patterns:
+          - 'prisma'
+          - '@prisma/*'
         update-types:
           - minor
           - patch

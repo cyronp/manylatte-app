@@ -228,6 +228,8 @@ describe('cursor socket server', () => {
     const expectedNode: CanvasNode = {
       ...node,
       data: {
+        messageCount: 1,
+        textBytes: 14,
         messages: [
           {
             author: first.session.self,

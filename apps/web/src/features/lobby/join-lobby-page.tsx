@@ -55,7 +55,7 @@ export function JoinLobbyPage() {
       }}
     >
       <DecorativeCursors />
-      <div className="relative z-20 flex w-full max-w-120 flex-col items-center gap-8 rounded-2xl border border-border bg-background/95 px-6 py-16 shadow sm:px-10">
+      <div className="relative z-20 flex w-full max-w-120 flex-col items-center gap-8 rounded-2xl border border-border bg-background/95 px-3 py-10 shadow sm:px-10">
         <div className="flex flex-col gap-4 items-center justify-center">
           <h1 className="text-5xl font-bold">ManyLatte</h1>
           <p className="text-sm text-muted-foreground">
@@ -72,7 +72,7 @@ export function JoinLobbyPage() {
             </FieldLabel>
             <InputOTP
               id="join-lobby-code"
-              containerClassName="justify-center"
+              containerClassName="justify-center gap-1 sm:gap-2"
               maxLength={8}
               pattern={REGEXP_ONLY_DIGITS_AND_CHARS}
               inputMode="text"
@@ -97,7 +97,7 @@ export function JoinLobbyPage() {
                   <InputOTPSlot
                     key={index}
                     index={index}
-                    className="h-12 w-9 text-base sm:h-14 sm:w-12 sm:text-lg"
+                    className="h-10 w-6 text-sm sm:h-14 sm:w-12 sm:text-lg"
                     aria-invalid={!!error}
                   />
                 ))}
@@ -108,7 +108,7 @@ export function JoinLobbyPage() {
                   <InputOTPSlot
                     key={index}
                     index={index}
-                    className="h-12 w-9 text-base sm:h-14 sm:w-12 sm:text-lg"
+                    className="h-10 w-6 text-sm sm:h-14 sm:w-12 sm:text-lg"
                     aria-invalid={!!error}
                   />
                 ))}

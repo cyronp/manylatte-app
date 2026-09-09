@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { parseTrustedProxies } from './client-address.js';
 import { DEFAULT_DATABASE_URL, resolveDatabaseUrl } from '@app/db';
 
 import {
@@ -23,6 +24,7 @@ const redisUrlSchema = z
   }, 'must be a valid redis:// or rediss:// URL');
 
 const rawApiEnvironmentSchema = z.object({
+  MAX_LOBBIES: z.coerce.number().int().min(1).max(1_000_000).default(10_000),
   DATABASE_URL: z.string().default(DEFAULT_DATABASE_URL),
   ALLOWED_ORIGINS: z.string().optional(),
   CURSOR_CONNECTION_IDLE_TIMEOUT_MS: z.coerce
@@ -59,10 +61,7 @@ const rawApiEnvironmentSchema = z.object({
     .min(512)
     .max(65_536)
     .default(DEFAULT_SOCKET_MAX_HTTP_BUFFER_BYTES),
-  TRUST_PROXY: z
-    .enum(['true', 'false'])
-    .default('false')
-    .transform((value) => value === 'true'),
+  TRUST_PROXY: z.string().default('false'),
 });
 
 const parseAllowedOrigins = (
@@ -134,6 +133,7 @@ export const readApiEnvironment = (
   }
 
   return {
+    maxLobbies: result.data.MAX_LOBBIES,
     databaseUrl: resolveDatabaseUrl(result.data.DATABASE_URL),
     allowedOrigins: parseAllowedOrigins(
       result.data.ALLOWED_ORIGINS,
@@ -147,6 +147,6 @@ export const readApiEnvironment = (
     nodeEnvironment: result.data.NODE_ENV,
     port: result.data.PORT,
     redisUrl: result.data.REDIS_URL,
-    trustProxy: result.data.TRUST_PROXY,
+    trustProxy: parseTrustedProxies(result.data.TRUST_PROXY),
   };
 };

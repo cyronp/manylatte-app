@@ -29,7 +29,7 @@ describe('API environment', () => {
       NODE_ENV: 'production',
       PORT: '8080',
       REDIS_URL: 'rediss://redis.example:6380',
-      TRUST_PROXY: 'true',
+      TRUST_PROXY: 'loopback',
     });
 
     expect(environment.allowedOrigins).toEqual([
@@ -38,7 +38,7 @@ describe('API environment', () => {
     ]);
     expect(environment.maxConnectionsPerIp).toBe(12);
     expect(environment.port).toBe(8_080);
-    expect(environment.trustProxy).toBe(true);
+    expect(environment.trustProxy).toEqual(['loopback']);
   });
 
   it('fails closed for missing or insecure production origins', () => {

@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { createSocketGuards } from './socket-guards.js';
+import { registerPresence } from './register-presence.js';
 
 import {
   CANVAS_EVENTS,
@@ -7,24 +9,13 @@ import {
   CURSOR_IDLE_TIMEOUT_MS,
   CURSOR_MOVE_FPS,
   CURSOR_MOVE_INTERVAL_MS,
-  canvasMessageInputSchema,
-  canvasNodeMutationSchema,
-  canvasTypingInputSchema,
-  cursorColorInputSchema,
-  cursorInputSchema,
-  cursorSocketAuthSchema,
-  type CanvasMessage,
-  type ClientToServerEvents,
   type CursorRoomId,
-  type CursorUpdate,
   type CursorUser,
-  type HexColor,
   type RemoteCursor,
-  type ServerToClientEvents,
 } from '@app/shared';
-import type { Server, Socket } from 'socket.io';
 
-import { createCoffeeGuestUsername } from './guest-username.js';
+import { registerAdmission } from './register-admission.js';
+import type { TrustedProxies } from '../client-address.js';
 import { selectCursorColor } from './palette.js';
 import { TokenBucket } from './token-bucket.js';
 import { PersistentCanvas } from './persistent-canvas.js';
@@ -35,73 +26,21 @@ import {
   DEFAULT_CURSOR_MAX_TOTAL_CONNECTIONS,
 } from '../security-config.js';
 
-type InterServerEvents = Record<never, never>;
-
 const CURSOR_COLOR_UPDATES_PER_SECOND = 8;
 const SOCKET_MESSAGE_BURST = 60;
 const SOCKET_MESSAGES_PER_SECOND = 45;
-const ABUSE_DISCONNECT_THRESHOLD = 20;
-const ABUSE_WINDOW_MS = 10_000;
-const ABUSE_LOG_INTERVAL_MS = 5_000;
-const CONNECTION_ATTEMPT_RETENTION_MS = 10 * 60_000;
 
-export interface CursorSocketData {
-  cursorColor?: HexColor;
-  cursorIpAddress: string;
-  cursorLastPosition?: RemoteCursor;
-  cursorRoomId: CursorRoomId;
-  cursorUsername: string;
-  cursorUserId?: string;
-}
-
-export type CursorIo = Server<
-  ClientToServerEvents,
-  ServerToClientEvents,
-  InterServerEvents,
-  CursorSocketData
->;
-
-type CursorSocket = Socket<
-  ClientToServerEvents,
-  ServerToClientEvents,
-  InterServerEvents,
-  CursorSocketData
->;
-
-interface CursorLogger {
-  error: (context: object, message: string) => void;
-  warn: (context: object, message: string) => void;
-}
-
-interface Participant {
-  clickLimiter: TokenBucket;
-  color: HexColor;
-  colorLimiter: TokenBucket;
-  lastActivityAt: number;
-  lastCursor?: RemoteCursor;
-  lastSequence: number;
-  lastViolationLogAt?: number;
-  messageLimiter: TokenBucket;
-  moveLimiter: TokenBucket;
-  socketId: string;
-  typingNodeIds: Set<string>;
-  username: string;
-  userId: string;
-  violationCount: number;
-  violationWindowStartedAt: number;
-}
-
-interface ConnectionAttemptState {
-  lastSeenAt: number;
-  limiter: TokenBucket;
-}
-
-interface CursorRoom {
-  canvas: PersistentCanvas;
-  participants: Map<string, Participant>;
-  pendingMoves: Map<string, CursorUpdate>;
-}
-
+export type { CursorIo, CursorSocketData } from './cursor-types.js';
+import type {
+  CursorIo,
+  Participant,
+  CursorRoom,
+  CursorLogger,
+} from './cursor-types.js';
+import { registerCanvasCommands } from './register-canvas-commands.js';
+import { registerTyping, clearTyping } from './typing-presence.js';
+import { OperationMetrics } from './operation-metrics.js';
+import { WorkBudget } from './work-budget.js';
 export interface CursorServerOptions {
   canvasPersistence: CanvasPersistence;
   authorizeRoom: (roomId: CursorRoomId) => boolean | Promise<boolean>;
@@ -112,7 +51,7 @@ export interface CursorServerOptions {
   maxParticipantsPerRoom?: number;
   maxTotalConnections?: number;
   now?: () => number;
-  trustProxy?: boolean;
+  trustProxy?: TrustedProxies;
 }
 
 export const registerCursorServer = (
@@ -130,9 +69,18 @@ export const registerCursorServer = (
     trustProxy = false,
   }: CursorServerOptions,
 ) => {
-  const connectionAttemptsByIp = new Map<string, ConnectionAttemptState>();
-  const connectionCountsByIp = new Map<string, number>();
+  const admission = registerAdmission(io, {
+    authorizeRoom,
+    maxConnectionsPerIp,
+    maxTotalConnections,
+    maxParticipantsPerRoom,
+    trustProxy,
+    now,
+    logger,
+  });
   const rooms = new Map<CursorRoomId, CursorRoom>();
+  const workBudget = new WorkBudget();
+  const metrics = new OperationMetrics();
 
   const getRoom = (roomId: CursorRoomId) => {
     const existingRoom = rooms.get(roomId);
@@ -142,7 +90,7 @@ export const registerCursorServer = (
     }
 
     const room: CursorRoom = {
-      canvas: new PersistentCanvas(roomId, canvasPersistence),
+      canvas: new PersistentCanvas(roomId, canvasPersistence, workBudget),
       participants: new Map(),
       pendingMoves: new Map(),
     };
@@ -150,168 +98,8 @@ export const registerCursorServer = (
     return room;
   };
 
-  io.use(async (socket, next) => {
-    try {
-      const authResult = cursorSocketAuthSchema.safeParse(
-        socket.handshake.auth,
-      );
-
-      if (!authResult.success) {
-        next(new Error('Invalid cursor connection'));
-        return;
-      }
-
-      if (!(await authorizeRoom(authResult.data.roomId))) {
-        next(new Error('Cursor room access denied'));
-        return;
-      }
-
-      const currentTime = now();
-      const forwardedFor = socket.handshake.headers['x-forwarded-for'];
-      const forwardedAddress = Array.isArray(forwardedFor)
-        ? forwardedFor[0]
-        : forwardedFor?.split(',')[0]?.trim();
-      const ipAddress =
-        trustProxy && forwardedAddress
-          ? forwardedAddress
-          : socket.handshake.address;
-      const existingAttemptState = connectionAttemptsByIp.get(ipAddress);
-      const attemptState = existingAttemptState ?? {
-        lastSeenAt: currentTime,
-        limiter: new TokenBucket(
-          maxConnectionsPerIp,
-          Math.max(1, maxConnectionsPerIp / 10),
-          currentTime,
-        ),
-      };
-      attemptState.lastSeenAt = currentTime;
-      connectionAttemptsByIp.set(ipAddress, attemptState);
-
-      if (!attemptState.limiter.take(currentTime)) {
-        next(new Error('Cursor connection rate limit exceeded'));
-        return;
-      }
-
-      if ((connectionCountsByIp.get(ipAddress) ?? 0) >= maxConnectionsPerIp) {
-        next(new Error('Cursor connection limit exceeded'));
-        return;
-      }
-
-      if (io.of('/').sockets.size >= maxTotalConnections) {
-        next(new Error('Cursor server connection limit reached'));
-        return;
-      }
-
-      const roomSocketIds = await io.in(authResult.data.roomId).allSockets();
-
-      if (roomSocketIds.size >= maxParticipantsPerRoom) {
-        next(new Error('Cursor room is full'));
-        return;
-      }
-
-      socket.data.cursorIpAddress = ipAddress;
-      socket.data.cursorRoomId = authResult.data.roomId;
-      socket.data.cursorUsername =
-        authResult.data.username ?? createCoffeeGuestUsername();
-      next();
-    } catch {
-      next(new Error('Cursor connection unavailable'));
-    }
-  });
-
-  const recordViolation = (
-    socket: CursorSocket,
-    participant: Participant,
-    reason: string,
-    issueCodes?: string[],
-  ) => {
-    const currentTime = now();
-
-    if (currentTime - participant.violationWindowStartedAt >= ABUSE_WINDOW_MS) {
-      participant.violationCount = 0;
-      participant.violationWindowStartedAt = currentTime;
-    }
-
-    participant.violationCount += 1;
-    const reachedDisconnectThreshold =
-      participant.violationCount >= ABUSE_DISCONNECT_THRESHOLD;
-    const shouldLog =
-      reachedDisconnectThreshold ||
-      participant.lastViolationLogAt === undefined ||
-      currentTime - participant.lastViolationLogAt >= ABUSE_LOG_INTERVAL_MS;
-
-    if (shouldLog) {
-      participant.lastViolationLogAt = currentTime;
-      logger.warn(
-        {
-          issueCodes,
-          reason,
-          socketId: socket.id,
-          violations: participant.violationCount,
-        },
-        'Rejected abusive cursor socket message',
-      );
-    }
-
-    if (reachedDisconnectThreshold) {
-      socket.emit(CURSOR_EVENTS.disconnect, { reason: 'abuse' });
-      socket.disconnect(true);
-    }
-  };
-
-  const acceptMessageBudget = (
-    socket: CursorSocket,
-    participant: Participant,
-    eventName: string,
-  ) => {
-    const currentTime = now();
-
-    if (!participant.messageLimiter.take(currentTime)) {
-      recordViolation(socket, participant, `rate:${eventName}`);
-      return;
-    }
-
-    return currentTime;
-  };
-
-  const acceptCursorInput = (
-    socket: CursorSocket,
-    participant: Participant,
-    input: unknown,
-    limiter: TokenBucket,
-    eventName: string,
-  ) => {
-    const acceptedAt = acceptMessageBudget(socket, participant, eventName);
-
-    if (acceptedAt === undefined) {
-      return;
-    }
-
-    const result = cursorInputSchema.safeParse(input);
-
-    if (!result.success) {
-      recordViolation(
-        socket,
-        participant,
-        `invalid:${eventName}`,
-        result.error.issues.map((issue) => issue.code),
-      );
-      return;
-    }
-
-    if (!limiter.take(acceptedAt)) {
-      recordViolation(socket, participant, `rate:${eventName}`);
-      return;
-    }
-
-    if (result.data.sequence <= participant.lastSequence) {
-      return;
-    }
-
-    participant.lastActivityAt = acceptedAt;
-    participant.lastSequence = result.data.sequence;
-    return result.data;
-  };
+  const { recordViolation, acceptMessageBudget, acceptCursorInput } =
+    createSocketGuards(now, logger);
 
   io.on('connection', (socket) => {
     const roomId = socket.data.cursorRoomId;
@@ -343,10 +131,6 @@ export const registerCursorServer = (
       violationWindowStartedAt: connectedAt,
     };
 
-    connectionCountsByIp.set(
-      socket.data.cursorIpAddress,
-      (connectionCountsByIp.get(socket.data.cursorIpAddress) ?? 0) + 1,
-    );
     room.participants.set(socket.id, participant);
     socket.data.cursorColor = participant.color;
     socket.data.cursorUsername = participant.username;
@@ -401,355 +185,47 @@ export const registerCursorServer = (
           }
         }
       })
-      .catch(() => {
+      .catch((error: unknown) => {
+        metrics.loadFailures++;
+        logger.warn(
+          { errorType: error instanceof Error ? error.name : 'unknown' },
+          'Canvas initialization failed',
+        );
         if (socket.connected) {
+          socket.emit(CURSOR_EVENTS.disconnect, { reason: 'unavailable' });
           socket.disconnect(true);
         }
       });
 
-    socket.on(CURSOR_EVENTS.color, (input) => {
-      const acceptedAt = acceptMessageBudget(
-        socket,
-        participant,
-        CURSOR_EVENTS.color,
-      );
-
-      if (acceptedAt === undefined) {
-        return;
-      }
-
-      const result = cursorColorInputSchema.safeParse(input);
-
-      if (!result.success) {
-        recordViolation(
-          socket,
-          participant,
-          `invalid:${CURSOR_EVENTS.color}`,
-          result.error.issues.map((issue) => issue.code),
-        );
-        return;
-      }
-
-      if (!participant.colorLimiter.take(acceptedAt)) {
-        recordViolation(socket, participant, `rate:${CURSOR_EVENTS.color}`);
-        return;
-      }
-
-      participant.lastActivityAt = acceptedAt;
-      participant.color = result.data.color;
-      socket.data.cursorColor = result.data.color;
-
-      if (participant.lastCursor) {
-        participant.lastCursor = {
-          ...participant.lastCursor,
-          color: result.data.color,
-        };
-        socket.data.cursorLastPosition = participant.lastCursor;
-      }
-
-      const pendingMove = room.pendingMoves.get(participant.userId);
-
-      if (pendingMove) {
-        room.pendingMoves.set(participant.userId, {
-          ...pendingMove,
-          color: result.data.color,
-        });
-      }
-
-      io.to(roomId).emit(CURSOR_EVENTS.presence, {
-        color: participant.color,
-        username: participant.username,
-        userId: participant.userId,
-      });
-      for (const nodeId of participant.typingNodeIds) {
-        socket.to(roomId).emit(CANVAS_EVENTS.typing, {
-          isTyping: true,
-          nodeId,
-          user: {
-            color: participant.color,
-            username: participant.username,
-            userId: participant.userId,
-          },
-        });
-      }
-    });
-
-    socket.on(CURSOR_EVENTS.move, (input) => {
-      const acceptedInput = acceptCursorInput(
-        socket,
-        participant,
-        input,
-        participant.moveLimiter,
-        CURSOR_EVENTS.move,
-      );
-
-      if (!acceptedInput) {
-        return;
-      }
-
-      const update: CursorUpdate = {
-        ...acceptedInput,
-        color: participant.color,
-        updatedAt: now(),
-        userId: participant.userId,
-      };
-      const cursor: RemoteCursor = {
-        ...update,
-        username: participant.username,
-      };
-      participant.lastCursor = cursor;
-      socket.data.cursorLastPosition = cursor;
-      room.pendingMoves.set(participant.userId, update);
-    });
-
-    socket.on(CURSOR_EVENTS.click, (input) => {
-      const acceptedInput = acceptCursorInput(
-        socket,
-        participant,
-        input,
-        participant.clickLimiter,
-        CURSOR_EVENTS.click,
-      );
-
-      if (!acceptedInput) {
-        return;
-      }
-
-      const update: CursorUpdate = {
-        ...acceptedInput,
-        color: participant.color,
-        updatedAt: now(),
-        userId: participant.userId,
-      };
-      const cursor: RemoteCursor = {
-        ...update,
-        username: participant.username,
-      };
-      participant.lastCursor = cursor;
-      socket.data.cursorLastPosition = cursor;
-      room.pendingMoves.delete(participant.userId);
-      socket.to(roomId).volatile.emit(CURSOR_EVENTS.click, update);
-    });
-
-    const runCanvasCommand = (operation: () => Promise<void>) => {
-      void operation().catch((error: unknown) => {
-        logger.error(
-          { err: error, socketId: socket.id, roomId },
-          'Canvas persistence operation failed',
-        );
-        socket.emit(CANVAS_EVENTS.error, {
-          message:
-            'The board could not be saved. Please reconnect and try again.',
-        });
-      });
-    };
-
-    socket.on(CANVAS_EVENTS.messageSend, (input) =>
-      runCanvasCommand(async () => {
-        const acceptedAt = acceptMessageBudget(
-          socket,
-          participant,
-          CANVAS_EVENTS.messageSend,
-        );
-
-        if (acceptedAt === undefined) {
-          return;
-        }
-
-        const result = canvasMessageInputSchema.safeParse(input);
-
-        if (!result.success) {
-          recordViolation(
-            socket,
-            participant,
-            `invalid:${CANVAS_EVENTS.messageSend}`,
-            result.error.issues.map((issue) => issue.code),
-          );
-          return;
-        }
-
-        const message: CanvasMessage = {
-          author: {
-            color: participant.color,
-            username: participant.username,
-            userId: participant.userId,
-          },
-          id: result.data.id,
-          text: result.data.text,
-        };
-        const change = await room.canvas.appendMessage(
-          result.data.nodeId,
-          message,
-        );
-
-        if (change.status === 'ignored') {
-          return;
-        }
-
-        if (change.status === 'rejected') {
-          recordViolation(
-            socket,
-            participant,
-            change.reason === 'message-limit'
-              ? 'limit:canvas-messages'
-              : 'invalid:canvas-message-node',
-          );
-          return;
-        }
-
-        if (participant.typingNodeIds.delete(result.data.nodeId)) {
-          socket.to(roomId).emit(CANVAS_EVENTS.typing, {
-            isTyping: false,
-            nodeId: result.data.nodeId,
-            user: {
-              color: participant.color,
-              username: participant.username,
-              userId: participant.userId,
-            },
-          });
-        }
-
-        participant.lastActivityAt = acceptedAt;
-        io.to(roomId).emit(CANVAS_EVENTS.nodeUpsert, change.node);
-      }),
+    registerPresence(
+      io,
+      socket,
+      room,
+      participant,
+      now,
+      (event) => acceptMessageBudget(socket, participant, event),
+      (reason, codes) => recordViolation(socket, participant, reason, codes),
+      (input, limiter, event) =>
+        acceptCursorInput(socket, participant, input, limiter, event),
     );
 
-    socket.on(CANVAS_EVENTS.typing, (input) =>
-      runCanvasCommand(async () => {
-        const acceptedAt = acceptMessageBudget(
-          socket,
-          participant,
-          CANVAS_EVENTS.typing,
-        );
-
-        if (acceptedAt === undefined) {
-          return;
-        }
-
-        const result = canvasTypingInputSchema.safeParse(input);
-
-        if (!result.success) {
-          recordViolation(
-            socket,
-            participant,
-            `invalid:${CANVAS_EVENTS.typing}`,
-            result.error.issues.map((issue) => issue.code),
-          );
-          return;
-        }
-
-        if (
-          result.data.isTyping &&
-          !(await room.canvas.hasMessageNode(result.data.nodeId))
-        ) {
-          recordViolation(socket, participant, 'invalid:canvas-typing-node');
-          return;
-        }
-
-        if (result.data.isTyping) {
-          for (const previousNodeId of participant.typingNodeIds) {
-            if (previousNodeId === result.data.nodeId) {
-              continue;
-            }
-
-            participant.typingNodeIds.delete(previousNodeId);
-            socket.to(roomId).emit(CANVAS_EVENTS.typing, {
-              isTyping: false,
-              nodeId: previousNodeId,
-              user: {
-                color: participant.color,
-                username: participant.username,
-                userId: participant.userId,
-              },
-            });
-          }
-          participant.typingNodeIds.add(result.data.nodeId);
-        } else {
-          participant.typingNodeIds.delete(result.data.nodeId);
-        }
-
-        participant.lastActivityAt = acceptedAt;
-        socket.to(roomId).emit(CANVAS_EVENTS.typing, {
-          ...result.data,
-          user: {
-            color: participant.color,
-            username: participant.username,
-            userId: participant.userId,
-          },
-        });
-      }),
-    );
-
-    socket.on(CANVAS_EVENTS.mutation, (input) =>
-      runCanvasCommand(async () => {
-        const acceptedAt = acceptMessageBudget(
-          socket,
-          participant,
-          CANVAS_EVENTS.mutation,
-        );
-
-        if (acceptedAt === undefined) {
-          return;
-        }
-
-        const result = canvasNodeMutationSchema.safeParse(input);
-
-        if (!result.success) {
-          recordViolation(
-            socket,
-            participant,
-            `invalid:${CANVAS_EVENTS.mutation}`,
-            result.error.issues.map((issue) => issue.code),
-          );
-          return;
-        }
-
-        const change = await room.canvas.applyMutation(result.data, {
-          color: participant.color,
-          username: participant.username,
-          userId: participant.userId,
-        });
-
-        if (change.status === 'deleted') {
-          for (const typingParticipant of room.participants.values()) {
-            typingParticipant.typingNodeIds.delete(change.nodeId);
-          }
-          participant.lastActivityAt = acceptedAt;
-          io.to(roomId).emit(CANVAS_EVENTS.nodeRemove, {
-            nodeId: change.nodeId,
-          });
-          return;
-        }
-
-        if (change.status === 'rejected') {
-          recordViolation(
-            socket,
-            participant,
-            change.reason === 'node-limit'
-              ? 'limit:canvas-nodes'
-              : 'invalid:canvas-node-mutation',
-          );
-          return;
-        }
-
-        participant.lastActivityAt = acceptedAt;
-        io.to(roomId).emit(CANVAS_EVENTS.nodeUpsert, change.node);
-      }),
+    registerCanvasCommands(io, socket, room, participant, {
+      acceptMessageBudget: (event) =>
+        acceptMessageBudget(socket, participant, event),
+      recordViolation: (reason) => recordViolation(socket, participant, reason),
+      logger,
+      metrics,
+    });
+    registerTyping(
+      socket,
+      room,
+      participant,
+      now,
+      (event) => acceptMessageBudget(socket, participant, event),
+      logger,
     );
 
     socket.on('disconnect', () => {
-      const ipConnectionCount =
-        connectionCountsByIp.get(socket.data.cursorIpAddress) ?? 0;
-
-      if (ipConnectionCount <= 1) {
-        connectionCountsByIp.delete(socket.data.cursorIpAddress);
-      } else {
-        connectionCountsByIp.set(
-          socket.data.cursorIpAddress,
-          ipConnectionCount - 1,
-        );
-      }
-
       room.participants.delete(socket.id);
       room.pendingMoves.delete(participant.userId);
       for (const nodeId of participant.typingNodeIds) {
@@ -798,6 +274,11 @@ export const registerCursorServer = (
       for (const [roomId, room] of rooms) {
         for (const participant of room.participants.values()) {
           if (
+            participant.typingExpiresAt &&
+            currentTime >= participant.typingExpiresAt
+          )
+            clearTyping(io, roomId, participant);
+          if (
             currentTime - participant.lastActivityAt >=
             connectionIdleTimeoutMs
           ) {
@@ -834,14 +315,7 @@ export const registerCursorServer = (
         }
       }
 
-      for (const [ipAddress, attemptState] of connectionAttemptsByIp) {
-        if (
-          currentTime - attemptState.lastSeenAt >=
-          CONNECTION_ATTEMPT_RETENTION_MS
-        ) {
-          connectionAttemptsByIp.delete(ipAddress);
-        }
-      }
+      admission.sweep();
     },
     Math.max(10, Math.min(1_000, idleTimeoutMs, connectionIdleTimeoutMs)),
   );
@@ -850,14 +324,19 @@ export const registerCursorServer = (
   idleTimer.unref();
 
   return {
+    metrics: () => ({
+      ...metrics.snapshot(),
+      activeRooms: rooms.size,
+      connections: io.engine.clientsCount,
+      pendingWork: workBudget.pending,
+      peakPendingWork: workBudget.peak,
+    }),
     close: async () => {
       clearInterval(batchTimer);
       clearInterval(idleTimer);
       await Promise.all(
         Array.from(rooms.values(), (room) => room.canvas.drain()),
       );
-      connectionAttemptsByIp.clear();
-      connectionCountsByIp.clear();
       rooms.clear();
     },
   };

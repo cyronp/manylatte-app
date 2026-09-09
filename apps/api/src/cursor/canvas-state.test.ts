@@ -86,7 +86,11 @@ describe('CanvasState', () => {
     ).toEqual({
       node: {
         ...createMessageNode.node,
-        data: { messages: [message] },
+        data: {
+          messages: [message],
+          messageCount: 1,
+          textBytes: Buffer.byteLength(message.text),
+        },
         position: { x: 300, y: 400 },
       },
       status: 'applied',
@@ -151,7 +155,11 @@ describe('CanvasState', () => {
       status: 'ignored',
     });
     expect(canvas.snapshot()[0]).toMatchObject({
-      data: { messages: [message] },
+      data: {
+        messages: [message],
+        messageCount: 1,
+        textBytes: Buffer.byteLength(message.text),
+      },
     });
   });
 });

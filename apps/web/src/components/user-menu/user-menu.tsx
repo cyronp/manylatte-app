@@ -1,5 +1,6 @@
 import {
   CaretDownIcon,
+  CircleNotchIcon,
   DoorOpenIcon,
   GearIcon,
   LinkIcon,
@@ -8,12 +9,16 @@ import {
   UserIcon,
   UsersIcon,
 } from '@phosphor-icons/react';
-import { useState } from 'react';
+import { lazy, Suspense, useState, type ComponentProps } from 'react';
 import { Link } from '@tanstack/react-router';
-import type { Lobby } from '@app/shared';
+import type { CursorUser, Lobby } from '@app/shared';
 
 import { Button } from '../ui/button';
-import { HexColorPicker } from '../ui/hex-color-picker';
+const HexColorPicker = lazy(() =>
+  import('../ui/hex-color-picker').then((module) => ({
+    default: module.HexColorPicker,
+  })),
+);
 import { useSocket } from '../socket-provider';
 import {
   DropdownMenu,
@@ -28,11 +33,31 @@ import {
 } from '../ui/dropdown-menu';
 
 import { LatteUserIcon } from '../icons/user-icon';
-import { LobbyUsersDialog } from './lobby-users-dialog';
-import { SettingsDialog } from './settings-dialog';
-import { UsernameDialog } from './username-dialog';
-import { CreateLobbyDialog } from './create-lobby-dialog';
-import { InviteFriendsDialog } from './invite-friends-dialog';
+const LobbyUsersDialog = lazy(() =>
+  import('./lobby-users-dialog').then((module) => ({
+    default: module.LobbyUsersDialog,
+  })),
+);
+const SettingsDialog = lazy(() =>
+  import('./settings-dialog').then((module) => ({
+    default: module.SettingsDialog,
+  })),
+);
+const UsernameDialog = lazy(() =>
+  import('./username-dialog').then((module) => ({
+    default: module.UsernameDialog,
+  })),
+);
+const CreateLobbyDialog = lazy(() =>
+  import('./create-lobby-dialog').then((module) => ({
+    default: module.CreateLobbyDialog,
+  })),
+);
+const InviteFriendsDialog = lazy(() =>
+  import('./invite-friends-dialog').then((module) => ({
+    default: module.InviteFriendsDialog,
+  })),
+);
 
 interface UserMenuProps {
   lobby: Lobby;
@@ -43,6 +68,74 @@ interface UserMenuProps {
 const MAX_VISIBLE_USERS = 3;
 type ActiveDialog =
   'lobbyusers' | 'settings' | 'username' | 'create' | 'invite' | null;
+
+interface UserMenuTriggerProps extends ComponentProps<typeof Button> {
+  loading?: boolean;
+  overflowCount: number;
+  user?: CursorUser;
+  userCount: number;
+  visibleUsers: CursorUser[];
+}
+
+function UserMenuTrigger({
+  loading = false,
+  overflowCount,
+  user,
+  userCount,
+  visibleUsers,
+  ...buttonProps
+}: UserMenuTriggerProps) {
+  const hasUserOverflow = overflowCount > 0;
+
+  return (
+    <Button
+      {...buttonProps}
+      aria-busy={loading}
+      aria-label={loading ? 'Loading user menu' : 'Open user menu'}
+      className="flex flex-row gap-3 rounded-full border-border bg-popover px-2 py-0.5 text-popover-foreground shadow-sm hover:bg-muted dark:border-border dark:bg-popover dark:hover:bg-muted"
+      disabled={loading}
+      variant="outline"
+    >
+      <span
+        aria-label={`${userCount} users`}
+        className="isolate flex -space-x-2"
+      >
+        {visibleUsers.map((visibleUser, index) => (
+          <span
+            className="relative size-6 shrink-0"
+            key={visibleUser.userId}
+            style={{ zIndex: index + 1 }}
+          >
+            <LatteUserIcon
+              backgroundColor={visibleUser.color}
+              className={
+                visibleUser.userId === user?.userId
+                  ? 'rounded-full'
+                  : 'rounded-full ring-2 ring-popover'
+              }
+              size={24}
+              title={visibleUser.username}
+            />
+          </span>
+        ))}
+        {hasUserOverflow && (
+          <span
+            aria-label={`${overflowCount} more users`}
+            className="relative flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground ring-2 ring-popover"
+            style={{ zIndex: visibleUsers.length + 1 }}
+          >
+            +{overflowCount}
+          </span>
+        )}
+      </span>
+      {loading ? (
+        <CircleNotchIcon aria-hidden="true" className="animate-spin" />
+      ) : (
+        <CaretDownIcon />
+      )}
+    </Button>
+  );
+}
 
 export default function UserMenu({
   lobby,
@@ -67,50 +160,25 @@ export default function UserMenu({
   const overflowCount = users.length - visibleUsers.length;
 
   return (
-    <>
+    <Suspense
+      fallback={
+        <UserMenuTrigger
+          loading
+          overflowCount={overflowCount}
+          user={user}
+          userCount={users.length}
+          visibleUsers={visibleUsers}
+        />
+      }
+    >
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button
-            aria-label="Open user menu"
-            variant="outline"
-            className="flex flex-row gap-3 rounded-full border-border bg-popover px-2 py-0.5 text-popover-foreground shadow-sm hover:bg-muted dark:border-border dark:bg-popover dark:hover:bg-muted"
-          >
-            <span
-              className="isolate flex -space-x-2"
-              aria-label={`${users.length} users`}
-            >
-              {visibleUsers.map((visibleUser, index) => (
-                <span
-                  key={visibleUser.userId}
-                  className="relative size-6 shrink-0"
-                  style={{ zIndex: index + 1 }}
-                >
-                  <LatteUserIcon
-                    size={24}
-                    backgroundColor={visibleUser.color}
-                    className={
-                      visibleUser.userId === user?.userId
-                        ? 'rounded-full'
-                        : 'rounded-full ring-2 ring-popover'
-                    }
-                    title={visibleUser.username}
-                  />
-                </span>
-              ))}
-              {hasUserOverflow ? (
-                <span
-                  aria-label={`${overflowCount} more users`}
-                  className="relative flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground ring-2 ring-popover"
-                  style={{
-                    zIndex: visibleUsers.length + 1,
-                  }}
-                >
-                  +{overflowCount}
-                </span>
-              ) : null}
-            </span>
-            <CaretDownIcon />
-          </Button>
+          <UserMenuTrigger
+            overflowCount={overflowCount}
+            user={user}
+            userCount={users.length}
+            visibleUsers={visibleUsers}
+          />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
           <DropdownMenuGroup>
@@ -140,7 +208,9 @@ export default function UserMenu({
                 Change Color
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="p-2">
-                <HexColorPicker color={user?.color} onChange={setUserColor} />
+                <Suspense fallback={<span role="status">Loading colors…</span>}>
+                  <HexColorPicker color={user?.color} onChange={setUserColor} />
+                </Suspense>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
             <DropdownMenuItem onSelect={() => setActiveDialog('lobbyusers')}>
@@ -152,7 +222,7 @@ export default function UserMenu({
               <GearIcon />
               Settings
             </DropdownMenuItem>
-            <DropdownMenuItem asChild variant='destructive'>
+            <DropdownMenuItem asChild variant="destructive">
               <Link to="/" search={{}}>
                 <DoorOpenIcon />
                 Leave lobby
@@ -174,22 +244,30 @@ export default function UserMenu({
           onOpenChange={(open) => setActiveDialog(open ? 'invite' : null)}
         />
       )}
-      <UsernameDialog
-        open={activeDialog === 'username'}
-        onOpenChange={(isOpen) => setActiveDialog(isOpen ? 'username' : null)}
-        onUsernameChange={onUsernameChange}
-        username={username}
-      />
-      <LobbyUsersDialog
-        open={activeDialog === 'lobbyusers'}
-        onOpenChange={(isOpen) => setActiveDialog(isOpen ? 'lobbyusers' : null)}
-        users={users}
-        userID={user?.userId}
-      />
-      <SettingsDialog
-        onOpenChange={(isOpen) => setActiveDialog(isOpen ? 'settings' : null)}
-        open={activeDialog === 'settings'}
-      />
-    </>
+      {activeDialog === 'username' && (
+        <UsernameDialog
+          open={activeDialog === 'username'}
+          onOpenChange={(isOpen) => setActiveDialog(isOpen ? 'username' : null)}
+          onUsernameChange={onUsernameChange}
+          username={username}
+        />
+      )}
+      {activeDialog === 'lobbyusers' && (
+        <LobbyUsersDialog
+          open={activeDialog === 'lobbyusers'}
+          onOpenChange={(isOpen) =>
+            setActiveDialog(isOpen ? 'lobbyusers' : null)
+          }
+          users={users}
+          userID={user?.userId}
+        />
+      )}
+      {activeDialog === 'settings' && (
+        <SettingsDialog
+          onOpenChange={(isOpen) => setActiveDialog(isOpen ? 'settings' : null)}
+          open={activeDialog === 'settings'}
+        />
+      )}
+    </Suspense>
   );
 }

@@ -20,11 +20,17 @@ model Lobby {
   code      String   @unique
   name      String
   createdAt DateTime @default(now())
+  archivedAt DateTime?
+  lastActivityAt DateTime @default(now())
+  nodes CanvasNode[]
+  operations CanvasOperation[]
+  @@index([archivedAt, lastActivityAt])
 }
 
 model CanvasNode {
   id             String          @id
   roomId         String
+  room           Lobby @relation(fields: [roomId], references: [id], onDelete: Cascade)
   type           String
   x              Float
   y              Float
@@ -33,6 +39,8 @@ model CanvasNode {
   authorId       String?
   authorUsername String?
   authorColor    String?
+  messageCount   Int             @default(0)
+  textBytes      Int             @default(0)
   createdAt      DateTime        @default(now())
   messages       CanvasMessage[]
 
@@ -50,5 +58,17 @@ model CanvasMessage {
   authorColor    String
   createdAt      DateTime   @default(now())
 
-  @@index([nodeId, createdAt, id])
+  @@index([nodeId, sequence])
+}
+
+model CanvasOperation {
+  roomId    String
+  room      Lobby @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  id        String
+  hash      String
+  result    String
+  createdAt DateTime @default(now())
+
+  @@id([roomId, id])
+  @@index([createdAt])
 }

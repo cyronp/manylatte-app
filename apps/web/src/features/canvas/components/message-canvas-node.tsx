@@ -26,6 +26,7 @@ import {
 import { Popover as PopoverPrimitive } from 'radix-ui';
 import {
   CANVAS_EVENTS,
+  MAX_CANVAS_MESSAGE_LENGTH,
   type CanvasMessage,
   type CursorUser,
 } from '@app/shared';
@@ -45,6 +46,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
+import { useMessageSubmit } from '../use-message-submit';
+import { useMessageHistory } from '../use-message-history';
+
 const TYPING_IDLE_TIMEOUT_MS = 1_500;
 
 const getTypingLabel = (users: CursorUser[]) => {
@@ -60,16 +64,29 @@ const getTypingLabel = (users: CursorUser[]) => {
 };
 
 export type MessageNode = Node<
-  { messages: CanvasMessage[]; typingUsers: CursorUser[] },
+  {
+    messages: CanvasMessage[];
+    messageCount?: number;
+    textBytes?: number;
+    typingUsers: CursorUser[];
+  },
   'message'
 >;
 
 export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
-  const { socket, status, user, users } = useSocket();
+  const { socket, execute, status, user, users } = useSocket();
   const zoom = useStore((state) => state.transform[2]);
   const [draft, setDraft] = useState('');
   const [isOpen, setIsOpen] = useState(() => data.messages.length === 0);
   const isTypingRef = useRef(false);
+  const typingSentAt = useRef(0);
+  const { pending, error, submit } = useMessageSubmit();
+  const history = useMessageHistory(id, isOpen, data.messages);
+  const previousScroll = useRef<{
+    first?: string;
+    last?: string;
+    height: number;
+  }>({ height: 0 });
   const messageListRef = useRef<HTMLDivElement>(null);
   const typingIdleTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
@@ -98,19 +115,23 @@ export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
     : undefined;
   const emitTyping = useCallback(
     (isTyping: boolean) => {
-      if (!socket.connected) {
+      if (!socket.connected || status !== 'connected') {
         isTypingRef.current = false;
         return;
       }
 
-      if (isTypingRef.current === isTyping) {
+      if (
+        isTypingRef.current === isTyping &&
+        (!isTyping || Date.now() - typingSentAt.current < 2_000)
+      ) {
         return;
       }
 
+      typingSentAt.current = Date.now();
       isTypingRef.current = isTyping;
       socket.emit(CANVAS_EVENTS.typing, { isTyping, nodeId: id });
     },
-    [id, socket],
+    [id, socket, status],
   );
   const stopTyping = useCallback(() => {
     if (typingIdleTimerRef.current !== undefined) {
@@ -128,8 +149,15 @@ export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
       return;
     }
 
-    messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
-  }, [data.messages.length, isOpen]);
+    const list = messageListRef.current;
+    const first = history.messages[0]?.id;
+    const last = history.messages.at(-1)?.id;
+    if (last !== previousScroll.current.last)
+      list.scrollTop = list.scrollHeight;
+    else if (first !== previousScroll.current.first)
+      list.scrollTop += list.scrollHeight - previousScroll.current.height;
+    previousScroll.current = { first, last, height: list.scrollHeight };
+  }, [history.messages, isOpen]);
 
   return (
     <PopoverPrimitive.Root
@@ -207,9 +235,12 @@ export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
                     onSelect={() => {
                       if (!socket.connected) return;
                       stopTyping();
-                      socket.emit(CANVAS_EVENTS.mutation, {
-                        action: 'delete',
-                        nodeId: id,
+                      void execute({
+                        type: 'mutation',
+                        mutation: {
+                          action: 'delete',
+                          nodeId: id,
+                        },
                       });
                     }}
                     variant="destructive"
@@ -236,7 +267,21 @@ export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
             className="nowheel flex flex-1 flex-col gap-6 overflow-y-auto p-4"
             ref={messageListRef}
           >
-            {data.messages.map((message) => {
+            {history.hasMore && (
+              <Button
+                variant="ghost"
+                disabled={history.loading}
+                onClick={() => void history.loadOlder()}
+              >
+                Load older messages
+              </Button>
+            )}
+            {history.error && (
+              <Button variant="ghost" onClick={() => void history.retry()}>
+                {history.error}
+              </Button>
+            )}
+            {history.messages.map((message) => {
               const author =
                 usersById.get(message.author.userId) ?? message.author;
               const isCurrentUser = message.author.userId === user?.userId;
@@ -272,7 +317,7 @@ export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
           )}
           <form
             className="nodrag nowheel border-t border-border p-2"
-            onSubmit={(event) => {
+            onSubmit={async (event) => {
               event.preventDefault();
 
               const text = draft.trim();
@@ -282,16 +327,19 @@ export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
               }
 
               stopTyping();
-              socket.emit(CANVAS_EVENTS.messageSend, {
-                id: crypto.randomUUID(),
-                nodeId: id,
-                text,
-              });
-              setDraft('');
+              if (
+                await submit(text, (value) => ({
+                  type: 'message',
+                  input: { id: crypto.randomUUID(), nodeId: id, text: value },
+                }))
+              )
+                setDraft('');
             }}
           >
             <InputGroup className="rounded-full">
               <InputGroupInput
+                disabled={pending}
+                maxLength={MAX_CANVAS_MESSAGE_LENGTH}
                 aria-label="Message"
                 autoComplete="off"
                 onBlur={stopTyping}
@@ -323,7 +371,9 @@ export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
                 <InputGroupButton
                   aria-label="Send message"
                   className="rounded-full"
-                  disabled={!draft.trim() || !user || status !== 'connected'}
+                  disabled={
+                    pending || !draft.trim() || !user || status !== 'connected'
+                  }
                   size="icon-xs"
                   title="Send message"
                   type="submit"
@@ -333,6 +383,11 @@ export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
                 </InputGroupButton>
               </InputGroupAddon>
             </InputGroup>
+            {error && (
+              <p role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
+            )}
           </form>
         </PopoverPrimitive.Content>
       </PopoverPrimitive.Portal>

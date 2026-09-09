@@ -16,8 +16,20 @@ import type {
   CanvasTypingInput,
   CanvasTypingUpdate,
 } from '../canvas/schemas.js';
+import type {
+  CanvasCommand,
+  CanvasCommandAck,
+  CanvasChange,
+  CanvasHistoryInput,
+  CanvasHistoryResult,
+} from '../canvas/commands.js';
 
 export interface ClientToServerEvents {
+  'canvas:command': (input: CanvasCommand, ack: CanvasCommandAck) => void;
+  'canvas:history': (
+    input: CanvasHistoryInput,
+    ack: (result: CanvasHistoryResult) => void,
+  ) => void;
   'canvas:message-send': (input: CanvasMessageInput) => void;
   'canvas:mutation': (mutation: CanvasNodeMutation) => void;
   'canvas:typing': (input: CanvasTypingInput) => void;
@@ -27,6 +39,7 @@ export interface ClientToServerEvents {
 }
 
 export interface ServerToClientEvents {
+  'canvas:change': (change: CanvasChange) => void;
   'canvas:error': (error: { message: string }) => void;
   'canvas:node-upsert': (node: CanvasNode) => void;
   'canvas:node-remove': (removal: { nodeId: string }) => void;

@@ -1,32 +1,27 @@
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { createDatabase } from '@app/db';
 
-export const createTestDatabase = async (url = 'file::memory:') => {
-  const database = createDatabase(url);
-  const migrations = [
-    '20260905000000_initial_sqlite',
-    '20260905010000_add_emoji_author',
-    '20260907000000_add_lobbies',
-    '20260907010000_add_lobby_codes',
-  ];
-  const sql = (
+export const migrationDirectory = new URL(
+  '../../../packages/db/prisma/migrations/',
+  import.meta.url,
+);
+export const readMigrations = async (names?: string[]) => {
+  const selected =
+    names ??
+    (await readdir(migrationDirectory, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort();
+  return (
     await Promise.all(
-      migrations.map((migration) =>
-        readFile(
-          new URL(
-            `../../../packages/db/prisma/migrations/${migration}/migration.sql`,
-            import.meta.url,
-          ),
-          'utf8',
-        ),
+      selected.map((name) =>
+        readFile(new URL(`${name}/migration.sql`, migrationDirectory), 'utf8'),
       ),
     )
   ).join('\n');
-  for (const statement of sql
-    .split(';')
-    .map((part) => part.trim())
-    .filter(Boolean)) {
-    await database.$executeRawUnsafe(statement);
-  }
+};
+export const createTestDatabase = async (url = 'file::memory:') => {
+  const database = createDatabase(url, await readMigrations());
+  await database.$connect();
   return database;
 };

@@ -1,4 +1,3 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -6,8 +5,6 @@ import { createRoot } from 'react-dom/client';
 import { AppearanceProvider } from './components/appearance-provider';
 import { routeTree } from './routeTree.gen';
 import './index.css';
-
-const queryClient = new QueryClient();
 
 const router = createRouter({
   routeTree,
@@ -28,9 +25,7 @@ if (!rootElement) {
 createRoot(rootElement).render(
   <StrictMode>
     <AppearanceProvider>
-      <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>
+      <RouterProvider router={router} />
     </AppearanceProvider>
   </StrictMode>,
 );

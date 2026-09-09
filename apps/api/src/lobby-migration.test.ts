@@ -1,31 +1,21 @@
-import { readFile } from 'node:fs/promises';
 import { createDatabase } from '@app/db';
 import { expect, it } from 'vitest';
 
 it('assigns codes to existing lobbies while preserving their identity and metadata', async () => {
-  const database = createDatabase('file::memory:');
-  const migrate = async (name: string) => {
-    const sql = await readFile(
-      new URL(
-        `../../../packages/db/prisma/migrations/${name}/migration.sql`,
-        import.meta.url,
-      ),
-      'utf8',
-    );
-    for (const statement of sql
-      .split(';')
-      .map((part) => part.trim())
-      .filter(Boolean)) {
-      await database.$executeRawUnsafe(statement);
-    }
-  };
+  const { readMigrations } = await import('../test/database.js');
+  const database = createDatabase(
+    'file::memory:',
+    (await readMigrations(['20260907000000_add_lobbies'])) +
+      `
+INSERT INTO Lobby (id, name, createdAt) VALUES ('existing-id', 'Existing friends', '2026-09-06 12:00:00'), ('empty-id', 'Empty lobby', '2026-09-06 12:00:00');
+` +
+      (await readMigrations(['20260907010000_add_lobby_codes'])),
+  );
   try {
-    await migrate('20260907000000_add_lobbies');
-    await database.$executeRawUnsafe(
-      `INSERT INTO "Lobby" ("id", "name", "createdAt") VALUES ('existing-id', 'Existing friends', '2026-09-06 12:00:00'), ('empty-id', 'Empty lobby', '2026-09-06 12:00:00')`,
-    );
-    await migrate('20260907010000_add_lobby_codes');
-    const lobbies = await database.lobby.findMany({ orderBy: { id: 'asc' } });
+    const lobbies = await database.lobby.findMany({
+      orderBy: { id: 'asc' },
+      select: { id: true, name: true, code: true, createdAt: true },
+    });
     expect(lobbies).toHaveLength(2);
     expect(lobbies[1]).toMatchObject({
       id: 'existing-id',

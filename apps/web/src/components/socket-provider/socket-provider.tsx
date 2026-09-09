@@ -4,6 +4,8 @@ import {
   type CursorRoomId,
   hexColorSchema,
   type CursorUser,
+  type CanvasCommandBody,
+  type CanvasCommandResult,
 } from '@app/shared';
 import {
   createContext,
@@ -18,12 +20,22 @@ import {
 
 import { createCursorSocket, type CursorSocket } from '../../lib/socket';
 
-export type SocketStatus = 'connected' | 'connecting' | 'disconnected';
+import {
+  bindSocketLifecycle,
+  type SocketStatus,
+} from '../../lib/socket-lifecycle';
+import { createCommandQueue } from '../../lib/canvas-commands';
+export type { SocketStatus } from '../../lib/socket-lifecycle';
 
 const USER_COLOR_UPDATE_DEBOUNCE_MS = 150;
 
 interface SocketContextValue {
   error?: string;
+  execute: (
+    body: CanvasCommandBody,
+    operationId?: string,
+  ) => Promise<CanvasCommandResult>;
+  retryConnect: () => void;
   setUserColor: (color: string) => void;
   socket: CursorSocket;
   status: SocketStatus;
@@ -47,6 +59,27 @@ export const SocketProvider = ({
     () => createCursorSocket(roomId, username),
     [roomId, username],
   );
+  const readyRef = useRef(false);
+  const commands = useMemo(
+    () => createCommandQueue(socket, () => readyRef.current),
+    [socket],
+  );
+  const retryRef = useRef<() => void>(() => socket.connect());
+  const retryConnect = useCallback(() => retryRef.current(), []);
+  const execute = useCallback(
+    async (
+      body: CanvasCommandBody,
+      operationId: string = crypto.randomUUID(),
+    ) => {
+      const result = await commands.send({
+        id: operationId,
+        body,
+      });
+      setError(result.ok ? undefined : result.message);
+      return result;
+    },
+    [commands],
+  );
   const [status, setStatus] = useState<SocketStatus>('connecting');
   const [error, setError] = useState<string>();
   const [user, setUser] = useState<CursorUser>();
@@ -63,6 +96,11 @@ export const SocketProvider = ({
         return;
       }
 
+      try {
+        localStorage.setItem('manylatte:color', result.data);
+      } catch {
+        /* Storage is optional. */
+      }
       setUser((currentUser) =>
         currentUser ? { ...currentUser, color: result.data } : currentUser,
       );
@@ -80,63 +118,52 @@ export const SocketProvider = ({
 
       colorUpdateTimer.current = setTimeout(() => {
         colorUpdateTimer.current = undefined;
-        socket.emit(CURSOR_EVENTS.color, { color: result.data });
+        if (readyRef.current && socket.connected)
+          socket.emit(CURSOR_EVENTS.color, { color: result.data });
       }, USER_COLOR_UPDATE_DEBOUNCE_MS);
     },
     [socket, user?.userId],
   );
 
   useEffect(() => {
-    let reconnectOnUserActivity = false;
+    const lifecycle = bindSocketLifecycle(
+      socket,
+      (nextStatus, nextError) => {
+        setStatus(nextStatus);
+        setError(nextError);
+      },
+      (ready) => {
+        readyRef.current = ready;
+        if (!ready) commands.clear();
+      },
+    );
+    retryRef.current = lifecycle.retry;
 
     setError(undefined);
     setStatus('connecting');
     setUser(undefined);
     setUsers([]);
 
-    const handleConnect = () => {
-      reconnectOnUserActivity = false;
-      setError(undefined);
-      setStatus('connected');
-    };
-    const handleDisconnect: Parameters<typeof socket.on<'disconnect'>>[1] = (
-      reason,
-    ) => {
-      if (reason !== 'io server disconnect') {
-        reconnectOnUserActivity = false;
-      }
+    const handleDisconnect = () => {
       setUser(undefined);
       setUsers([]);
-      setStatus('disconnected');
-    };
-    const handleDisconnectNotice: Parameters<
-      typeof socket.on<'cursor:disconnect'>
-    >[1] = ({ reason }) => {
-      reconnectOnUserActivity = reason === 'idle';
-    };
-    const handleConnectError = (connectionError: Error) => {
-      setError(connectionError.message);
-      setStatus('disconnected');
     };
     const handleCanvasError = ({ message }: { message: string }) =>
       setError(message);
-    const handleReconnectAttempt = () => {
-      setStatus('connecting');
-    };
-    const handleUserActivity = () => {
-      if (!reconnectOnUserActivity) {
-        return;
-      }
-
-      reconnectOnUserActivity = false;
-      setStatus('connecting');
-      socket.connect();
-    };
     const handleSession: Parameters<typeof socket.on<'cursor:session'>>[1] = (
       session,
     ) => {
       setUser(session.self);
       setUsers(session.users);
+      try {
+        const color = hexColorSchema.safeParse(
+          localStorage.getItem('manylatte:color'),
+        );
+        if (color.success && socket.connected)
+          socket.emit(CURSOR_EVENTS.color, { color: color.data });
+      } catch {
+        /* Storage is optional. */
+      }
     };
     const handlePresence: Parameters<typeof socket.on<'cursor:presence'>>[1] = (
       nextUser,
@@ -170,51 +197,20 @@ export const SocketProvider = ({
         currentUsers.filter((currentUser) => currentUser.userId !== userId),
       );
     };
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        handleUserActivity();
-      }
-    };
-
-    socket.on('connect', handleConnect);
     socket.on(CANVAS_EVENTS.error, handleCanvasError);
     socket.on('disconnect', handleDisconnect);
-    socket.on('connect_error', handleConnectError);
-    socket.io.on('reconnect_attempt', handleReconnectAttempt);
     socket.on(CURSOR_EVENTS.session, handleSession);
     socket.on(CURSOR_EVENTS.presence, handlePresence);
     socket.on(CURSOR_EVENTS.remove, handleRemoval);
-    socket.on(CURSOR_EVENTS.disconnect, handleDisconnectNotice);
-    window.addEventListener('keydown', handleUserActivity);
-    window.addEventListener('pointerdown', handleUserActivity, {
-      passive: true,
-    });
-    window.addEventListener('pointermove', handleUserActivity, {
-      passive: true,
-    });
-    window.addEventListener('focus', handleUserActivity);
-    window.addEventListener('pageshow', handleUserActivity);
-    window.addEventListener('online', handleUserActivity);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
     socket.connect();
 
     return () => {
-      socket.off('connect', handleConnect);
+      lifecycle.dispose();
       socket.off(CANVAS_EVENTS.error, handleCanvasError);
       socket.off('disconnect', handleDisconnect);
-      socket.off('connect_error', handleConnectError);
-      socket.io.off('reconnect_attempt', handleReconnectAttempt);
       socket.off(CURSOR_EVENTS.session, handleSession);
       socket.off(CURSOR_EVENTS.presence, handlePresence);
       socket.off(CURSOR_EVENTS.remove, handleRemoval);
-      socket.off(CURSOR_EVENTS.disconnect, handleDisconnectNotice);
-      window.removeEventListener('keydown', handleUserActivity);
-      window.removeEventListener('pointerdown', handleUserActivity);
-      window.removeEventListener('pointermove', handleUserActivity);
-      window.removeEventListener('focus', handleUserActivity);
-      window.removeEventListener('pageshow', handleUserActivity);
-      window.removeEventListener('online', handleUserActivity);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
 
       if (colorUpdateTimer.current !== undefined) {
         clearTimeout(colorUpdateTimer.current);
@@ -223,11 +219,20 @@ export const SocketProvider = ({
 
       socket.disconnect();
     };
-  }, [socket]);
+  }, [socket, commands]);
 
   const value = useMemo(
-    () => ({ error, setUserColor, socket, status, user, users }),
-    [error, setUserColor, socket, status, user, users],
+    () => ({
+      error,
+      execute,
+      retryConnect,
+      setUserColor,
+      socket,
+      status,
+      user,
+      users,
+    }),
+    [error, execute, retryConnect, setUserColor, socket, status, user, users],
   );
 
   return (
