@@ -106,7 +106,7 @@ export const MessageDraftCanvasNode = ({
           align="center"
           aria-label="New message"
           className={cn(
-            'z-50 w-72 origin-(--radix-popover-content-transform-origin) rounded-2xl border border-border bg-popover p-2 text-popover-foreground shadow-lg outline-none',
+            'z-50 w-72 origin-(--radix-popover-content-transform-origin) rounded-full border border-border bg-popover p-2 text-popover-foreground shadow-lg outline-none',
             bounceClassName,
           )}
           collisionPadding={12}
