@@ -170,14 +170,6 @@ export const MessageDraftCanvasNode = ({
                 {error}
               </p>
             )}
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={pending || isCancelling}
-              onClick={cancel}
-            >
-              Cancel
-            </Button>
           </form>
         </PopoverPrimitive.Content>
       </PopoverPrimitive.Portal>
