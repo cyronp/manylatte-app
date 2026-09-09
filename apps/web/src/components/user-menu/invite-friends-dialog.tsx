@@ -1,5 +1,5 @@
 import type { Lobby } from '@app/shared';
-import { useState } from 'react';
+import { useEffect } from 'react';
 import { Button } from '../ui/button';
 import {
   Dialog,
@@ -11,6 +11,32 @@ import {
 import { Field, FieldLabel } from '../ui/field';
 import { Input } from '../ui/input';
 import { lobbyInviteUrl } from '../../lib/lobby';
+import { CopyStatusIcon } from '../icons/copy-status-icon';
+import {
+  useCopyToClipboard,
+  type CopyStatus,
+} from '../../lib/use-copy-to-clipboard';
+
+const SPINNER_REVOLUTION_DURATION_MS = 600;
+const STATUS_ENTRANCE_DURATION_MS = 200;
+const COPY_FEEDBACK_OPTIONS = {
+  minimumLoadingDurationMs: 600,
+  successDurationMs: 1800,
+  errorDurationMs: 3000,
+};
+
+function statusMessage(status: CopyStatus, label: string) {
+  switch (status) {
+    case 'copying':
+      return `Copying ${label}.`;
+    case 'copied':
+      return `${label} copied.`;
+    case 'error':
+      return `Could not copy ${label}. Select it above and copy it manually.`;
+    default:
+      return '';
+  }
+}
 
 export function InviteFriendsDialog({
   lobby,
@@ -21,18 +47,15 @@ export function InviteFriendsDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const [copyStatus, setCopyStatus] = useState('');
   const inviteUrl = lobbyInviteUrl(window.location.href, lobby.code);
-  const copyInvite = async (codeOnly = false) => {
-    try {
-      await navigator.clipboard.writeText(codeOnly ? lobby.code : inviteUrl);
-      setCopyStatus(codeOnly ? 'Lobby code copied!' : 'Invite link copied!');
-    } catch {
-      setCopyStatus(
-        'Select the code or link above and copy it to share with your friends.',
-      );
-    }
-  };
+  const lobbyCodeCopy = useCopyToClipboard(COPY_FEEDBACK_OPTIONS);
+  const inviteLinkCopy = useCopyToClipboard(COPY_FEEDBACK_OPTIONS);
+
+  useEffect(() => {
+    if (open) return;
+    lobbyCodeCopy.reset();
+    inviteLinkCopy.reset();
+  }, [open, lobbyCodeCopy.reset, inviteLinkCopy.reset]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -40,8 +63,9 @@ export function InviteFriendsDialog({
         <DialogHeader>
           <DialogTitle>Invite friends</DialogTitle>
           <DialogDescription>
-            Share this code or link to join {lobby.name}. Anyone with the invite
-            can view and edit this canvas.
+            Share this code or link to join{' '}
+            <span className="font-bold">{lobby.name}</span>. Anyone with the
+            invite can view and edit this canvas.
           </DialogDescription>
         </DialogHeader>
         <Field>
@@ -50,13 +74,24 @@ export function InviteFriendsDialog({
             id="lobby-code"
             readOnly
             value={lobby.code}
-            className="font-mono tracking-widest"
+            className="tracking-widest"
             onFocus={(event) => event.target.select()}
           />
         </Field>
-        <Button variant="outline" onClick={() => copyInvite(true)}>
+        <Button
+          variant="outline"
+          onClick={() => void lobbyCodeCopy.copy(lobby.code)}
+        >
           Copy lobby code
+          <CopyStatusIcon
+            status={lobbyCodeCopy.status}
+            spinnerDurationMs={SPINNER_REVOLUTION_DURATION_MS}
+            entranceDurationMs={STATUS_ENTRANCE_DURATION_MS}
+          />
         </Button>
+        <span className="sr-only" role="status">
+          {statusMessage(lobbyCodeCopy.status, 'lobby code')}
+        </span>
         <Field>
           <FieldLabel htmlFor="lobby-invite">Invite link</FieldLabel>
           <Input
@@ -66,10 +101,17 @@ export function InviteFriendsDialog({
             onFocus={(event) => event.target.select()}
           />
         </Field>
-        <Button onClick={() => copyInvite()}>Copy invite link</Button>
-        <p role="status" className="text-sm text-muted-foreground">
-          {copyStatus}
-        </p>
+        <Button onClick={() => void inviteLinkCopy.copy(inviteUrl)}>
+          Copy invite link
+          <CopyStatusIcon
+            status={inviteLinkCopy.status}
+            spinnerDurationMs={SPINNER_REVOLUTION_DURATION_MS}
+            entranceDurationMs={STATUS_ENTRANCE_DURATION_MS}
+          />
+        </Button>
+        <span className="sr-only" role="status">
+          {statusMessage(inviteLinkCopy.status, 'invite link')}
+        </span>
       </DialogContent>
     </Dialog>
   );

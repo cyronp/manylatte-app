@@ -207,7 +207,7 @@ export default function UserMenu({
                 <PaintBrushIcon />
                 Change Color
               </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="p-2">
+              <DropdownMenuSubContent className="p-4">
                 <Suspense fallback={<span role="status">Loading colors…</span>}>
                   <HexColorPicker color={user?.color} onChange={setUserColor} />
                 </Suspense>
