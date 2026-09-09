@@ -9,7 +9,7 @@ and messages are saved to SQLite before updates are broadcast.
 Use Node.js 24 and the npm version pinned in `package.json`.
 
 ```sh
-npm install
+npm ci
 npm run db:deploy
 npm run build
 npm run dev
@@ -63,11 +63,38 @@ database. Empty rooms release their in-memory state after pending writes finish;
 reconnecting clients reload saved content. Database write failures are logged and
 reported to clients without committing the candidate in-memory state.
 
-For a simple consistent backup, stop the API gracefully and copy the database
-and any remaining `-wal`/`-shm` companion files together. For live backups, use a
-SQLite-aware backup tool; copying only the live `.db` file can omit committed WAL
-data. Restore into an empty destination while the API is stopped, then run
-`db:deploy` before restarting. Test restoration periodically.
+Use the included SQLite backup command with an explicit destination:
+
+```sh
+npm run db:ops -- stats
+npm run db:ops -- backup /backups/manylatte-2026-09-08.db
+npm run db:ops -- restore /backups/manylatte-2026-09-08.db /data/restored.db
+```
+
+Set `DATABASE_URL` in the shell or repository-root `.env` when running `db:ops`.
+Backup uses SQLite `VACUUM INTO`, includes committed WAL data, and checks integrity.
+Restore checks integrity and refuses to overwrite an existing file. Stop the API,
+restore to a new path, point `DATABASE_URL` there, run `db:deploy`, verify `/readyz`,
+and reopen an existing lobby before directing traffic to the restored database.
+Keep the original volume until recovery is verified. Schedule backups outside this
+application and regularly run `npm run test:migrations` to exercise recovery.
+
+The generated **`apps/web/dist/_headers`** is the deployment header file. The build
+adds hashes for installed emoji, color, scroll-area and modal styles; deploying the
+unprocessed `public/_headers` blocks those styles. Hosts that ignore `_headers`
+must copy its policies into their server configuration. Script policy remains
+`'self'`. Small font assets stay external to comply with `font-src 'self'`.
+Frontend API URLs must be exact HTTP(S) origins with no credentials, path, query,
+or fragment; builds reject invalid configuration. Production non-loopback APIs
+require HTTPS. `TRUST_PROXY` defaults to `false`; configure only actual proxy
+IP/CIDR ranges, consistently for HTTP and Socket.IO admission.
+
+The API writes aggregate operational logs every minute: room/connection counts,
+pending and peak queue work, command latency, load/write failures, database size,
+free disk space, and heap usage. Lobby invitations and query strings are redacted
+from request logs. `/readyz` combines a database read with a cached write probe
+refreshed every 30 seconds; `/healthz` remains process liveness. Alert on write
+failures, unavailable storage, sustained queue growth and low disk space.
 
 ## Lobbies and invites
 
@@ -82,13 +109,13 @@ canvas content survive API restarts, including lobbies with no content yet.
 
 Invites use `/?lobby=AB12-CD34`. Lobbies are accessible to anyone with their
 link and collaboratively editable, including deletion. There are no accounts,
-owner permissions, or invite revocation. Canvas content and presence are scoped
+owner permissions, or per-user invite revocation. Operators can archive a lobby to disable its invitations. Canvas content and presence are scoped
 to each lobby. Invalid or unknown invites show an error. Creation is limited to
 10 requests per IP per minute.
 
 Run `npm run db:deploy` before starting the updated API to add lobby codes.
 Existing lobbies receive a code and retain their content and original invite
-links. Old public canvas data remains stored but is no longer accessible.
+links. Old public canvas data is preserved in archived legacy lobbies.
 
 ## Checks
 
@@ -103,3 +130,64 @@ npm run security:audit
 Tests include real SQLite persistence, write-failure rollback, ordered messages,
 deletion cascades, polling clients, and API restart recovery. Test task hashes
 include dependency builds so shared-contract changes invalidate consumer tests.
+
+## Editing, identity and retention
+
+Use **Add message** or **Add reaction**, including with a keyboard or touch screen.
+Arrow keys move focused nodes; Enter selects them; Delete/Backspace deletes selected
+nodes. Group moves and deletion synchronize with other participants. Creation
+positions are constrained to the board. Editing waits for the initial snapshot;
+offline writes are rejected instead of buffered. Text remains in the composer on
+failure. The first message and its thread save atomically, and retries reuse the
+same operation ID. Reconnects reload authoritative state after API restarts or
+temporary admission failures; **Reconnect** is also available manually.
+
+User identity is intentionally **connection-scoped**. There are no verified
+accounts: names and colors are display preferences, stored on this device. A new
+connection receives a new user ID; saved messages retain the author recorded when
+sent and may appear as another participant's messages after reconnecting. This
+is not an ownership or authentication mechanism.
+
+Snapshots contain one message preview per thread; opening a thread loads 50
+messages, and **Load older messages** retrieves earlier pages. New content is
+limited to 500 nodes per lobby, 200 messages per thread, 2,000 messages and 2 MiB
+of UTF-8 message text per lobby. Existing content is preserved by migrations;
+a lobby already above a limit must remove content before adding more. Persistent
+work is bounded to 64 queued operations per room and 512 globally. Browser edits
+are paced and movement updates are coalesced.
+
+`MAX_LOBBIES` defaults to 10,000, including archived lobbies. No canvas content is
+automatically erased. Operators review unused lobbies and apply their retention
+policy explicitly:
+
+```sh
+npm run db:ops -- list
+# Stop the API before changing stored lifecycle state.
+npm run db:ops -- archive LOBBY_ID --offline
+# Permanent removal requires the lobby to have been archived first.
+npm run db:ops -- delete LOBBY_ID --offline
+npm run db:ops -- prune-receipts --offline
+```
+
+Deletion cascades to nodes, messages, and operation receipts. Receipt pruning
+removes only confirmations older than seven days, bounding the guaranteed retry
+window to at least seven days when pruning is scheduled. Back up first and keep
+backups according to the same retention policy. `list` returns the oldest 1,000
+lobbies for review. The unused historical `User` table is deliberately preserved
+so this audit does not erase pre-existing data.
+
+## Browser and migration regression checks
+
+```sh
+npm run build
+npm run test:migrations
+npx playwright install chromium
+npm run test:e2e --workspace=@app/web
+```
+
+Browser tests use temporary SQLite data and the production CSP, covering two-client
+editing, failure-preserved drafts, restart recovery, keyboard synchronization,
+pickers and a 320px join screen. The test server binds only to loopback; never
+serve `apps/web/e2e/server.mjs` in production. Run the checks locally before merging.
+No CI workflow or deployment is included in this change. See [AUDIT.md](AUDIT.md)
+for the original findings and their implementation status.
