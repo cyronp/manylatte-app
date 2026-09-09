@@ -35,10 +35,20 @@ export async function sendCanvasCommand(
 }
 
 export function createCommandQueue(socket: CursorSocket, ready: () => boolean) {
-  const queue: { command: CanvasCommand; resolve: (result: CanvasCommandResult) => void }[] = [];
+  const queue: {
+    command: CanvasCommand;
+    resolve: (result: CanvasCommandResult) => void;
+  }[] = [];
   let running = false;
-  const offline = (id: string): CanvasCommandResult => ({ ok: false, operationId: id, code: 'offline', message: 'Reconnect before editing. Your message is still here.' });
-  const clear = () => { for (const item of queue.splice(0)) item.resolve(offline(item.command.id)); };
+  const offline = (id: string): CanvasCommandResult => ({
+    ok: false,
+    operationId: id,
+    code: 'offline',
+    message: 'Reconnect before editing. Your message is still here.',
+  });
+  const clear = () => {
+    for (const item of queue.splice(0)) item.resolve(offline(item.command.id));
+  };
   const drain = async () => {
     if (running) return;
     running = true;
@@ -48,14 +58,26 @@ export function createCommandQueue(socket: CursorSocket, ready: () => boolean) {
         item.resolve(await sendCanvasCommand(socket, ready(), item.command));
         await new Promise((resolve) => setTimeout(resolve, 150));
       }
-    } finally { running = false; }
+    } finally {
+      running = false;
+    }
   };
   return {
     clear,
     send: (command: CanvasCommand): Promise<CanvasCommandResult> => {
-      if (!ready() || !socket.connected) return Promise.resolve(offline(command.id));
-      if (queue.length >= 500) return Promise.resolve({ ok: false, operationId: command.id, code: 'busy', message: 'Wait for your pending edits to finish.' });
-      return new Promise((resolve) => { queue.push({ command, resolve }); void drain(); });
+      if (!ready() || !socket.connected)
+        return Promise.resolve(offline(command.id));
+      if (queue.length >= 500)
+        return Promise.resolve({
+          ok: false,
+          operationId: command.id,
+          code: 'busy',
+          message: 'Wait for your pending edits to finish.',
+        });
+      return new Promise((resolve) => {
+        queue.push({ command, resolve });
+        void drain();
+      });
     },
   };
 }

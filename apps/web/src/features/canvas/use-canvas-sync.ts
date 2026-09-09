@@ -21,7 +21,11 @@ export function applyCanvasChange(
   if (change.type === 'upsert') {
     const next = toFlowCanvasNode(change.node);
     return nodes.some(({ id }) => id === next.id)
-      ? nodes.map((node) => (node.id === next.id ? { ...node, ...next } : node))
+      ? nodes.map((node) =>
+          node.id === next.id
+            ? { ...next, selected: node.selected, measured: node.measured }
+            : node,
+        )
       : [...nodes, next];
   }
   return nodes.map((node) => {
@@ -131,7 +135,6 @@ export function useCanvasSync() {
               ),
             );
         }
-
       }
     } finally {
       running.current = false;

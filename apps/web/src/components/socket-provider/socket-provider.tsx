@@ -60,7 +60,10 @@ export const SocketProvider = ({
     [roomId, username],
   );
   const readyRef = useRef(false);
-  const commands = useMemo(() => createCommandQueue(socket, () => readyRef.current), [socket]);
+  const commands = useMemo(
+    () => createCommandQueue(socket, () => readyRef.current),
+    [socket],
+  );
   const retryRef = useRef<() => void>(() => socket.connect());
   const retryConnect = useCallback(() => retryRef.current(), []);
   const execute = useCallback(
@@ -131,7 +134,7 @@ export const SocketProvider = ({
       },
       (ready) => {
         readyRef.current = ready;
-      if (!ready) commands.clear();
+        if (!ready) commands.clear();
       },
     );
     retryRef.current = lifecycle.retry;

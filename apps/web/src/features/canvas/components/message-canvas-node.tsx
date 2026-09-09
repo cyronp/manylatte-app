@@ -82,7 +82,11 @@ export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
   const typingSentAt = useRef(0);
   const { pending, error, submit } = useMessageSubmit();
   const history = useMessageHistory(id, isOpen, data.messages);
-  const previousScroll = useRef<{ first?: string; last?: string; height: number }>({ height: 0 });
+  const previousScroll = useRef<{
+    first?: string;
+    last?: string;
+    height: number;
+  }>({ height: 0 });
   const messageListRef = useRef<HTMLDivElement>(null);
   const typingIdleTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
@@ -148,8 +152,10 @@ export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
     const list = messageListRef.current;
     const first = history.messages[0]?.id;
     const last = history.messages.at(-1)?.id;
-    if (last !== previousScroll.current.last) list.scrollTop = list.scrollHeight;
-    else if (first !== previousScroll.current.first) list.scrollTop += list.scrollHeight - previousScroll.current.height;
+    if (last !== previousScroll.current.last)
+      list.scrollTop = list.scrollHeight;
+    else if (first !== previousScroll.current.first)
+      list.scrollTop += list.scrollHeight - previousScroll.current.height;
     previousScroll.current = { first, last, height: list.scrollHeight };
   }, [history.messages, isOpen]);
 
