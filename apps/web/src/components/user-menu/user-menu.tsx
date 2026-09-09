@@ -1,5 +1,6 @@
 import {
   CaretDownIcon,
+  CircleNotchIcon,
   DoorOpenIcon,
   GearIcon,
   LinkIcon,
@@ -8,9 +9,9 @@ import {
   UserIcon,
   UsersIcon,
 } from '@phosphor-icons/react';
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useState, type ComponentProps } from 'react';
 import { Link } from '@tanstack/react-router';
-import type { Lobby } from '@app/shared';
+import type { CursorUser, Lobby } from '@app/shared';
 
 import { Button } from '../ui/button';
 const HexColorPicker = lazy(() =>
@@ -68,6 +69,74 @@ const MAX_VISIBLE_USERS = 3;
 type ActiveDialog =
   'lobbyusers' | 'settings' | 'username' | 'create' | 'invite' | null;
 
+interface UserMenuTriggerProps extends ComponentProps<typeof Button> {
+  loading?: boolean;
+  overflowCount: number;
+  user?: CursorUser;
+  userCount: number;
+  visibleUsers: CursorUser[];
+}
+
+function UserMenuTrigger({
+  loading = false,
+  overflowCount,
+  user,
+  userCount,
+  visibleUsers,
+  ...buttonProps
+}: UserMenuTriggerProps) {
+  const hasUserOverflow = overflowCount > 0;
+
+  return (
+    <Button
+      {...buttonProps}
+      aria-busy={loading}
+      aria-label={loading ? 'Loading user menu' : 'Open user menu'}
+      className="flex flex-row gap-3 rounded-full border-border bg-popover px-2 py-0.5 text-popover-foreground shadow-sm hover:bg-muted dark:border-border dark:bg-popover dark:hover:bg-muted"
+      disabled={loading}
+      variant="outline"
+    >
+      <span
+        aria-label={`${userCount} users`}
+        className="isolate flex -space-x-2"
+      >
+        {visibleUsers.map((visibleUser, index) => (
+          <span
+            className="relative size-6 shrink-0"
+            key={visibleUser.userId}
+            style={{ zIndex: index + 1 }}
+          >
+            <LatteUserIcon
+              backgroundColor={visibleUser.color}
+              className={
+                visibleUser.userId === user?.userId
+                  ? 'rounded-full'
+                  : 'rounded-full ring-2 ring-popover'
+              }
+              size={24}
+              title={visibleUser.username}
+            />
+          </span>
+        ))}
+        {hasUserOverflow && (
+          <span
+            aria-label={`${overflowCount} more users`}
+            className="relative flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground ring-2 ring-popover"
+            style={{ zIndex: visibleUsers.length + 1 }}
+          >
+            +{overflowCount}
+          </span>
+        )}
+      </span>
+      {loading ? (
+        <CircleNotchIcon aria-hidden="true" className="animate-spin" />
+      ) : (
+        <CaretDownIcon />
+      )}
+    </Button>
+  );
+}
+
 export default function UserMenu({
   lobby,
   onUsernameChange,
@@ -91,50 +160,25 @@ export default function UserMenu({
   const overflowCount = users.length - visibleUsers.length;
 
   return (
-    <Suspense fallback={<span role="status">Loading menu…</span>}>
+    <Suspense
+      fallback={
+        <UserMenuTrigger
+          loading
+          overflowCount={overflowCount}
+          user={user}
+          userCount={users.length}
+          visibleUsers={visibleUsers}
+        />
+      }
+    >
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button
-            aria-label="Open user menu"
-            variant="outline"
-            className="flex flex-row gap-3 rounded-full border-border bg-popover px-2 py-0.5 text-popover-foreground shadow-sm hover:bg-muted dark:border-border dark:bg-popover dark:hover:bg-muted"
-          >
-            <span
-              className="isolate flex -space-x-2"
-              aria-label={`${users.length} users`}
-            >
-              {visibleUsers.map((visibleUser, index) => (
-                <span
-                  key={visibleUser.userId}
-                  className="relative size-6 shrink-0"
-                  style={{ zIndex: index + 1 }}
-                >
-                  <LatteUserIcon
-                    size={24}
-                    backgroundColor={visibleUser.color}
-                    className={
-                      visibleUser.userId === user?.userId
-                        ? 'rounded-full'
-                        : 'rounded-full ring-2 ring-popover'
-                    }
-                    title={visibleUser.username}
-                  />
-                </span>
-              ))}
-              {hasUserOverflow ? (
-                <span
-                  aria-label={`${overflowCount} more users`}
-                  className="relative flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground ring-2 ring-popover"
-                  style={{
-                    zIndex: visibleUsers.length + 1,
-                  }}
-                >
-                  +{overflowCount}
-                </span>
-              ) : null}
-            </span>
-            <CaretDownIcon />
-          </Button>
+          <UserMenuTrigger
+            overflowCount={overflowCount}
+            user={user}
+            userCount={users.length}
+            visibleUsers={visibleUsers}
+          />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
           <DropdownMenuGroup>
