@@ -1,5 +1,5 @@
 import type { Lobby } from '@app/shared';
-import { useEffect } from 'react';
+import { useEffect, useId } from 'react';
 import { Button } from '../ui/button';
 import {
   Dialog,
@@ -38,6 +38,82 @@ function statusMessage(status: CopyStatus, label: string) {
   }
 }
 
+function copyButtonLabel(status: CopyStatus, label: string) {
+  switch (status) {
+    case 'copying':
+      return 'Copying…';
+    case 'copied':
+      return `${label} copied`;
+    case 'error':
+      return 'Couldn’t copy';
+    default:
+      return `Copy ${label}`;
+  }
+}
+
+function CopyField({
+  label,
+  value,
+  open,
+  variant,
+  inputClassName,
+}: {
+  label: string;
+  value: string;
+  open: boolean;
+  variant?: 'default' | 'outline';
+  inputClassName?: string;
+}) {
+  const inputId = useId();
+  const statusId = `${inputId}-copy-status`;
+  const copy = useCopyToClipboard(COPY_FEEDBACK_OPTIONS);
+  const normalizedLabel = label.toLocaleLowerCase();
+
+  useEffect(() => {
+    if (!open) copy.reset();
+  }, [open, copy.reset]);
+
+  return (
+    <Field>
+      <FieldLabel htmlFor={inputId}>{label}</FieldLabel>
+      <div className="flex flex-col gap-2">
+        <Input
+          id={inputId}
+          readOnly
+          value={value}
+          className={inputClassName}
+          aria-describedby={copy.status === 'error' ? statusId : undefined}
+          onFocus={(event) => event.target.select()}
+        />
+        <Button
+          type="button"
+          variant={variant}
+          className="w-full"
+          aria-label={`Copy ${normalizedLabel}`}
+          disabled={copy.status === 'copying'}
+          onClick={() => void copy.copy(value)}
+        >
+          {copyButtonLabel(copy.status, normalizedLabel)}
+          <CopyStatusIcon
+            status={copy.status}
+            spinnerDurationMs={SPINNER_REVOLUTION_DURATION_MS}
+            entranceDurationMs={STATUS_ENTRANCE_DURATION_MS}
+          />
+        </Button>
+      </div>
+      <p
+        id={statusId}
+        className={
+          copy.status === 'error' ? 'text-sm text-destructive' : 'sr-only'
+        }
+        role="status"
+      >
+        {statusMessage(copy.status, normalizedLabel)}
+      </p>
+    </Field>
+  );
+}
+
 export function InviteFriendsDialog({
   lobby,
   open,
@@ -48,14 +124,6 @@ export function InviteFriendsDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const inviteUrl = lobbyInviteUrl(window.location.href, lobby.code);
-  const lobbyCodeCopy = useCopyToClipboard(COPY_FEEDBACK_OPTIONS);
-  const inviteLinkCopy = useCopyToClipboard(COPY_FEEDBACK_OPTIONS);
-
-  useEffect(() => {
-    if (open) return;
-    lobbyCodeCopy.reset();
-    inviteLinkCopy.reset();
-  }, [open, lobbyCodeCopy.reset, inviteLinkCopy.reset]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -68,50 +136,14 @@ export function InviteFriendsDialog({
             invite can view and edit this canvas.
           </DialogDescription>
         </DialogHeader>
-        <Field>
-          <FieldLabel htmlFor="lobby-code">Lobby code</FieldLabel>
-          <Input
-            id="lobby-code"
-            readOnly
-            value={lobby.code}
-            className="tracking-widest"
-            onFocus={(event) => event.target.select()}
-          />
-        </Field>
-        <Button
+        <CopyField
+          label="Lobby code"
+          value={lobby.code}
+          open={open}
           variant="outline"
-          onClick={() => void lobbyCodeCopy.copy(lobby.code)}
-        >
-          Copy lobby code
-          <CopyStatusIcon
-            status={lobbyCodeCopy.status}
-            spinnerDurationMs={SPINNER_REVOLUTION_DURATION_MS}
-            entranceDurationMs={STATUS_ENTRANCE_DURATION_MS}
-          />
-        </Button>
-        <span className="sr-only" role="status">
-          {statusMessage(lobbyCodeCopy.status, 'lobby code')}
-        </span>
-        <Field>
-          <FieldLabel htmlFor="lobby-invite">Invite link</FieldLabel>
-          <Input
-            id="lobby-invite"
-            readOnly
-            value={inviteUrl}
-            onFocus={(event) => event.target.select()}
-          />
-        </Field>
-        <Button onClick={() => void inviteLinkCopy.copy(inviteUrl)}>
-          Copy invite link
-          <CopyStatusIcon
-            status={inviteLinkCopy.status}
-            spinnerDurationMs={SPINNER_REVOLUTION_DURATION_MS}
-            entranceDurationMs={STATUS_ENTRANCE_DURATION_MS}
-          />
-        </Button>
-        <span className="sr-only" role="status">
-          {statusMessage(inviteLinkCopy.status, 'invite link')}
-        </span>
+          inputClassName="tracking-widest"
+        />
+        <CopyField label="Invite link" value={inviteUrl} open={open} />
       </DialogContent>
     </Dialog>
   );
