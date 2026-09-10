@@ -25,6 +25,31 @@ async function openCanvasMenu(page: Page) {
   });
 }
 
+test('starts with the viewport centered on the canvas', async ({
+  page,
+  request,
+}) => {
+  const response = await request.post('http://127.0.0.1:3000/lobbies', {
+    data: { name: 'Centered canvas' },
+  });
+  const lobby = await response.json();
+
+  await join(page, lobby.code, 'Centered user');
+
+  const canvasBounds = await page.locator('[data-canvas-width]').boundingBox();
+  const viewport = page.viewportSize();
+  if (!canvasBounds || !viewport) throw new Error('Missing canvas viewport');
+
+  expect(canvasBounds.x + canvasBounds.width / 2).toBeCloseTo(
+    viewport.width / 2,
+    0,
+  );
+  expect(canvasBounds.y + canvasBounds.height / 2).toBeCloseTo(
+    viewport.height / 2,
+    0,
+  );
+});
+
 test('two clients keep saved messages and keyboard moves/deletes in sync through restart', async ({
   browser,
   request,

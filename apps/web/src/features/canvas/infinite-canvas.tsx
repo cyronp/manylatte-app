@@ -35,11 +35,11 @@ const CANVAS_EXTENT: CoordinateExtent = [
   [CANVAS_WIDTH, CANVAS_HEIGHT],
 ];
 
-const FIRST_REGION_BOUNDS = {
+const INITIAL_VIEW_BOUNDS = {
   height: CANVAS_REGION_HEIGHT,
   width: CANVAS_REGION_WIDTH,
-  x: 0,
-  y: 0,
+  x: (CANVAS_WIDTH - CANVAS_REGION_WIDTH) / 2,
+  y: (CANVAS_HEIGHT - CANVAS_REGION_HEIGHT) / 2,
 };
 
 const NODE_TYPES = {
@@ -63,7 +63,7 @@ export const InfiniteCanvas = () => {
 
   const handleInit = useCallback(
     (instance: ReactFlowInstance<FlowCanvasNode>) => {
-      void instance.fitBounds(FIRST_REGION_BOUNDS, { padding: 0.02 });
+      void instance.fitBounds(INITIAL_VIEW_BOUNDS, { padding: 0.02 });
     },
     [],
   );
