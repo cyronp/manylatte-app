@@ -25,6 +25,69 @@ async function openCanvasMenu(page: Page) {
   });
 }
 
+test('starts centered and provides canvas zoom controls', async ({
+  page,
+  request,
+}) => {
+  const response = await request.post('http://127.0.0.1:3000/lobbies', {
+    data: { name: 'Centered canvas' },
+  });
+  const lobby = await response.json();
+
+  await join(page, lobby.code, 'Centered user');
+
+  const canvasBounds = await page.locator('[data-canvas-width]').boundingBox();
+  const viewport = page.viewportSize();
+  if (!canvasBounds || !viewport) throw new Error('Missing canvas viewport');
+
+  expect(
+    await page
+      .locator('[data-canvas-width]')
+      .evaluate((element) => getComputedStyle(element).boxShadow),
+  ).not.toBe('none');
+
+  expect(canvasBounds.x + canvasBounds.width / 2).toBeCloseTo(
+    viewport.width / 2,
+    0,
+  );
+  expect(canvasBounds.y + canvasBounds.height / 2).toBeCloseTo(
+    viewport.height / 2,
+    0,
+  );
+
+  const controlsBounds = await page
+    .getByRole('toolbar', { name: 'Canvas controls' })
+    .boundingBox();
+  if (!controlsBounds) throw new Error('Missing canvas controls');
+  expect(controlsBounds.x + controlsBounds.width).toBeCloseTo(
+    viewport.width - 16,
+    0,
+  );
+  expect(controlsBounds.y + controlsBounds.height).toBeCloseTo(
+    viewport.height - 16,
+    0,
+  );
+
+  const viewportTransform = page.locator('.react-flow__viewport');
+  const initialTransform = await viewportTransform.getAttribute('style');
+  await page.getByRole('button', { name: 'Zoom in' }).click();
+  await expect
+    .poll(() => viewportTransform.getAttribute('style'))
+    .not.toBe(initialTransform);
+
+  const zoomedInTransform = await viewportTransform.getAttribute('style');
+  await page.getByRole('button', { name: 'Zoom out' }).click();
+  await expect
+    .poll(() => viewportTransform.getAttribute('style'))
+    .not.toBe(zoomedInTransform);
+
+  await expect(page.getByLabel('Current zoom')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Reset zoom' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Center canvas' })).toHaveCount(
+    0,
+  );
+});
+
 test('two clients keep saved messages and keyboard moves/deletes in sync through restart', async ({
   browser,
   request,

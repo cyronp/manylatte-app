@@ -45,6 +45,8 @@
   --canvas-border: oklch(0.704 0.04 256.788 / 70%);
   --canvas-grid: oklch(0.704 0.04 256.788 / 55%);
   --canvas-surround: oklch(0.929 0.013 255.508);
+  --canvas-edge-shadow: oklch(0.704 0.04 256.788 / 18%);
+  --canvas-shadow: oklch(0.282 0.04 256.788 / 24%);
 }
 
 @theme inline {
@@ -131,6 +133,8 @@
   --canvas-border: oklch(0.556 0 0 / 70%);
   --canvas-grid: oklch(0.556 0 0 / 55%);
   --canvas-surround: oklch(0.145 0 0);
+  --canvas-edge-shadow: oklch(0 0 0 / 28%);
+  --canvas-shadow: oklch(0 0 0 / 60%);
 }
 
 @layer base {

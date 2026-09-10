@@ -1,6 +1,7 @@
 import { CursorClickIcon, CursorIcon } from '@phosphor-icons/react';
 import type { XYPosition } from '@xyflow/react';
 import { memo, useLayoutEffect, useRef } from 'react';
+import { cn } from 'cn';
 
 import { getCursorLabelTextColor } from '../../features/cursors/cursor-label-color';
 import { getCursorLabelPosition } from '../../features/cursors/cursor-label-position';
@@ -115,7 +116,10 @@ export const RemoteCursor = memo(function RemoteCursor({
   return (
     <div
       ref={nodeRef}
-      className="absolute left-0 top-0 will-change-transform"
+      className={cn(
+        'absolute left-0 top-0 opacity-100 transition-opacity duration-500 will-change-transform',
+        cursor.isInactive && 'opacity-40',
+      )}
       style={{
         transform: `translate3d(${currentPositionRef.current.x}px, ${currentPositionRef.current.y}px, 0)`,
       }}
@@ -123,7 +127,7 @@ export const RemoteCursor = memo(function RemoteCursor({
       <Icon color={cursor.color} size={28} weight="duotone" />
       <div
         ref={labelRef}
-        className="absolute left-0 top-0 flex h-fit max-w-48 justify-center truncate rounded-full px-1.5 will-change-transform"
+        className="absolute left-0 top-0 flex h-fit max-w-48 justify-center truncate rounded-full px-2 py-0.5 shadow-sm ring-1 ring-black/10 will-change-transform"
         style={{
           backgroundColor: cursor.color,
           color: getCursorLabelTextColor(cursor.color),
