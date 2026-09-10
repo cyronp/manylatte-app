@@ -12,6 +12,8 @@ export const CanvasSurface = () => (
         backgroundImage:
           'radial-gradient(circle, var(--canvas-grid) 1.5px, transparent 1.5px)',
         backgroundSize: '32px 32px',
+        boxShadow:
+          'inset 0 0 96px var(--canvas-edge-shadow), 0 24px 80px var(--canvas-shadow)',
         height: CANVAS_HEIGHT,
         width: CANVAS_WIDTH,
         zIndex: -1,

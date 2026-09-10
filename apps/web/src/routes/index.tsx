@@ -47,7 +47,7 @@ function CanvasPage() {
       {status === 'connected' && error && (
         <div
           role="alert"
-          className="absolute bottom-4 left-4 right-4 z-60 rounded-lg bg-destructive p-3 text-sm text-white"
+          className="absolute right-4 bottom-16 left-4 z-60 rounded-lg bg-destructive p-3 text-sm text-white"
         >
           {error}
         </div>
@@ -56,7 +56,7 @@ function CanvasPage() {
       {status !== 'connected' && (
         <div
           aria-live="polite"
-          className="absolute right-4 bottom-4 z-60 flex flex-row items-center gap-2 rounded-full bg-primary px-3 py-1.5 text-sm text-primary-foreground"
+          className="absolute right-4 bottom-16 z-60 flex flex-row items-center gap-2 rounded-full bg-primary px-3 py-1.5 text-sm text-primary-foreground"
           title={error}
         >
           <CircleNotchIcon

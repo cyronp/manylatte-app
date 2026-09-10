@@ -18,6 +18,7 @@ import { useSocket } from '@/components/socket-provider';
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 
 import { CanvasContextMenu } from './components/canvas-context-menu';
+import { CanvasControls } from './components/canvas-controls';
 import { CanvasSurface } from './components/canvas-surface';
 import { EmojiCanvasNode } from './components/emoji-canvas-node';
 import { EmojiPickerPortal } from './components/emoji-picker-portal';
@@ -200,6 +201,7 @@ export const InfiniteCanvas = () => {
             >
               <CanvasSurface />
             </ReactFlow>
+            <CanvasControls />
           </div>
         </ContextMenuTrigger>
         <CanvasContextMenu

@@ -1,6 +1,7 @@
 import {
   CURSOR_CLICK_DURATION_MS,
   CURSOR_EVENTS,
+  CURSOR_IDLE_TIMEOUT_MS,
   CURSOR_MOVE_INTERVAL_MS,
   type CursorPosition,
   type CursorUpdate,
@@ -22,7 +23,11 @@ type ProjectCursorPosition = (
 
 export type RemoteCursorView = RemoteCursor & {
   isClicking: boolean;
+  isInactive: boolean;
 };
+
+const CURSOR_INACTIVE_AFTER_MS = CURSOR_IDLE_TIMEOUT_MS / 2;
+const CURSOR_ACTIVITY_CHECK_INTERVAL_MS = 1_000;
 
 export const useRemoteCursors = (
   surfaceRef: RefObject<HTMLElement | null>,
@@ -87,6 +92,7 @@ export const useRemoteCursors = (
       cursorMap.set(cursor.userId, {
         ...cursor,
         isClicking: isClicking || currentCursor?.isClicking === true,
+        isInactive: false,
         username,
       });
       scheduleRender();
@@ -177,6 +183,27 @@ export const useRemoteCursors = (
       scheduleRender();
     };
 
+    const activityTimer = window.setInterval(() => {
+      const currentTime = Date.now();
+      let activityChanged = false;
+
+      cursorMap.forEach((cursor, userId) => {
+        const isInactive =
+          currentTime - cursor.updatedAt >= CURSOR_INACTIVE_AFTER_MS;
+
+        if (cursor.isInactive === isInactive) {
+          return;
+        }
+
+        cursorMap.set(userId, { ...cursor, isInactive });
+        activityChanged = true;
+      });
+
+      if (activityChanged) {
+        scheduleRender();
+      }
+    }, CURSOR_ACTIVITY_CHECK_INTERVAL_MS);
+
     socket.on(CURSOR_EVENTS.session, handleSession);
     socket.on(CURSOR_EVENTS.batch, handleBatch);
     socket.on(CURSOR_EVENTS.click, handleClick);
@@ -192,6 +219,7 @@ export const useRemoteCursors = (
       socket.off(CURSOR_EVENTS.remove, handleRemoval);
       socket.off('disconnect', resetCursors);
       clickTimers.forEach((timer) => window.clearTimeout(timer));
+      window.clearInterval(activityTimer);
 
       if (renderFrame !== undefined) {
         window.cancelAnimationFrame(renderFrame);
