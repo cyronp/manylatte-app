@@ -115,6 +115,7 @@ export const createApp = async ({
       serveClient: false,
     });
     const cursorServer = registerCursorServer(io, {
+      lobbyDatabase: database,
       canvasPersistence: createCanvasPersistence(database),
       authorizeRoom: async (roomId) =>
         (await database.lobby.findUnique({

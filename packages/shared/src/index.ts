@@ -81,5 +81,11 @@ export {
   createLobbySchema,
   lobbyCodeSchema,
   lobbySchema,
+  lobbyCreatedSchema,
+  lobbyModerationSchema,
+  lobbyOwnershipSchema,
+  type LobbyModeration,
+  type LobbyModerationResult,
+  type LobbyOwnership,
   type Lobby,
 } from './lobby.js';

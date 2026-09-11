@@ -31,6 +31,7 @@ export const cursorUsernameSchema = z
 export type CursorUsername = z.infer<typeof cursorUsernameSchema>;
 
 export const cursorSocketAuthSchema = z.object({
+  token: z.uuidv4().optional(),
   roomId: cursorRoomIdSchema,
   username: cursorUsernameSchema.optional(),
 });
@@ -57,7 +58,7 @@ export const cursorColorInputSchema = z.object({
 export type CursorColorInput = z.infer<typeof cursorColorInputSchema>;
 
 export const cursorDisconnectNoticeSchema = z.object({
-  reason: z.enum(['abuse', 'idle', 'restarting', 'unavailable']),
+  reason: z.enum(['abuse', 'idle', 'restarting', 'unavailable', 'kicked']),
 });
 
 export type CursorDisconnectNotice = z.infer<

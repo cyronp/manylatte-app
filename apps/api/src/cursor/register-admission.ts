@@ -7,6 +7,7 @@ import {
   type TrustedProxies,
 } from '../client-address.js';
 import { createCoffeeGuestUsername } from './guest-username.js';
+import { lobbyUserId } from '../lobby-identity.js';
 
 export function registerAdmission(
   io: CursorIo,
@@ -90,6 +91,9 @@ export function registerAdmission(
       socket.once('disconnect', release);
       socket.data.cursorIpAddress = addressFor(socket.request);
       socket.data.cursorRoomId = auth.data.roomId;
+      socket.data.cursorUserId = auth.data.token
+        ? lobbyUserId(auth.data.token, auth.data.roomId)
+        : undefined;
       socket.data.cursorUsername =
         auth.data.username ?? createCoffeeGuestUsername();
       next();

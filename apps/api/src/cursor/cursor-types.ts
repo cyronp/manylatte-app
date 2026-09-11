@@ -59,6 +59,7 @@ export interface Participant {
 }
 
 export interface CursorRoom {
+  moderation?: Promise<void>;
   canvas: PersistentCanvas;
   participants: Map<string, Participant>;
   pendingMoves: Map<string, CursorUpdate>;

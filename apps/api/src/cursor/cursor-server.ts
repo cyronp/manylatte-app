@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import type { Database } from '@app/db';
+import { registerLobbyModeration } from './register-lobby-moderation.js';
 import { createSocketGuards } from './socket-guards.js';
 import { registerPresence } from './register-presence.js';
 
@@ -42,6 +44,7 @@ import { registerTyping, clearTyping } from './typing-presence.js';
 import { OperationMetrics } from './operation-metrics.js';
 import { WorkBudget } from './work-budget.js';
 export interface CursorServerOptions {
+  lobbyDatabase?: Database;
   canvasPersistence: CanvasPersistence;
   authorizeRoom: (roomId: CursorRoomId) => boolean | Promise<boolean>;
   connectionIdleTimeoutMs?: number;
@@ -57,6 +60,7 @@ export interface CursorServerOptions {
 export const registerCursorServer = (
   io: CursorIo,
   {
+    lobbyDatabase,
     canvasPersistence,
     authorizeRoom,
     connectionIdleTimeoutMs = CURSOR_CONNECTION_IDLE_TIMEOUT_MS,
@@ -126,7 +130,7 @@ export const registerCursorServer = (
       socketId: socket.id,
       typingNodeIds: new Set(),
       username: socket.data.cursorUsername,
-      userId: randomUUID(),
+      userId: socket.data.cursorUserId ?? randomUUID(),
       violationCount: 0,
       violationWindowStartedAt: connectedAt,
     };
@@ -166,7 +170,9 @@ export const registerCursorServer = (
             .map(({ data }) => data.cursorLastPosition)
             .filter((cursor): cursor is RemoteCursor => cursor !== undefined),
           self: user,
-          users,
+          users: Array.from(
+            new Map(users.map((user) => [user.userId, user])).values(),
+          ),
         });
         socket.emit(CANVAS_EVENTS.snapshot, {
           nodes: await room.canvas.snapshot(),
@@ -196,6 +202,17 @@ export const registerCursorServer = (
           socket.disconnect(true);
         }
       });
+
+    if (lobbyDatabase)
+      registerLobbyModeration(
+        io,
+        socket,
+        room,
+        participant,
+        lobbyDatabase,
+        (event) => acceptMessageBudget(socket, participant, event),
+        logger,
+      );
 
     registerPresence(
       io,
@@ -239,13 +256,19 @@ export const registerCursorServer = (
           },
         });
       }
-      socket.to(roomId).emit(CURSOR_EVENTS.remove, {
-        reason: 'disconnect',
-        userId: participant.userId,
-      });
+      if (
+        !Array.from(room.participants.values()).some(
+          (user) => user.userId === participant.userId,
+        )
+      ) {
+        socket.to(roomId).emit(CURSOR_EVENTS.remove, {
+          reason: 'disconnect',
+          userId: participant.userId,
+        });
+      }
 
       if (room.participants.size === 0) {
-        void room.canvas.drain().then(() => {
+        void Promise.all([room.canvas.drain(), room.moderation]).then(() => {
           if (room.participants.size === 0 && rooms.get(roomId) === room) {
             rooms.delete(roomId);
           }
@@ -335,7 +358,10 @@ export const registerCursorServer = (
       clearInterval(batchTimer);
       clearInterval(idleTimer);
       await Promise.all(
-        Array.from(rooms.values(), (room) => room.canvas.drain()),
+        Array.from(rooms.values(), async (room) => {
+          await room.moderation;
+          await room.canvas.drain();
+        }),
       );
       rooms.clear();
     },
