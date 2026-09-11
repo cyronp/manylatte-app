@@ -128,21 +128,17 @@ it('transfers the single owner atomically, revokes the former owner, and kicks e
     guest.client.once('lobby:ownership', resolve),
   );
   expect(
-    await owner.client
-      .timeout(2000)
-      .emitWithAck('lobby:moderate', {
-        action: 'transfer',
-        userId: guest.session.self.userId,
-      }),
+    await owner.client.timeout(2000).emitWithAck('lobby:moderate', {
+      action: 'transfer',
+      userId: guest.session.self.userId,
+    }),
   ).toEqual({ ok: true });
   expect(await changed).toEqual({ ownerId: guest.session.self.userId });
   expect(
-    await ownerTab.client
-      .timeout(2000)
-      .emitWithAck('lobby:moderate', {
-        action: 'kick',
-        userId: guest.session.self.userId,
-      }),
+    await ownerTab.client.timeout(2000).emitWithAck('lobby:moderate', {
+      action: 'kick',
+      userId: guest.session.self.userId,
+    }),
   ).toMatchObject({ ok: false });
   guest.client.disconnect();
   const newOwner = await join(lobby.id, guest.token);
@@ -159,12 +155,10 @@ it('transfers the single owner atomically, revokes the former owner, and kicks e
     newOwner.client.once('cursor:remove', resolve),
   );
   expect(
-    await newOwner.client
-      .timeout(2000)
-      .emitWithAck('lobby:moderate', {
-        action: 'kick',
-        userId: owner.session.self.userId,
-      }),
+    await newOwner.client.timeout(2000).emitWithAck('lobby:moderate', {
+      action: 'kick',
+      userId: owner.session.self.userId,
+    }),
   ).toEqual({ ok: true });
   expect(await Promise.all(notices)).toEqual([
     { reason: 'kicked' },
@@ -182,18 +176,14 @@ it('allows only one concurrent ownership transfer and preserves ownership when e
   const guest = await join(lobby.id);
   const another = await join(lobby.id);
   const results = await Promise.all([
-    first.client
-      .timeout(2000)
-      .emitWithAck('lobby:moderate', {
-        action: 'transfer',
-        userId: guest.session.self.userId,
-      }),
-    second.client
-      .timeout(2000)
-      .emitWithAck('lobby:moderate', {
-        action: 'transfer',
-        userId: another.session.self.userId,
-      }),
+    first.client.timeout(2000).emitWithAck('lobby:moderate', {
+      action: 'transfer',
+      userId: guest.session.self.userId,
+    }),
+    second.client.timeout(2000).emitWithAck('lobby:moderate', {
+      action: 'transfer',
+      userId: another.session.self.userId,
+    }),
   ]);
   expect(results.filter((result) => result.ok)).toHaveLength(1);
   const winner = results[0]!.ok ? guest : another;
@@ -213,11 +203,9 @@ it('does not let visitors claim legacy lobbies with no recorded creator', async 
   const second = await join('legacy');
   expect(first.ownership.ownerId).toBeNull();
   expect(
-    await first.client
-      .timeout(2000)
-      .emitWithAck('lobby:moderate', {
-        action: 'transfer',
-        userId: second.session.self.userId,
-      }),
+    await first.client.timeout(2000).emitWithAck('lobby:moderate', {
+      action: 'transfer',
+      userId: second.session.self.userId,
+    }),
   ).toMatchObject({ ok: false });
 });
