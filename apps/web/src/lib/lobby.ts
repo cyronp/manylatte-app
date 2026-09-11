@@ -1,4 +1,9 @@
-import { cursorRoomIdSchema, lobbySchema } from '@app/shared';
+import {
+  cursorRoomIdSchema,
+  lobbyCreatedSchema,
+  lobbySchema,
+} from '@app/shared';
+import { saveLobbyCredential } from './lobby-credential';
 
 import { resolveCursorApiUrl } from './socket';
 
@@ -36,7 +41,7 @@ const requestLobby = async (path: string, options?: RequestInit) => {
       throw new Error('Too many requests. Please try again in a minute.');
     throw new Error('Could not reach the lobby. Please try again.');
   }
-  return lobbySchema.parse(await response.json());
+  return response.json() as Promise<unknown>;
 };
 
 export const loadLobby = (roomId: string, signal: AbortSignal) => {
@@ -47,12 +52,17 @@ export const loadLobby = (roomId: string, signal: AbortSignal) => {
     );
   return requestLobby(`/${encodeURIComponent(result.data)}`, {
     signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
-  });
+  }).then((data) => lobbySchema.parse(data));
 };
 
-export const createLobby = (name: string) =>
-  requestLobby('', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name }),
-  });
+export const createLobby = async (name: string) => {
+  const created = lobbyCreatedSchema.parse(
+    await requestLobby('', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    }),
+  );
+  saveLobbyCredential(created.id, created.token);
+  return lobbySchema.parse(created);
+};

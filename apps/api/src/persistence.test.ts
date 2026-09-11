@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { io } from 'socket.io-client';
 import { afterEach, describe, expect, it } from 'vitest';
+import { lobbySchema } from '@app/shared';
 import type {
   CanvasSnapshot,
   CanvasNode,
@@ -126,10 +127,14 @@ describe('persistent API lifecycle', () => {
       expectedNode,
       expectedReaction,
     ]);
-    expect((await app.inject(`/lobbies/${lobby.id}`)).json()).toEqual(lobby);
-    expect((await app.inject(`/lobbies/${lobby.code}`)).json()).toEqual(lobby);
+    expect((await app.inject(`/lobbies/${lobby.id}`)).json()).toEqual(
+      lobbySchema.parse(lobby),
+    );
+    expect((await app.inject(`/lobbies/${lobby.code}`)).json()).toEqual(
+      lobbySchema.parse(lobby),
+    );
     expect((await app.inject(`/lobbies/${emptyLobby.id}`)).json()).toEqual(
-      emptyLobby,
+      lobbySchema.parse(emptyLobby),
     );
     expect((await app.inject('/healthz')).statusCode).toBe(200);
     expect((await app.inject('/readyz')).statusCode).toBe(200);

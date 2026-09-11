@@ -2,7 +2,7 @@ import { CANVAS_EVENTS, CURSOR_EVENTS } from '@app/shared';
 import type { CursorSocket } from './socket';
 
 export type SocketStatus =
-  'connected' | 'initializing' | 'connecting' | 'disconnected';
+  'connected' | 'initializing' | 'connecting' | 'disconnected' | 'kicked';
 
 export function bindSocketLifecycle(
   socket: CursorSocket,
@@ -10,10 +10,12 @@ export function bindSocketLifecycle(
   ready: (value: boolean) => void,
 ) {
   let idle = false;
+  let kicked = false;
   let retryable = false;
   let attempts = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const retry = () => {
+    if (kicked) return;
     clearTimeout(timer);
     ready(false);
     update('connecting');
@@ -27,11 +29,13 @@ export function bindSocketLifecycle(
     );
   };
   const connect = () => {
+    kicked = false;
     idle = false;
     ready(false);
     update('initializing');
   };
   const snapshot = () => {
+    if (kicked) return;
     attempts = 0;
     retryable = false;
     clearTimeout(timer);
@@ -41,15 +45,32 @@ export function bindSocketLifecycle(
   const notice: Parameters<typeof socket.on<'cursor:disconnect'>>[1] = ({
     reason,
   }) => {
+    kicked = reason === 'kicked';
+    clearTimeout(timer);
     idle = reason === 'idle';
     retryable = reason === 'restarting' || reason === 'unavailable';
+    if (kicked) {
+      ready(false);
+      update('kicked');
+    }
   };
   const disconnect = () => {
     ready(false);
-    update('disconnected');
+    update(kicked ? 'kicked' : 'disconnected');
     if (retryable) schedule();
   };
-  const error = (cause: Error & { data?: { retryable?: boolean } }) => {
+  const error = (
+    cause: Error & { data?: { retryable?: boolean; reason?: string } },
+  ) => {
+    if (cause.data?.reason === 'kicked') {
+      kicked = true;
+      idle = false;
+      retryable = false;
+      clearTimeout(timer);
+      ready(false);
+      update('kicked');
+      return;
+    }
     ready(false);
     update('disconnected', cause.message);
     if (cause.data?.retryable && !socket.active) schedule();

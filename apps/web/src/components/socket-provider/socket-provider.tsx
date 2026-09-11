@@ -3,6 +3,7 @@ import {
   CURSOR_EVENTS,
   type CursorRoomId,
   hexColorSchema,
+  lobbyOwnershipSchema,
   type CursorUser,
   type CanvasCommandBody,
   type CanvasCommandResult,
@@ -25,11 +26,13 @@ import {
   type SocketStatus,
 } from '../../lib/socket-lifecycle';
 import { createCommandQueue } from '../../lib/canvas-commands';
+import { LobbyKickedDialog } from '../../features/lobby/lobby-kicked-dialog';
 export type { SocketStatus } from '../../lib/socket-lifecycle';
 
 const USER_COLOR_UPDATE_DEBOUNCE_MS = 150;
 
 interface SocketContextValue {
+  ownerId: string | null;
   error?: string;
   execute: (
     body: CanvasCommandBody,
@@ -84,6 +87,7 @@ export const SocketProvider = ({
   const [error, setError] = useState<string>();
   const [user, setUser] = useState<CursorUser>();
   const [users, setUsers] = useState<CursorUser[]>([]);
+  const [ownerId, setOwnerId] = useState<string | null>(null);
   const colorUpdateTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
@@ -143,8 +147,10 @@ export const SocketProvider = ({
     setStatus('connecting');
     setUser(undefined);
     setUsers([]);
+    setOwnerId(null);
 
     const handleDisconnect = () => {
+      setOwnerId(null);
       setUser(undefined);
       setUsers([]);
     };
@@ -197,6 +203,13 @@ export const SocketProvider = ({
         currentUsers.filter((currentUser) => currentUser.userId !== userId),
       );
     };
+    const handleOwnership: Parameters<
+      typeof socket.on<'lobby:ownership'>
+    >[1] = (input) => {
+      const result = lobbyOwnershipSchema.safeParse(input);
+      if (result.success) setOwnerId(result.data.ownerId);
+    };
+    socket.on('lobby:ownership', handleOwnership);
     socket.on(CANVAS_EVENTS.error, handleCanvasError);
     socket.on('disconnect', handleDisconnect);
     socket.on(CURSOR_EVENTS.session, handleSession);
@@ -206,6 +219,7 @@ export const SocketProvider = ({
 
     return () => {
       lifecycle.dispose();
+      socket.off('lobby:ownership', handleOwnership);
       socket.off(CANVAS_EVENTS.error, handleCanvasError);
       socket.off('disconnect', handleDisconnect);
       socket.off(CURSOR_EVENTS.session, handleSession);
@@ -223,6 +237,7 @@ export const SocketProvider = ({
 
   const value = useMemo(
     () => ({
+      ownerId,
       error,
       execute,
       retryConnect,
@@ -232,11 +247,23 @@ export const SocketProvider = ({
       user,
       users,
     }),
-    [error, execute, retryConnect, setUserColor, socket, status, user, users],
+    [
+      ownerId,
+      error,
+      execute,
+      retryConnect,
+      setUserColor,
+      socket,
+      status,
+      user,
+      users,
+    ],
   );
 
   return (
-    <SocketContext.Provider value={value}>{children}</SocketContext.Provider>
+    <SocketContext.Provider value={value}>
+      {status === 'kicked' ? <LobbyKickedDialog /> : children}
+    </SocketContext.Provider>
   );
 };
 

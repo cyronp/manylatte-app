@@ -70,7 +70,8 @@ describe('lobbies', () => {
     await start();
     const response = await create('  Coffee friends  ');
     expect(response.statusCode).toBe(201);
-    const lobby = response.json();
+    const { token, ...lobby } = response.json();
+    expect(token).toEqual(expect.any(String));
     expect(lobby).toEqual({
       id: expect.any(String),
       code: expect.stringMatching(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/),

@@ -18,6 +18,7 @@ import {
 } from './cursor/cursor-server.js';
 import { createCanvasPersistence } from './cursor/canvas-persistence.js';
 import { registerLobbyRoutes } from './lobbies.js';
+import { trackIdleHttpConnections } from './idle-http-connections.js';
 import {
   DEFAULT_ALLOWED_ORIGINS,
   DEFAULT_CURSOR_CONNECTION_IDLE_TIMEOUT_MS,
@@ -90,6 +91,7 @@ export const createApp = async ({
     trustProxy,
   });
   app.addHook('onClose', async () => database.$disconnect());
+  const closeIdleConnections = trackIdleHttpConnections(app.server);
   try {
     const allowedOriginSet = new Set(allowedOrigins);
     const isOriginAllowed = (origin: string | undefined) =>
@@ -115,6 +117,7 @@ export const createApp = async ({
       serveClient: false,
     });
     const cursorServer = registerCursorServer(io, {
+      lobbyDatabase: database,
       canvasPersistence: createCanvasPersistence(database),
       authorizeRoom: async (roomId) =>
         (await database.lobby.findUnique({
@@ -134,7 +137,7 @@ export const createApp = async ({
       io.local.disconnectSockets(true);
       await cursorServer.close();
       io.engine.close();
-      app.server.closeIdleConnections();
+      closeIdleConnections();
     });
 
     app.addHook('onClose', async () => {

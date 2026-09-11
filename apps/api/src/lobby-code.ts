@@ -1,5 +1,6 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import { Prisma, type Database } from '@app/db';
+import { lobbyUserId } from './lobby-identity.js';
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 
@@ -17,6 +18,7 @@ export const persistLobby = async (
   database: Database,
   name: string,
   maxLobbies = 10_000,
+  token = randomUUID(),
 ) => {
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
@@ -25,10 +27,17 @@ export const persistLobby = async (
           throw new LobbyCapacityError(
             'Lobby capacity reached. Contact the operator to archive or remove unused lobbies.',
           );
-        return tx.lobby.create({
-          data: { id: randomUUID(), code: generateLobbyCode(), name },
+        const id = randomUUID();
+        const lobby = await tx.lobby.create({
+          data: {
+            id,
+            code: generateLobbyCode(),
+            name,
+            ownerId: lobbyUserId(token, id),
+          },
           select: { id: true, code: true, name: true },
         });
+        return { ...lobby, token };
       });
     } catch (error) {
       if (

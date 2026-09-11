@@ -33,6 +33,7 @@ export const registerLobbyRoutes = async (
         });
       }
       try {
+        reply.header('Cache-Control', 'no-store');
         const lobby = await persistLobby(
           database,
           result.data.name,

@@ -1,4 +1,9 @@
 import type {
+  LobbyModeration,
+  LobbyModerationResult,
+  LobbyOwnership,
+} from '../lobby.js';
+import type {
   CursorBatch,
   CursorColorInput,
   CursorDisconnectNotice,
@@ -25,6 +30,10 @@ import type {
 } from '../canvas/commands.js';
 
 export interface ClientToServerEvents {
+  'lobby:moderate': (
+    input: LobbyModeration,
+    ack: (result: LobbyModerationResult) => void,
+  ) => void;
   'canvas:command': (input: CanvasCommand, ack: CanvasCommandAck) => void;
   'canvas:history': (
     input: CanvasHistoryInput,
@@ -39,6 +48,7 @@ export interface ClientToServerEvents {
 }
 
 export interface ServerToClientEvents {
+  'lobby:ownership': (ownership: LobbyOwnership) => void;
   'canvas:change': (change: CanvasChange) => void;
   'canvas:error': (error: { message: string }) => void;
   'canvas:node-upsert': (node: CanvasNode) => void;

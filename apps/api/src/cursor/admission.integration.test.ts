@@ -16,7 +16,8 @@ it('admits one participant when authorizations finish concurrently', async () =>
   const original = database.lobby.findUnique.bind(database.lobby);
   const releases: (() => void)[] = [];
   vi.spyOn(database.lobby, 'findUnique').mockImplementation(async (args) => {
-    await new Promise<void>((resolve) => releases.push(resolve));
+    if (args.select?.id)
+      await new Promise<void>((resolve) => releases.push(resolve));
     return original(args);
   });
   const url = await app.listen({ host: '127.0.0.1', port: 0 });

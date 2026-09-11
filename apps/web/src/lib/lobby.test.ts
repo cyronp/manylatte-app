@@ -1,4 +1,6 @@
+// @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { getLobbyCredential } from './lobby-credential';
 
 import { createLobby, loadLobby, lobbyInviteUrl, lobbySearch } from './lobby';
 
@@ -30,11 +32,17 @@ describe('lobby invites', () => {
   });
 
   it('persists a lobby before returning the invite and reports missing lobbies', async () => {
+    const token = crypto.randomUUID();
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
         new Response(
-          JSON.stringify({ id: 'friends', code: 'AB12-CD34', name: 'Friends' }),
+          JSON.stringify({
+            id: 'friends',
+            code: 'AB12-CD34',
+            name: 'Friends',
+            token,
+          }),
           {
             status: 201,
           },
@@ -53,6 +61,10 @@ describe('lobby invites', () => {
         method: 'POST',
         body: JSON.stringify({ name: 'Friends' }),
       }),
+    );
+    expect(getLobbyCredential('friends')).toBe(token);
+    expect(localStorage.getItem('manylatte:lobby-credential:friends')).toBe(
+      token,
     );
     await expect(
       loadLobby('missing', new AbortController().signal),

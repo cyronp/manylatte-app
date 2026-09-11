@@ -38,6 +38,7 @@ export const connectDatabase = async (database: PrismaClient) => {
     await database.canvasNode.findFirst();
     await database.canvasMessage.findFirst();
     await database.lobby.findFirst();
+    await database.lobbyBan.findFirst();
     await database.canvasOperation.findFirst();
   } catch (cause) {
     await database.$disconnect();
