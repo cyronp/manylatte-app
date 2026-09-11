@@ -72,3 +72,29 @@ it('never buffers offline or initializing writes and preserves IDs after acknowl
   });
   expect(emitWithAck.mock.calls[0]).toEqual(emitWithAck.mock.calls[1]);
 });
+
+it('explains a kick and does not reconnect on activity or a pending retry timer', () => {
+  vi.useFakeTimers();
+  const handlers = new Map<string, (...args: unknown[]) => void>();
+  const socket = {
+    on: vi.fn((event, handler) => handlers.set(event, handler)),
+    off: vi.fn((event) => handlers.delete(event)),
+    connect: vi.fn(),
+    active: false,
+  } as unknown as CursorSocket;
+  const update = vi.fn();
+  const lifecycle = bindSocketLifecycle(socket, update, vi.fn());
+  handlers.get('cursor:disconnect')!({ reason: 'restarting' });
+  handlers.get('disconnect')!();
+  handlers.get('cursor:disconnect')!({ reason: 'kicked' });
+  handlers.get('disconnect')!();
+  expect(update).toHaveBeenLastCalledWith(
+    'disconnected',
+    'You were removed from this lobby by the owner.',
+  );
+  window.dispatchEvent(new Event('pointermove'));
+  window.dispatchEvent(new Event('online'));
+  vi.runAllTimers();
+  expect(socket.connect).not.toHaveBeenCalled();
+  lifecycle.dispose();
+});

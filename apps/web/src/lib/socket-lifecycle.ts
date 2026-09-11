@@ -10,6 +10,7 @@ export function bindSocketLifecycle(
   ready: (value: boolean) => void,
 ) {
   let idle = false;
+  let kicked = false;
   let retryable = false;
   let attempts = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -27,6 +28,7 @@ export function bindSocketLifecycle(
     );
   };
   const connect = () => {
+    kicked = false;
     idle = false;
     ready(false);
     update('initializing');
@@ -41,12 +43,17 @@ export function bindSocketLifecycle(
   const notice: Parameters<typeof socket.on<'cursor:disconnect'>>[1] = ({
     reason,
   }) => {
+    kicked = reason === 'kicked';
+    clearTimeout(timer);
     idle = reason === 'idle';
     retryable = reason === 'restarting' || reason === 'unavailable';
   };
   const disconnect = () => {
     ready(false);
-    update('disconnected');
+    update(
+      'disconnected',
+      kicked ? 'You were removed from this lobby by the owner.' : undefined,
+    );
     if (retryable) schedule();
   };
   const error = (cause: Error & { data?: { retryable?: boolean } }) => {

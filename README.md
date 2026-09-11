@@ -108,12 +108,22 @@ There is no public lobby. Refreshing or reopening an invite restores that lobby;
 canvas content survive API restarts, including lobbies with no content yet.
 
 Invites use `/?lobby=AB12-CD34`. Lobbies are accessible to anyone with their
-link and collaboratively editable, including deletion. There are no accounts,
-owner permissions, or per-user invite revocation. Operators can archive a lobby to disable its invitations. Canvas content and presence are scoped
+link and collaboratively editable, including deletion. The creator is the lobby's
+single owner and can use **Lobby Users** to kick someone or delegate ownership.
+Delegating immediately removes the previous owner's moderation permissions.
+Ownership survives disconnects and API restarts; leaving does not elect a new owner.
+The browser keeps a private credential for each lobby in local storage. Clearing
+that storage or switching browsers loses that identity; when storage is disabled,
+identity lasts only for the current page. Credentials are never part of invite links.
+Kicking disconnects all of that user's tabs without automatic reconnection; it is
+not a ban, and the user can explicitly rejoin with the invite. There are no accounts
+or per-user invite revocation. Operators can archive a lobby to disable its invitations. Canvas content and presence are scoped
 to each lobby. Invalid or unknown invites show an error. Creation is limited to
 10 requests per IP per minute.
 
-Run `npm run db:deploy` before starting the updated API to add lobby codes.
+Run `npm run db:deploy` before starting the updated API to add lobby ownership.
+Lobbies created before ownership was introduced have no verifiable creator and
+remain without moderation permissions; visitors cannot claim them.
 Existing lobbies receive a code and retain their content and original invite
 links. Old public canvas data is preserved in archived legacy lobbies.
 
