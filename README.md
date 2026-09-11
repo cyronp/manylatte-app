@@ -115,9 +115,11 @@ Ownership survives disconnects and API restarts; leaving does not elect a new ow
 The browser keeps a private credential for each lobby in local storage. Clearing
 that storage or switching browsers loses that identity; when storage is disabled,
 identity lasts only for the current page. Credentials are never part of invite links.
-Kicking disconnects all of that user's tabs without automatic reconnection; it is
-not a ban, and the user can explicitly rejoin with the invite. There are no accounts
-or per-user invite revocation. Operators can archive a lobby to disable its invitations. Canvas content and presence are scoped
+Kicking saves a permanent lobby ban for that browser identity, disconnects all of
+its tabs, and blocks rejoining after refresh or API restart. A removal alert returns
+the user to the lobby entry page. Since there are no accounts, clearing browser
+storage or switching browsers creates a different identity and can evade the ban.
+Operators can archive a lobby to disable its invitations. Canvas content and presence are scoped
 to each lobby. Invalid or unknown invites show an error. Creation is limited to
 10 requests per IP per minute.
 

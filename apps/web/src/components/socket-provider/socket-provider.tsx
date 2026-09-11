@@ -26,6 +26,7 @@ import {
   type SocketStatus,
 } from '../../lib/socket-lifecycle';
 import { createCommandQueue } from '../../lib/canvas-commands';
+import { LobbyKickedDialog } from '../../features/lobby/lobby-kicked-dialog';
 export type { SocketStatus } from '../../lib/socket-lifecycle';
 
 const USER_COLOR_UPDATE_DEBOUNCE_MS = 150;
@@ -260,7 +261,9 @@ export const SocketProvider = ({
   );
 
   return (
-    <SocketContext.Provider value={value}>{children}</SocketContext.Provider>
+    <SocketContext.Provider value={value}>
+      {status === 'kicked' ? <LobbyKickedDialog /> : children}
+    </SocketContext.Provider>
   );
 };
 

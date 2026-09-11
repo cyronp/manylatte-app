@@ -61,15 +61,31 @@ test('creator delegates ownership, new owner survives restart and can kick the f
     await guest
       .getByRole('button', { name: 'Kick Alice', exact: true })
       .click();
-    await expect(
-      owner
-        .getByRole('status')
-        .filter({ hasText: 'You were removed from this lobby by the owner.' }),
-    ).toBeVisible();
+    const kickedDialog = owner.getByRole('alertdialog', {
+      name: 'You were kicked from this lobby',
+    });
+    await expect(kickedDialog).toBeVisible();
+    await expect(kickedDialog).toContainText('You can no longer rejoin it.');
+    await expect(owner.getByRole('button', { name: 'Reconnect' })).toHaveCount(
+      0,
+    );
+    await expect(owner.locator('.react-flow__pane')).toHaveCount(0);
+    await owner.keyboard.press('Escape');
+    await expect(kickedDialog).toBeVisible();
     await expect(
       guest.getByRole('heading', { name: 'Alice', exact: true }),
     ).toHaveCount(0);
     await expect(guest.getByText('Owner', { exact: true })).toHaveCount(1);
+    const invite = owner.url();
+    await owner.reload();
+    await expect(kickedDialog).toBeVisible();
+    expect((await request.post('/test/restart')).ok()).toBe(true);
+    await owner.reload();
+    await expect(kickedDialog).toBeVisible();
+    await kickedDialog.getByRole('link', { name: 'Back to lobbies' }).click();
+    await expect(owner.getByLabel('Lobby code', { exact: true })).toBeVisible();
+    await owner.goto(invite);
+    await expect(kickedDialog).toBeVisible();
   } finally {
     await ownerContext.close();
     await guestContext.close();
