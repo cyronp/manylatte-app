@@ -76,6 +76,41 @@ export const registerCursorServer = (
   const admission = registerAdmission(io, {
     authorizeRoom,
     maxConnectionsPerIp,
+    admitUser: lobbyDatabase
+      ? async (roomId, userId, admit) => {
+          const room = getRoom(roomId);
+          let allowed = false;
+          const pending = (room.moderation ?? Promise.resolve()).then(
+            async () => {
+              const banned =
+                userId &&
+                (await lobbyDatabase.lobbyBan.findUnique({
+                  where: { roomId_userId: { roomId, userId } },
+                  select: { userId: true },
+                }));
+              if (!banned) {
+                allowed = true;
+                admit();
+              }
+            },
+          );
+          room.moderation = pending.catch(() => undefined);
+          const tail = room.moderation;
+          try {
+            await pending;
+            return allowed;
+          } finally {
+            if (!allowed) await room.canvas.drain();
+            if (
+              !allowed &&
+              room.participants.size === 0 &&
+              room.moderation === tail &&
+              rooms.get(roomId) === room
+            )
+              rooms.delete(roomId);
+          }
+        }
+      : undefined,
     maxTotalConnections,
     maxParticipantsPerRoom,
     trustProxy,
@@ -268,8 +303,13 @@ export const registerCursorServer = (
       }
 
       if (room.participants.size === 0) {
-        void Promise.all([room.canvas.drain(), room.moderation]).then(() => {
-          if (room.participants.size === 0 && rooms.get(roomId) === room) {
+        const moderation = room.moderation;
+        void Promise.all([room.canvas.drain(), moderation]).then(() => {
+          if (
+            room.participants.size === 0 &&
+            rooms.get(roomId) === room &&
+            room.moderation === moderation
+          ) {
             rooms.delete(roomId);
           }
         });

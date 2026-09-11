@@ -25,7 +25,17 @@ model Lobby {
   lastActivityAt DateTime @default(now())
   nodes CanvasNode[]
   operations CanvasOperation[]
+  bans LobbyBan[]
   @@index([archivedAt, lastActivityAt])
+}
+
+model LobbyBan {
+  roomId String
+  userId String
+  room Lobby @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([roomId, userId])
 }
 
 model CanvasNode {

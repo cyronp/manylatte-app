@@ -7,7 +7,7 @@ import type {
   ServerToClientEvents,
 } from '@app/shared';
 import { io, type Socket } from 'socket.io-client';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { createTestDatabase } from '../test/database.js';
 import { createApp } from './app.js';
 
@@ -166,6 +166,86 @@ it('transfers the single owner atomically, revokes the former owner, and kicks e
   ]);
   await Promise.all(disconnected);
   expect((await removed).userId).toBe(owner.session.self.userId);
+  const denied = event<
+    Error & { data: { reason: string; retryable: boolean } }
+  >((resolve) => owner.client.once('connect_error', resolve));
+  const leakedSession = vi.fn();
+  const leakedCanvas = vi.fn();
+  owner.client.on('cursor:session', leakedSession);
+  owner.client.on('canvas:snapshot', leakedCanvas);
+  owner.client.connect();
+  expect((await denied).data).toEqual({ reason: 'kicked', retryable: false });
+  expect(leakedSession).not.toHaveBeenCalled();
+  expect(leakedCanvas).not.toHaveBeenCalled();
+  expect((await join((await create()).id, lobby.token)).client.connected).toBe(
+    true,
+  );
+});
+
+it('keeps the user connected if saving the ban fails', async () => {
+  await start();
+  const lobby = await create();
+  const owner = await join(lobby.id, lobby.token);
+  const guest = await join(lobby.id);
+  const save = vi
+    .spyOn(database.lobbyBan, 'upsert')
+    .mockRejectedValueOnce(new Error('Disk unavailable'));
+  expect(
+    await owner.client.timeout(2000).emitWithAck('lobby:moderate', {
+      action: 'kick',
+      userId: guest.session.self.userId,
+    }),
+  ).toMatchObject({ ok: false });
+  expect(guest.client.connected).toBe(true);
+  expect(await database.lobbyBan.count()).toBe(0);
+  save.mockRestore();
+});
+
+it('blocks admission that races with a kick before publishing any presence', async () => {
+  await start();
+  const lobby = await create();
+  const owner = await join(lobby.id, lobby.token);
+  const guest = await join(lobby.id);
+  const original = database.lobbyBan.upsert.bind(database.lobbyBan);
+  let release!: () => void;
+  const hold = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const save = vi
+    .spyOn(database.lobbyBan, 'upsert')
+    .mockImplementation(async (args) => {
+      await hold;
+      return original(args);
+    });
+  const kicked = owner.client.timeout(2000).emitWithAck('lobby:moderate', {
+    action: 'kick',
+    userId: guest.session.self.userId,
+  });
+  await vi.waitFor(() => expect(save).toHaveBeenCalledOnce());
+  const address = app.server.address();
+  if (!address || typeof address === 'string')
+    throw new Error('Missing address');
+  const concurrent: Client = io(`http://127.0.0.1:${address.port}`, {
+    auth: { roomId: lobby.id, token: guest.token },
+    transports: ['websocket'],
+    reconnection: false,
+    autoConnect: false,
+  });
+  clients.push(concurrent);
+  const session = vi.fn();
+  concurrent.on('cursor:session', session);
+  const denied = event<Error & { data: { reason: string } }>((resolve) =>
+    concurrent.once('connect_error', resolve),
+  );
+  const queried = vi.spyOn(database.lobby, 'findUnique');
+  concurrent.connect();
+  await vi.waitFor(() => expect(queried).toHaveBeenCalled());
+  release();
+  expect(await kicked).toEqual({ ok: true });
+  expect((await denied).data.reason).toBe('kicked');
+  expect(session).not.toHaveBeenCalled();
+  save.mockRestore();
+  queried.mockRestore();
 });
 
 it('allows only one concurrent ownership transfer and preserves ownership when everyone leaves', async () => {

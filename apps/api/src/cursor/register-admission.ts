@@ -13,6 +13,11 @@ export function registerAdmission(
   io: CursorIo,
   options: {
     authorizeRoom: (id: CursorRoomId) => boolean | Promise<boolean>;
+    admitUser?: (
+      id: CursorRoomId,
+      userId: string | undefined,
+      admit: () => void,
+    ) => Promise<boolean>;
     maxConnectionsPerIp: number;
     maxTotalConnections: number;
     maxParticipantsPerRoom: number;
@@ -72,8 +77,10 @@ export function registerAdmission(
     transport.once('close', reservation.release);
   });
   io.use(async (socket, next) => {
-    const deny = (message: string, retryable: boolean) => {
-      const error = Object.assign(new Error(message), { data: { retryable } });
+    const deny = (message: string, retryable: boolean, reason?: 'kicked') => {
+      const error = Object.assign(new Error(message), {
+        data: { retryable, reason },
+      });
       next(error);
       // Rejected namespaces must not retain an unauthenticated transport.
       const timer = setTimeout(() => socket.conn.close(), 100);
@@ -84,19 +91,30 @@ export function registerAdmission(
       if (!auth.success) return deny('Invalid cursor connection', false);
       if (!(await options.authorizeRoom(auth.data.roomId)))
         return deny('Cursor room access denied', false);
-      if (socket.conn.readyState !== 'open') return;
-      const release = admission.reserveRoom(auth.data.roomId);
-      if (!release) return deny('Cursor room is full', true);
-      socket.conn.once('close', release);
-      socket.once('disconnect', release);
-      socket.data.cursorIpAddress = addressFor(socket.request);
-      socket.data.cursorRoomId = auth.data.roomId;
-      socket.data.cursorUserId = auth.data.token
+      const userId = auth.data.token
         ? lobbyUserId(auth.data.token, auth.data.roomId)
         : undefined;
-      socket.data.cursorUsername =
-        auth.data.username ?? createCoffeeGuestUsername();
-      next();
+      const admit = () => {
+        if (socket.conn.readyState !== 'open') return;
+        const release = admission.reserveRoom(auth.data.roomId);
+        if (!release) return deny('Cursor room is full', true);
+        socket.conn.once('close', release);
+        socket.once('disconnect', release);
+        socket.data.cursorIpAddress = addressFor(socket.request);
+        socket.data.cursorRoomId = auth.data.roomId;
+        socket.data.cursorUserId = userId;
+        socket.data.cursorUsername =
+          auth.data.username ?? createCoffeeGuestUsername();
+        next();
+      };
+      if (options.admitUser) {
+        if (!(await options.admitUser(auth.data.roomId, userId, admit)))
+          deny(
+            'You were kicked from this lobby and can no longer rejoin.',
+            false,
+            'kicked',
+          );
+      } else admit();
     } catch (error) {
       options.logger.error(
         {

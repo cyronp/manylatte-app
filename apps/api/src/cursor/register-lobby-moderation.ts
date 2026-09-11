@@ -79,9 +79,16 @@ export function registerLobbyModeration(
           };
         io.to(roomId).emit('lobby:ownership', { ownerId: userId });
       } else {
-        for (const target of targets) {
-          target.emit(CURSOR_EVENTS.disconnect, { reason: 'kicked' });
-          target.disconnect(true);
+        await database.lobbyBan.upsert({
+          where: { roomId_userId: { roomId, userId } },
+          create: { roomId, userId },
+          update: {},
+        });
+        for (const user of room.participants.values()) {
+          if (user.userId !== userId) continue;
+          const target = io.sockets.sockets.get(user.socketId);
+          target?.emit(CURSOR_EVENTS.disconnect, { reason: 'kicked' });
+          target?.disconnect(true);
         }
       }
       return { ok: true };
