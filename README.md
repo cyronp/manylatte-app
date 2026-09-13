@@ -1,205 +1,302 @@
 # ManyLatte
 
-A shared canvas built with React, Fastify, Socket.IO, and SQLite. Prisma manages
-the database schema and migrations. Cursor presence is temporary; canvas nodes
-and messages are saved to SQLite before updates are broadcast.
+ManyLatte is a shared canvas for conversations, reactions, and live presence.
+Create a private lobby, send its code or invite link to friends, and arrange
+message threads and emoji reactions together in real time.
 
-## Local setup
+Canvas content is stored in SQLite, so a lobby can be reopened after everyone
+leaves or the API restarts. No account is required: participants choose a name
+and can customize their cursor color.
 
-Use Node.js 24 and the npm version pinned in `package.json`.
+## Features
+
+- Private lobbies with short, shareable invite codes
+- Live cursors, participant presence, and typing indicators
+- Draggable message threads with paginated history
+- Emoji reactions that can be moved, changed, or removed
+- Persistent canvas content and lobby ownership
+- Owner controls for removing participants and transferring ownership
+- Light, dark, and system appearance settings
+- Responsive UI with keyboard-accessible canvas editing
+
+## Using the application
+
+### Create or join a lobby
+
+From the home page, select **Create lobby**, enter a name, and choose
+**Create and join lobby**. ManyLatte opens a new canvas and assigns it an
+eight-character code such as `AB12-CD34`.
+
+To enter an existing lobby, type or paste its code on the home page. Codes are
+case-insensitive, and pasted codes may include the dash. Opening an invite URL
+such as `/?lobby=AB12-CD34` takes you directly to that lobby. The first time you
+join, enter the username that other participants will see beside your cursor and
+messages.
+
+### Add content to the canvas
+
+Right-click an empty area of the canvas and choose one of these actions:
+
+- **Message** creates a conversation thread at that position. Write the first
+  message to save it, then open the thread to read replies or add another one.
+- **Reaction** opens the emoji picker and places the selected reaction on the
+  canvas.
+
+Drag a saved node to reposition it. Select one or more nodes and press
+`Delete` or `Backspace` to remove them. You can also use a node's actions menu
+to remove a thread, remove a reaction, or change a reaction's emoji. Changes
+appear for everyone in the lobby after they have been saved.
+
+Use the controls in the lower-right corner to zoom. You can pan around the
+canvas with scroll gestures or by holding `Space` while dragging. Arrow keys
+move focused nodes, and `Enter` selects a focused node.
+
+If a message thread contains more than 50 messages, choose **Load older
+messages** to retrieve the previous page. A typing indicator appears while
+other participants compose a reply.
+
+### Invite and manage participants
+
+Open the user menu in the upper-right corner to:
+
+- Copy the lobby code or full invite link
+- See everyone currently connected
+- Change your username and cursor color
+- Switch between system, light, and dark appearance
+- Create another lobby or leave the current one
+
+Anyone with the invite can join, view, edit, move, and delete canvas content.
+There is no separate viewer role.
+
+The participant who creates a lobby becomes its owner. From **Lobby Users**, the
+owner can remove a participant or transfer ownership to someone else. A removed
+participant is disconnected and their browser identity is banned from that
+lobby. Transferring ownership immediately gives the new owner all moderation
+controls.
+
+### Identity and saved data
+
+ManyLatte does not use user accounts. Your browser stores a private identity for
+each lobby. It also stores your preferred name, color, and appearance on that
+device. Invite links never include the private lobby credential.
+
+Clearing browser storage or using another browser creates a new identity. This
+means a lobby ban can also be bypassed in the same way. Cursor sessions are
+temporary, while lobbies, ownership, message threads, and reactions remain in
+the database until an operator archives or deletes the lobby.
+
+If the connection drops, ManyLatte reloads the server's saved state when it
+reconnects. Edits made while offline are not queued. A message draft stays in
+the composer if sending fails, and the **Reconnect** button can retry the
+connection manually.
+
+## Run locally
+
+### Requirements
+
+- Node.js 24
+- npm 11.18 or later in the 11.x release line
+
+SQLite runs inside the API through `@prisma/adapter-better-sqlite3`; you do not
+need to install a database server or the SQLite CLI.
+
+### Setup
 
 ```sh
 npm ci
+cp apps/api/.env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env
+cp packages/db/.env.example packages/db/.env
 npm run db:deploy
 npm run build
 npm run dev
 ```
 
-SQLite is embedded in the API through `@prisma/adapter-better-sqlite3`; no database
-server or separate SQLite installation is required. npm may require approval for
-the native driver's install script on a fresh machine. Use `npm install-scripts ls`
-to review the scripts requested by your installed packages.
-
-The default database is `packages/db/prisma/manylatte.db`. It and SQLite journal
-files are ignored by Git. `DATABASE_URL=file:./prisma/manylatte.db` uses a path
-relative to `packages/db`, consistently in Prisma CLI, development, and compiled
-API code. Absolute file paths are also accepted. Use the same `DATABASE_URL` for
-migration commands and the API. API environment files live in `apps/api/.env`;
-Prisma CLI environment files live in `packages/db/.env`. Examples are provided
-in those directories.
-
-No PostgreSQL data is automatically imported. The previous application did not
-persist canvas content. If an older development `.env` still contains a
-PostgreSQL URL, replace its `DATABASE_URL` with the SQLite value above.
-
-## Database commands
+The web application is available at `http://localhost:5173` and the API listens
+at `http://localhost:3000`. You can check the API with:
 
 ```sh
-npm run db:deploy
-npm run db:studio
+curl http://localhost:3000/healthz
+curl http://localhost:3000/readyz
+```
+
+The default database is created at
+`packages/db/prisma/manylatte.db`. Database files and SQLite journal files are
+ignored by Git.
+
+On a fresh machine, npm may ask for approval before running the native SQLite
+driver's install script. Review pending scripts with `npm install-scripts ls`.
+
+## Technical overview
+
+ManyLatte is an npm workspace managed with Turborepo.
+
+| Workspace         | Responsibility                                                                                             |
+| ----------------- | ---------------------------------------------------------------------------------------------------------- |
+| `apps/web`        | React 19 client built with Vite, TanStack Router, Tailwind CSS, React Flow, Radix UI, and Socket.IO Client |
+| `apps/api`        | Fastify HTTP API and Socket.IO real-time server                                                            |
+| `packages/shared` | Shared Zod schemas, event contracts, constants, and TypeScript types                                       |
+| `packages/db`     | Prisma schema, SQLite client, migrations, and operator scripts                                             |
+
+The browser uses HTTP to create and resolve lobby invitations. After a lobby is
+loaded, Socket.IO handles admission, presence, cursor movement, typing state,
+canvas commands, and message history.
+
+Each lobby has an in-memory state managed by the API. Mutations are serialized
+through a per-lobby queue, committed to SQLite, and only then broadcast to
+connected clients. Failed database writes are rejected without applying the
+candidate state. When an empty lobby is released from memory, the next visitor
+reconstructs it from the database.
+
+Prisma manages the `Lobby`, `LobbyBan`, `CanvasNode`, `CanvasMessage`, and
+`CanvasOperation` records. Operation receipts make retried edits idempotent.
+SQLite uses WAL journaling and a busy timeout so committed WAL data is included
+in consistent backups.
+
+### Environment variables
+
+Frontend variables are read from `apps/web/.env` at build and development time.
+
+| Variable                   | Default                 | Purpose                                                     |
+| -------------------------- | ----------------------- | ----------------------------------------------------------- |
+| `VITE_API_MODE`            | `local`                 | Selects `VITE_LOCAL_API_URL` or `VITE_FORWARDED_API_URL`    |
+| `VITE_LOCAL_API_URL`       | `http://localhost:3000` | API origin for local development                            |
+| `VITE_FORWARDED_API_URL`   | none                    | API origin used when `VITE_API_MODE=forwarded`              |
+| `DEV_SERVER_HOST`          | `127.0.0.1`             | Address used by the Vite development server                 |
+| `DEV_SERVER_ALLOWED_HOSTS` | none                    | Comma-separated hostnames allowed by the development server |
+
+API variables are read from `apps/api/.env`. Prisma commands separately read
+`packages/db/.env`, so both files should use the same `DATABASE_URL`.
+
+| Variable                            | Default                           | Purpose                                                           |
+| ----------------------------------- | --------------------------------- | ----------------------------------------------------------------- |
+| `PORT`                              | `3000`                            | API port                                                          |
+| `DATABASE_URL`                      | `file:./prisma/manylatte.db`      | SQLite file URL; relative paths resolve from `packages/db`        |
+| `ALLOWED_ORIGINS`                   | local Vite origins in development | Exact, comma-separated web origins allowed by HTTP and Socket.IO  |
+| `MAX_LOBBIES`                       | `10000`                           | Maximum number of active and archived lobbies                     |
+| `CURSOR_CONNECTION_IDLE_TIMEOUT_MS` | `300000`                          | Idle connection lifetime                                          |
+| `CURSOR_MAX_CONNECTIONS_PER_IP`     | `20`                              | Per-IP concurrent connection limit                                |
+| `CURSOR_MAX_PARTICIPANTS_PER_ROOM`  | `100`                             | Per-lobby participant limit                                       |
+| `CURSOR_MAX_TOTAL_CONNECTIONS`      | `1000`                            | Process-wide connection limit                                     |
+| `SOCKET_MAX_HTTP_BUFFER_BYTES`      | `4096`                            | Maximum Socket.IO payload size                                    |
+| `TRUST_PROXY`                       | `false`                           | Trusted proxy IPs or CIDR ranges used to resolve client addresses |
+
+Frontend API URLs must be exact HTTP or HTTPS origins without credentials,
+paths, queries, or fragments. Production URLs outside the local machine must
+use HTTPS. In production, `ALLOWED_ORIGINS` is required and every origin must
+also use HTTPS.
+
+### Common commands
+
+| Command                   | Description                                     |
+| ------------------------- | ----------------------------------------------- |
+| `npm run dev`             | Start the web and API development servers       |
+| `npm run build`           | Build every workspace                           |
+| `npm test`                | Run unit and integration tests                  |
+| `npm run lint`            | Lint every workspace                            |
+| `npm run format`          | Format the repository with Prettier             |
+| `npm run format:check`    | Check formatting without changing files         |
+| `npm run security:audit`  | Report high-severity dependency vulnerabilities |
+| `npm run db:deploy`       | Apply pending Prisma migrations                 |
+| `npm run db:studio`       | Open Prisma Studio                              |
+| `npm run test:migrations` | Test migration and database recovery paths      |
+
+Create and commit a migration whenever the Prisma schema changes:
+
+```sh
 npm run prisma:migrate --workspace=@app/db -- --name describe_your_change
 ```
 
-Commit new Prisma migrations alongside schema changes. `db:deploy` applies
-pending migrations without resetting the database. The API checks that tables
-exist at startup and reports a setup error if migrations have not been applied.
-Schema/client generation does not apply migrations.
+`db:deploy` applies existing migrations without resetting the database. Prisma
+client generation does not apply migrations, and the API reports a setup error
+at startup when the required tables are missing.
 
-## Deployment and recovery
-
-Run **one API instance**, with its SQLite database on a persistent local volume.
-Set `NODE_ENV=production`, explicit HTTPS `ALLOWED_ORIGINS`, and `DATABASE_URL`
-to that volume's absolute file path. Create the parent directory before startup.
-Configure the frontend's API URL using the variables in `apps/web/.env.example`.
-Deploy migrations before starting `npm start --workspace=@app/api`.
-
-`REDIS_URL` is rejected: broadcasting events between processes does not synchronize
-their authoritative room state. This version does not support multiple API
-instances sharing a database or separate database files.
-
-The API exposes `/healthz` and `/readyz`, uses SQLite WAL journaling with a busy
-timeout, and drains pending room writes on SIGINT/SIGTERM before closing the
-database. Empty rooms release their in-memory state after pending writes finish;
-reconnecting clients reload saved content. Database write failures are logged and
-reported to clients without committing the candidate in-memory state.
-
-Use the included SQLite backup command with an explicit destination:
-
-```sh
-npm run db:ops -- stats
-npm run db:ops -- backup /backups/manylatte-2026-09-08.db
-npm run db:ops -- restore /backups/manylatte-2026-09-08.db /data/restored.db
-```
-
-Set `DATABASE_URL` in the shell or repository-root `.env` when running `db:ops`.
-Backup uses SQLite `VACUUM INTO`, includes committed WAL data, and checks integrity.
-Restore checks integrity and refuses to overwrite an existing file. Stop the API,
-restore to a new path, point `DATABASE_URL` there, run `db:deploy`, verify `/readyz`,
-and reopen an existing lobby before directing traffic to the restored database.
-Keep the original volume until recovery is verified. Schedule backups outside this
-application and regularly run `npm run test:migrations` to exercise recovery.
-
-The generated **`apps/web/dist/_headers`** is the deployment header file. The build
-adds hashes for installed emoji, color, scroll-area and modal styles; deploying the
-unprocessed `public/_headers` blocks those styles. Hosts that ignore `_headers`
-must copy its policies into their server configuration. Script policy remains
-`'self'`. Small font assets stay external to comply with `font-src 'self'`.
-Frontend API URLs must be exact HTTP(S) origins with no credentials, path, query,
-or fragment; builds reject invalid configuration. Production non-loopback APIs
-require HTTPS. `TRUST_PROXY` defaults to `false`; configure only actual proxy
-IP/CIDR ranges, consistently for HTTP and Socket.IO admission.
-
-The API writes aggregate operational logs every minute: room/connection counts,
-pending and peak queue work, command latency, load/write failures, database size,
-free disk space, and heap usage. Lobby invitations and query strings are redacted
-from request logs. `/readyz` combines a database read with a cached write probe
-refreshed every 30 seconds; `/healthz` remains process liveness. Alert on write
-failures, unavailable storage, sustained queue growth and low disk space.
-
-## Lobbies and invites
-
-The home page lets you join a lobby using the shadcn Input OTP field or choose
-**Create lobby** to start one. Codes contain eight random letters and numbers,
-formatted as `AB12-CD34`. Code entry accepts lowercase and pasting with the dash.
-Use **Invite friends** to copy the code or invite link. Friends enter the code
-or open the link, then choose a username to join the same canvas.
-**Leave lobby** returns to the code entry page and disconnects from the canvas.
-There is no public lobby. Refreshing or reopening an invite restores that lobby; names and
-canvas content survive API restarts, including lobbies with no content yet.
-
-Invites use `/?lobby=AB12-CD34`. Lobbies are accessible to anyone with their
-link and collaboratively editable, including deletion. The creator is the lobby's
-single owner and can use **Lobby Users** to kick someone or delegate ownership.
-Delegating immediately removes the previous owner's moderation permissions.
-Ownership survives disconnects and API restarts; leaving does not elect a new owner.
-The browser keeps a private credential for each lobby in local storage. Clearing
-that storage or switching browsers loses that identity; when storage is disabled,
-identity lasts only for the current page. Credentials are never part of invite links.
-Kicking saves a permanent lobby ban for that browser identity, disconnects all of
-its tabs, and blocks rejoining after refresh or API restart. A removal alert returns
-the user to the lobby entry page. Since there are no accounts, clearing browser
-storage or switching browsers creates a different identity and can evade the ban.
-Operators can archive a lobby to disable its invitations. Canvas content and presence are scoped
-to each lobby. Invalid or unknown invites show an error. Creation is limited to
-10 requests per IP per minute.
-
-Run `npm run db:deploy` before starting the updated API to add lobby ownership.
-Lobbies created before ownership was introduced have no verifiable creator and
-remain without moderation permissions; visitors cannot claim them.
-Existing lobbies receive a code and retain their content and original invite
-links. Old public canvas data is preserved in archived legacy lobbies.
-
-## Checks
-
-```sh
-npm test
-npm run build
-npm run lint
-npm run format:check
-npm run security:audit
-```
-
-Tests include real SQLite persistence, write-failure rollback, ordered messages,
-deletion cascades, polling clients, and API restart recovery. Test task hashes
-include dependency builds so shared-contract changes invalidate consumer tests.
-
-## Editing, identity and retention
-
-Open the canvas context menu to add a message or reaction.
-Arrow keys move focused nodes; Enter selects them; Delete/Backspace deletes selected
-nodes. Group moves and deletion synchronize with other participants. Creation
-positions are constrained to the board. Editing waits for the initial snapshot;
-offline writes are rejected instead of buffered. Text remains in the composer on
-failure. The first message and its thread save atomically, and retries reuse the
-same operation ID. Reconnects reload authoritative state after API restarts or
-temporary admission failures; **Reconnect** is also available manually.
-
-User identity is intentionally **connection-scoped**. There are no verified
-accounts: names and colors are display preferences, stored on this device. A new
-connection receives a new user ID; saved messages retain the author recorded when
-sent and may appear as another participant's messages after reconnecting. This
-is not an ownership or authentication mechanism.
-
-Snapshots contain one message preview per thread; opening a thread loads 50
-messages, and **Load older messages** retrieves earlier pages. New content is
-limited to 500 nodes per lobby, 200 messages per thread, 2,000 messages and 2 MiB
-of UTF-8 message text per lobby. Existing content is preserved by migrations;
-a lobby already above a limit must remove content before adding more. Persistent
-work is bounded to 64 queued operations per room and 512 globally. Browser edits
-are paced and movement updates are coalesced.
-
-`MAX_LOBBIES` defaults to 10,000, including archived lobbies. No canvas content is
-automatically erased. Operators review unused lobbies and apply their retention
-policy explicitly:
-
-```sh
-npm run db:ops -- list
-# Stop the API before changing stored lifecycle state.
-npm run db:ops -- archive LOBBY_ID --offline
-# Permanent removal requires the lobby to have been archived first.
-npm run db:ops -- delete LOBBY_ID --offline
-npm run db:ops -- prune-receipts --offline
-```
-
-Deletion cascades to nodes, messages, and operation receipts. Receipt pruning
-removes only confirmations older than seven days, bounding the guaranteed retry
-window to at least seven days when pruning is scheduled. Back up first and keep
-backups according to the same retention policy. `list` returns the oldest 1,000
-lobbies for review. The unused historical `User` table is deliberately preserved
-so this audit does not erase pre-existing data.
-
-## Browser and migration regression checks
+### Browser tests
 
 ```sh
 npm run build
-npm run test:migrations
 npx playwright install chromium
 npm run test:e2e --workspace=@app/web
 ```
 
-Browser tests use temporary SQLite data and the production CSP, covering two-client
-editing, failure-preserved drafts, restart recovery, keyboard synchronization,
-pickers and a 320px join screen. The test server binds only to loopback; never
-serve `apps/web/e2e/server.mjs` in production. Run the checks locally before merging.
-No CI workflow or deployment is included in this change. See [AUDIT.md](AUDIT.md)
-for the original findings and their implementation status.
+The browser suite uses temporary SQLite databases and the production Content
+Security Policy. It covers collaborative editing between two clients, keyboard
+movement, pickers, preserved drafts after failures, API restart recovery,
+moderation, and the mobile join screen.
+
+## Production deployment
+
+Build the web client, deploy the database migrations, and run one API process:
+
+```sh
+npm run build
+npm run db:deploy
+npm start --workspace=@app/api
+```
+
+Serve `apps/web/dist` from a static host and place the SQLite database on a
+persistent local volume. Set `NODE_ENV=production`, configure explicit HTTPS
+origins in `ALLOWED_ORIGINS`, and use an absolute `DATABASE_URL` for the mounted
+volume. Create the database's parent directory before starting the API.
+
+This version supports exactly one API instance. `REDIS_URL` is rejected because
+cross-process broadcasting would not synchronize the authoritative in-memory
+lobby state. Do not place multiple API processes in front of the same database
+or give separate processes different database files.
+
+The web build generates `apps/web/dist/_headers` with the Content Security
+Policy hashes required by installed UI styles. Deploy that generated file with
+the site. If the static host ignores `_headers`, reproduce those policies in its
+server configuration.
+
+Use `/healthz` for process liveness and `/readyz` for database and storage
+readiness. The API also logs aggregate operational metrics every minute,
+including connections, rooms, queued work, command latency, database failures,
+database size, free disk space, and heap use.
+
+## Backups and lobby retention
+
+Set `DATABASE_URL` in the shell or a repository-root `.env` before using the
+operator script.
+
+```sh
+npm run db:ops -- stats
+npm run db:ops -- backup /backups/manylatte-2026-09-13.db
+npm run db:ops -- restore /backups/manylatte-2026-09-13.db /data/restored.db
+```
+
+Backup uses SQLite `VACUUM INTO` and verifies database integrity. Restore also
+checks integrity and refuses to overwrite an existing file. For recovery, stop
+the API, restore to a new path, point `DATABASE_URL` to it, apply migrations,
+verify `/readyz`, and open an existing lobby before sending production traffic
+to the restored database.
+
+Canvas content is not deleted automatically. Review and manage old lobbies with:
+
+```sh
+npm run db:ops -- list
+npm run db:ops -- archive LOBBY_ID --offline
+npm run db:ops -- delete LOBBY_ID --offline
+npm run db:ops -- prune-receipts --offline
+```
+
+Stop the API before running lifecycle commands. A lobby must be archived before
+it can be permanently deleted. Deletion cascades to its nodes, messages, bans,
+and operation receipts. Receipt pruning removes confirmations older than seven
+days, so schedule it only with that retry guarantee in mind.
+
+## Application limits
+
+The API enforces the following defaults to keep a lobby's persisted and queued
+work bounded:
+
+- 500 canvas nodes per lobby
+- 200 messages per thread
+- 2,000 messages per lobby
+- 2 MiB of message text per lobby
+- 1,000 characters per message
+- 64 queued persistent operations per lobby and 512 globally
+- 10 lobby creation requests per IP per minute
+
+Existing content is preserved if a migration introduces a lower limit. A lobby
+already above a limit must remove content before adding more.
