@@ -16,7 +16,7 @@ and can customize their cursor color.
 - Emoji reactions that can be moved, changed, or removed
 - Persistent canvas content and lobby ownership
 - Owner controls for removing participants and transferring ownership
-- Light, dark, and system appearance settings
+- Device settings for appearance, canvas behavior, and cursor visibility
 - Responsive UI with keyboard-accessible canvas editing
 
 ## Using the application
@@ -63,6 +63,9 @@ Open the user menu in the upper-right corner to:
 - See everyone currently connected
 - Change your username and cursor color
 - Switch between system, light, and dark appearance
+- Show or hide the canvas grid, snap items to it, and choose whether the mouse
+  wheel pans or zooms
+- Adjust the opacity of other participants' cursors
 - Create another lobby or leave the current one
 
 Anyone with the invite can join, view, edit, move, and delete canvas content.
@@ -77,8 +80,9 @@ controls.
 ### Identity and saved data
 
 ManyLatte does not use user accounts. Your browser stores a private identity for
-each lobby. It also stores your preferred name, color, and appearance on that
-device. Invite links never include the private lobby credential.
+each lobby. It also stores your preferred name, color, appearance, canvas
+behavior, and cursor visibility on that device. Invite links never include the
+private lobby credential.
 
 Clearing browser storage or using another browser creates a new identity. This
 means a lobby ban can also be bypassed in the same way. Cursor sessions are

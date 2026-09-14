@@ -3,6 +3,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { AppearanceProvider } from './components/appearance-provider';
+import { UserPreferencesProvider } from './components/user-preferences-provider';
 import { routeTree } from './routeTree.gen';
 import './index.css';
 
@@ -25,7 +26,9 @@ if (!rootElement) {
 createRoot(rootElement).render(
   <StrictMode>
     <AppearanceProvider>
-      <RouterProvider router={router} />
+      <UserPreferencesProvider>
+        <RouterProvider router={router} />
+      </UserPreferencesProvider>
     </AppearanceProvider>
   </StrictMode>,
 );

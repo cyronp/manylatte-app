@@ -1,7 +1,11 @@
 import { CANVAS_HEIGHT, CANVAS_WIDTH } from '@app/shared';
 import { ViewportPortal } from '@xyflow/react';
 
-export const CanvasSurface = () => (
+interface CanvasSurfaceProps {
+  showGrid: boolean;
+}
+
+export const CanvasSurface = ({ showGrid }: CanvasSurfaceProps) => (
   <ViewportPortal>
     <div
       aria-hidden="true"
@@ -9,8 +13,9 @@ export const CanvasSurface = () => (
       data-canvas-height={CANVAS_HEIGHT}
       data-canvas-width={CANVAS_WIDTH}
       style={{
-        backgroundImage:
-          'radial-gradient(circle, var(--canvas-grid) 1.5px, transparent 1.5px)',
+        backgroundImage: showGrid
+          ? 'radial-gradient(circle, var(--canvas-grid) 1.5px, transparent 1.5px)'
+          : 'none',
         backgroundSize: '32px 32px',
         boxShadow:
           'inset 0 0 96px var(--canvas-edge-shadow), 0 24px 80px var(--canvas-shadow)',
