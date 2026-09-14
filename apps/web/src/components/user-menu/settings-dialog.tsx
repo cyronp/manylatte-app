@@ -1,7 +1,11 @@
-import { GearIcon } from '@phosphor-icons/react';
+import { CursorIcon, GearIcon, GridFourIcon } from '@phosphor-icons/react';
+import { useState, type ComponentType } from 'react';
 
 import { useAppearance } from '@/components/appearance-provider';
+import { useUserPreferences } from '@/components/user-preferences-provider';
 import type { Appearance } from '@/lib/appearance-storage';
+import type { MouseWheelBehavior } from '@/lib/user-preferences-storage';
+import { cn } from '@/lib/utils';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { ScrollArea } from '../ui/scroll-area';
@@ -13,6 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../ui/select';
+import { Slider } from '../ui/slider';
+import { Switch } from '../ui/switch';
 
 interface SettingsDialogProps {
   onOpenChange: (open: boolean) => void;
@@ -21,6 +27,18 @@ interface SettingsDialogProps {
 
 export function SettingsDialog({ onOpenChange, open }: SettingsDialogProps) {
   const { appearance, setAppearance } = useAppearance();
+  const {
+    mouseWheelBehavior,
+    remoteCursorOpacity,
+    setMouseWheelBehavior,
+    setRemoteCursorOpacity,
+    setShowGrid,
+    setSnapToGrid,
+    showGrid,
+    snapToGrid,
+  } = useUserPreferences();
+  const [activeSection, setActiveSection] =
+    useState<SettingsSection>('general');
 
   const handleAppearanceChange = (nextAppearance: Appearance) => {
     setAppearance(nextAppearance);
@@ -36,25 +54,35 @@ export function SettingsDialog({ onOpenChange, open }: SettingsDialogProps) {
         <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
           <nav
             aria-label="Settings sections"
-            className="shrink-0 border-b bg-muted/30 p-2 sm:w-52 sm:border-r sm:border-b-0 sm:p-3"
+            className="flex shrink-0 gap-1 overflow-x-auto border-b bg-muted/30 p-2 sm:w-52 sm:flex-col sm:border-r sm:border-b-0 sm:p-3"
           >
-            <div
-              aria-current="page"
-              className="flex h-9 w-full items-center gap-2 rounded-lg bg-muted px-3 text-left text-sm font-medium text-foreground"
-            >
-              <GearIcon className="size-4" weight="fill" />
-              General
-            </div>
+            {SETTINGS_SECTIONS.map((section) => (
+              <button
+                aria-current={activeSection === section.id ? 'page' : undefined}
+                className={cn(
+                  'flex h-9 shrink-0 items-center gap-2 rounded-lg px-3 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:w-full',
+                  activeSection === section.id &&
+                    'bg-muted text-foreground hover:bg-muted',
+                )}
+                key={section.id}
+                onClick={() => setActiveSection(section.id)}
+                type="button"
+              >
+                <section.icon
+                  className="size-4"
+                  weight={activeSection === section.id ? 'fill' : 'regular'}
+                />
+                {section.label}
+              </button>
+            ))}
           </nav>
 
           <ScrollArea className="min-h-0 w-full flex-1">
-            <section className="w-full px-5 py-6 sm:px-8 sm:py-8">
-              <SettingsHeading
+            {activeSection === 'general' && (
+              <SettingsSectionContent
                 description="Choose how ManyLatte looks and feels on this device."
                 title="General"
-              />
-
-              <div className="mt-7 w-full divide-y">
+              >
                 <SettingsRow
                   description="Use your device setting or choose a theme."
                   label="Appearance"
@@ -77,12 +105,131 @@ export function SettingsDialog({ onOpenChange, open }: SettingsDialogProps) {
                     </SelectContent>
                   </Select>
                 </SettingsRow>
-              </div>
-            </section>
+              </SettingsSectionContent>
+            )}
+
+            {activeSection === 'canvas' && (
+              <SettingsSectionContent
+                description="Adjust how the shared canvas behaves on this device."
+                title="Canvas"
+              >
+                <SettingsRow
+                  description="Display the dotted grid behind canvas items."
+                  label="Show grid"
+                >
+                  <Switch
+                    aria-label="Show grid"
+                    checked={showGrid}
+                    onCheckedChange={setShowGrid}
+                  />
+                </SettingsRow>
+                <SettingsRow
+                  description="Align items to the 32 pixel grid when placing or moving them."
+                  label="Snap items to grid"
+                >
+                  <Switch
+                    aria-label="Snap items to grid"
+                    checked={snapToGrid}
+                    onCheckedChange={setSnapToGrid}
+                  />
+                </SettingsRow>
+                <SettingsRow
+                  description="Choose what happens when you scroll over the canvas."
+                  label="Mouse wheel behavior"
+                >
+                  <Select
+                    onValueChange={(value) =>
+                      setMouseWheelBehavior(value as MouseWheelBehavior)
+                    }
+                    value={mouseWheelBehavior}
+                  >
+                    <SelectTrigger
+                      aria-label="Mouse wheel behavior"
+                      className="w-32"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value="pan">Pan</SelectItem>
+                        <SelectItem value="zoom">Zoom</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </SettingsRow>
+              </SettingsSectionContent>
+            )}
+
+            {activeSection === 'presence' && (
+              <SettingsSectionContent
+                description="Control how other participants appear on this device."
+                title="Presence"
+              >
+                <SettingsRow
+                  description="Set the visibility of other users' cursors and names."
+                  label="Other cursors opacity"
+                >
+                  <div className="flex w-44 items-center gap-3">
+                    <Slider
+                      aria-label="Other cursors opacity"
+                      max={100}
+                      min={0}
+                      onValueChange={(values) =>
+                        setRemoteCursorOpacity(values[0] ?? 100)
+                      }
+                      step={10}
+                      value={[remoteCursorOpacity]}
+                    />
+                    <output
+                      aria-live="polite"
+                      className="w-10 text-right text-sm tabular-nums text-muted-foreground"
+                    >
+                      {remoteCursorOpacity}%
+                    </output>
+                  </div>
+                </SettingsRow>
+              </SettingsSectionContent>
+            )}
           </ScrollArea>
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+type SettingsSection = 'general' | 'canvas' | 'presence';
+
+interface SettingsSectionDefinition {
+  icon: ComponentType<{
+    className?: string;
+    weight?: 'fill' | 'regular';
+  }>;
+  id: SettingsSection;
+  label: string;
+}
+
+const SETTINGS_SECTIONS: SettingsSectionDefinition[] = [
+  { icon: GearIcon, id: 'general', label: 'General' },
+  { icon: GridFourIcon, id: 'canvas', label: 'Canvas' },
+  { icon: CursorIcon, id: 'presence', label: 'Presence' },
+];
+
+interface SettingsSectionContentProps {
+  children: React.ReactNode;
+  description: string;
+  title: string;
+}
+
+function SettingsSectionContent({
+  children,
+  description,
+  title,
+}: SettingsSectionContentProps) {
+  return (
+    <section className="w-full px-5 py-6 sm:px-8 sm:py-8">
+      <SettingsHeading description={description} title={title} />
+      <div className="mt-7 w-full divide-y">{children}</div>
+    </section>
   );
 }
 

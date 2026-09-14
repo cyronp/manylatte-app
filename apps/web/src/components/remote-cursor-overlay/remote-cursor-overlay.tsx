@@ -6,6 +6,7 @@ import { RemoteCursor, type SurfaceSize } from '../remote-cursor';
 
 interface RemoteCursorOverlayProps {
   cursors: RemoteCursorView[];
+  opacity: number;
   projectPosition: (position: XYPosition) => XYPosition;
 }
 
@@ -16,6 +17,7 @@ interface SurfaceBounds extends SurfaceSize {
 
 export const RemoteCursorOverlay = ({
   cursors,
+  opacity,
   projectPosition,
 }: RemoteCursorOverlayProps) => {
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -55,6 +57,7 @@ export const RemoteCursorOverlay = ({
       ref={overlayRef}
       aria-hidden="true"
       className="pointer-events-none absolute inset-0 z-50 overflow-hidden"
+      style={{ opacity }}
     >
       {surfaceBounds.width > 0 &&
         surfaceBounds.height > 0 &&

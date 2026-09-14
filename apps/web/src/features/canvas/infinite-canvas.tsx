@@ -9,12 +9,14 @@ import {
   ReactFlow,
   type CoordinateExtent,
   type ReactFlowInstance,
+  type SnapGrid,
   type XYPosition,
   useReactFlow,
 } from '@xyflow/react';
 import { useCallback, useRef, useState } from 'react';
 
 import { useSocket } from '@/components/socket-provider';
+import { useUserPreferences } from '@/components/user-preferences-provider';
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 
 import { CanvasContextMenu } from './components/canvas-context-menu';
@@ -30,6 +32,7 @@ import { MessageCanvasNode } from './components/message-canvas-node';
 
 const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 2;
+const CANVAS_SNAP_GRID: SnapGrid = [32, 32];
 
 const CANVAS_EXTENT: CoordinateExtent = [
   [0, 0],
@@ -55,6 +58,7 @@ import { Button } from '@/components/ui/button';
 
 export const InfiniteCanvas = () => {
   const { execute, status, error, retryConnect } = useSocket();
+  const { mouseWheelBehavior, showGrid, snapToGrid } = useUserPreferences();
   const { screenToFlowPosition } = useReactFlow();
   const { nodes, setNodes, onNodesChange } = useCanvasSync();
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
@@ -76,7 +80,10 @@ export const InfiniteCanvas = () => {
       }
 
       const position = constrainCursorPosition(
-        screenToFlowPosition(contextMenuPosition),
+        screenToFlowPosition(contextMenuPosition, {
+          snapGrid: CANVAS_SNAP_GRID,
+          snapToGrid,
+        }),
       );
       if (!position) return;
 
@@ -96,7 +103,7 @@ export const InfiniteCanvas = () => {
       });
       setEmojiPickerOpen(false);
     },
-    [contextMenuPosition, screenToFlowPosition, execute],
+    [contextMenuPosition, screenToFlowPosition, execute, snapToGrid],
   );
 
   const handleReactionSelect = useCallback(() => {
@@ -141,10 +148,15 @@ export const InfiniteCanvas = () => {
       return;
     }
 
-    pendingMessageDraftPositionRef.current =
-      screenToFlowPosition(contextMenuPosition);
+    pendingMessageDraftPositionRef.current = screenToFlowPosition(
+      contextMenuPosition,
+      {
+        snapGrid: CANVAS_SNAP_GRID,
+        snapToGrid,
+      },
+    );
     setContextMenuOpen(false);
-  }, [contextMenuPosition, screenToFlowPosition]);
+  }, [contextMenuPosition, screenToFlowPosition, snapToGrid]);
 
   const handleEmojiPickerClose = useCallback(() => {
     setEmojiPickerOpen(false);
@@ -192,14 +204,16 @@ export const InfiniteCanvas = () => {
               onNodesChange={onNodesChange}
               panActivationKeyCode="Space"
               panOnDrag={[1]}
-              panOnScroll
+              panOnScroll={mouseWheelBehavior === 'pan'}
               proOptions={{ hideAttribution: true }}
+              snapGrid={CANVAS_SNAP_GRID}
+              snapToGrid={snapToGrid}
               translateExtent={CANVAS_EXTENT}
               zoomActivationKeyCode="Control"
               zoomOnDoubleClick={false}
-              zoomOnScroll={false}
+              zoomOnScroll={mouseWheelBehavior === 'zoom'}
             >
-              <CanvasSurface />
+              <CanvasSurface showGrid={showGrid} />
             </ReactFlow>
             <CanvasControls />
           </div>

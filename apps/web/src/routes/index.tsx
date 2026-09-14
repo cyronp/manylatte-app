@@ -4,6 +4,7 @@ import { useCallback, useRef } from 'react';
 
 import { RemoteCursorOverlay } from '../components/remote-cursor-overlay';
 import { useSocket } from '../components/socket-provider';
+import { useUserPreferences } from '../components/user-preferences-provider';
 import { InfiniteCanvas } from '../features/canvas/infinite-canvas';
 import { constrainCursorPosition } from '../features/cursors/cursor-position';
 import { useRemoteCursors } from '../features/cursors/use-remote-cursors';
@@ -36,6 +37,7 @@ function CanvasPage() {
   );
   const cursors = useRemoteCursors(surfaceRef, projectCursorPosition);
   const { error, status } = useSocket();
+  const { remoteCursorOpacity } = useUserPreferences();
 
   return (
     <main
@@ -70,6 +72,7 @@ function CanvasPage() {
 
       <RemoteCursorOverlay
         cursors={cursors}
+        opacity={remoteCursorOpacity / 100}
         projectPosition={projectRemotePosition}
       />
     </main>
