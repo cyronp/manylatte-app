@@ -31,7 +31,7 @@ function RootLayout() {
 
   return (
     <TooltipProvider>
-      <Toaster position="bottom-center" duration={3000} closeButton />
+      <Toaster position="bottom-left" duration={3000} />
       {roomId === undefined ? (
         <JoinLobbyPage />
       ) : !username ? (
