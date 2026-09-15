@@ -17,19 +17,21 @@ const rejection = (
   operationId,
   code: reason.includes('limit')
     ? 'limit'
-    : reason.includes('exists')
+    : reason.includes('exists') || reason === 'thread-changed'
       ? 'conflict'
       : 'missing',
   message:
-    reason === 'message-limit'
-      ? 'This conversation is full (200 messages). Start another conversation.'
-      : reason === 'node-limit'
-        ? 'This board is full. Remove an item before adding another.'
-        : reason === 'room-limit'
-          ? 'This board has reached its message storage limit.'
-          : reason.includes('exists')
-            ? 'This item already exists. Refresh the board before trying again.'
-            : 'This item no longer exists. Your message has not been sent.',
+    reason === 'thread-changed'
+      ? 'Cannot undo this insertion because the conversation has received replies.'
+      : reason === 'message-limit'
+        ? 'This conversation is full (200 messages). Start another conversation.'
+        : reason === 'node-limit'
+          ? 'This board is full. Remove an item before adding another.'
+          : reason === 'room-limit'
+            ? 'This board has reached its message storage limit.'
+            : reason.includes('exists')
+              ? 'This item already exists. Refresh the board before trying again.'
+              : 'This item no longer exists. Your message has not been sent.',
 });
 
 export function prepareCommand(

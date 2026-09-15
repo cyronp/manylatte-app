@@ -53,10 +53,12 @@ const NODE_TYPES = {
 };
 
 import { useCanvasSync, type FlowCanvasNode } from './use-canvas-sync';
+import { useInsertionShortcuts } from './use-insertion-shortcuts';
 import { constrainCursorPosition } from '../cursors/cursor-position';
 import { Button } from '@/components/ui/button';
 
 export const InfiniteCanvas = () => {
+  useInsertionShortcuts();
   const { execute, status, error, retryConnect } = useSocket();
   const { mouseWheelBehavior, showGrid, snapToGrid } = useUserPreferences();
   const { screenToFlowPosition } = useReactFlow();

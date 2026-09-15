@@ -25,6 +25,110 @@ async function openCanvasMenu(page: Page) {
   });
 }
 
+test('Ctrl+Z and Ctrl+Y undo and restore only this participant’s node insertions', async ({
+  browser,
+  request,
+}) => {
+  const response = await request.post('http://127.0.0.1:3000/lobbies', {
+    data: { name: 'Insertion history' },
+  });
+  const lobby = await response.json();
+  const first = await browser.newPage();
+  const second = await browser.newPage();
+  try {
+    await join(first, lobby.code, 'Alice');
+    await join(second, lobby.code, 'Bob');
+    await openCanvasMenu(first);
+    await first.getByRole('menuitem', { name: 'Reaction' }).click();
+    await expect(first.locator('.EmojiPickerReact')).toBeVisible();
+    await first.locator('.EmojiPickerReact button.epr-emoji').first().click();
+    const reactions = (page: Page) => page.locator('.react-flow__node-emoji');
+    await expect(reactions(second)).toHaveCount(1);
+    const reactionId = await reactions(first).getAttribute('data-id');
+    const reactionPosition = await reactions(first).evaluate(
+      (node) => (node as HTMLElement).style.transform,
+    );
+    // A peer's insertion never enters Bob's undo history.
+    await second.keyboard.press('Control+z');
+    await expect(reactions(second)).toHaveCount(1);
+    await first
+      .locator('.react-flow__pane')
+      .click({ position: { x: 100, y: 100 } });
+    await first.keyboard.press('Control+z');
+    await expect(reactions(first)).toHaveCount(0);
+    await expect(reactions(second)).toHaveCount(0);
+    await first.keyboard.press('Control+y');
+    await expect(reactions(second)).toHaveCount(1);
+    await expect(reactions(first)).toHaveAttribute('data-id', reactionId!);
+    expect(
+      await reactions(first).evaluate(
+        (node) => (node as HTMLElement).style.transform,
+      ),
+    ).toBe(reactionPosition);
+
+    await openCanvasMenu(first);
+    await first.getByRole('menuitem', { name: 'Message' }).click();
+    await first
+      .getByRole('textbox', { name: 'First message', exact: true })
+      .fill('Restore this message');
+    // Text undo must not remove the previously inserted reaction.
+    await first.keyboard.press('Control+z');
+    await expect(reactions(second)).toHaveCount(1);
+    await first
+      .getByRole('textbox', { name: 'First message', exact: true })
+      .fill('Restore this message');
+    await first
+      .getByRole('button', { name: 'Create message', exact: true })
+      .click();
+    const messages = (page: Page) => page.locator('.react-flow__node-message');
+    await expect(messages(second)).toHaveCount(1);
+    const messageId = await messages(first).getAttribute('data-id');
+    await first
+      .locator('.react-flow__pane')
+      .click({ position: { x: 100, y: 100 } });
+    await first.keyboard.press('Control+z');
+    await expect(messages(second)).toHaveCount(0);
+    await expect(reactions(second)).toHaveCount(1);
+    await first.keyboard.press('Control+y');
+    await expect(messages(second)).toHaveCount(1);
+    await expect(messages(first)).toHaveAttribute('data-id', messageId!);
+    await second
+      .getByRole('button', { name: 'Open messages', exact: true })
+      .click();
+    await expect(
+      second.getByText('Restore this message', { exact: true }).last(),
+    ).toBeVisible();
+    await second
+      .getByRole('textbox', { name: 'Message', exact: true })
+      .fill('Reply stays safe');
+    await second
+      .getByRole('button', { name: 'Send message', exact: true })
+      .click();
+    await expect(
+      second.getByRole('textbox', { name: 'Message', exact: true }),
+    ).toHaveValue('');
+    await first.keyboard.press('Control+z');
+    await expect(first.getByRole('alert')).toHaveText(
+      /conversation has received replies/,
+    );
+    await expect(messages(second)).toHaveCount(1);
+    await second.reload();
+    await expect(messages(second)).toHaveCount(1);
+    await second
+      .getByRole('button', { name: 'Open messages', exact: true })
+      .click();
+    await expect(
+      second.getByText('Reply stays safe', { exact: true }).last(),
+    ).toBeVisible();
+    await expect(
+      second.getByText('Restore this message', { exact: true }).last(),
+    ).toBeVisible();
+  } finally {
+    await first.close();
+    await second.close();
+  }
+});
+
 test('starts centered and provides canvas zoom controls', async ({
   page,
   request,

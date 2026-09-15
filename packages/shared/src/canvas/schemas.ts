@@ -102,6 +102,8 @@ export const canvasNodeMutationSchema = z.discriminatedUnion('action', [
   z.strictObject({
     action: z.literal('delete'),
     nodeId: z.uuidv4(),
+    // Insertion undo may only remove the original, unreplied-to thread.
+    expectedMessageId: z.uuidv4().optional(),
   }),
   z.strictObject({
     action: z.literal('create'),

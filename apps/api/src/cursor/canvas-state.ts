@@ -19,6 +19,7 @@ export type CanvasMutationResult =
         | 'node-already-exists'
         | 'node-limit'
         | 'node-missing'
+        | 'thread-changed'
         | 'not-emoji-node';
       status: 'rejected';
     };
@@ -78,6 +79,16 @@ export class CanvasState {
     user: CursorUser,
   ): CanvasMutationResult {
     if (mutation.action === 'delete') {
+      if (mutation.expectedMessageId) {
+        const node = this.#nodes.get(mutation.nodeId);
+        if (
+          node &&
+          (node.type !== 'message' ||
+            (node.data.messageCount ?? node.data.messages.length) !== 1 ||
+            node.data.messages[0]?.id !== mutation.expectedMessageId)
+        )
+          return { reason: 'thread-changed', status: 'rejected' };
+      }
       this.#nodes.delete(mutation.nodeId);
       return { nodeId: mutation.nodeId, status: 'deleted' };
     }

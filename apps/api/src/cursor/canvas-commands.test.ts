@@ -137,3 +137,81 @@ it('bounds outstanding work and releases capacity after stalled storage resumes'
     await database.$disconnect();
   }
 });
+
+it('persists insertion undo/redo and rejects undo after a concurrent reply', async () => {
+  const database = await createTestDatabase();
+  await database.lobby.create({
+    data: { id: 'room', code: 'TEST-0001', name: 'Test' },
+  });
+  try {
+    const persistence = createCanvasPersistence(database);
+    const canvas = new PersistentCanvas('room', persistence);
+    const insert = thread();
+    if (insert.body.type !== 'thread') throw new Error('Expected thread');
+    const { nodeId, message } = insert.body;
+    const undo: CanvasCommand = {
+      id: randomUUID(),
+      body: {
+        type: 'mutation',
+        mutation: {
+          action: 'delete',
+          nodeId,
+          expectedMessageId: message.id,
+        },
+      },
+    };
+    await canvas.execute(insert, user);
+    const commit = vi.spyOn(persistence, 'commit');
+    commit.mockRejectedValueOnce(new Error('Disk unavailable'));
+    await expect(canvas.execute(undo, user)).rejects.toThrow(
+      'Disk unavailable',
+    );
+    expect(await canvas.snapshot()).toHaveLength(1);
+    expect(await database.canvasMessage.count()).toBe(1);
+    expect(await canvas.execute(undo, user)).toMatchObject({
+      result: { ok: true },
+    });
+    expect(await canvas.snapshot()).toEqual([]);
+    expect(await database.canvasMessage.count()).toBe(0);
+    const reloaded = new PersistentCanvas('room', persistence);
+    expect(await reloaded.execute(undo, user)).toMatchObject({
+      replayed: true,
+    });
+    expect(await reloaded.snapshot()).toEqual([]);
+    const redo = { ...insert, id: randomUUID() };
+    expect(await reloaded.execute(redo, user)).toMatchObject({
+      result: { ok: true },
+    });
+    expect(await reloaded.history({ nodeId })).toMatchObject({
+      messages: [message],
+    });
+    expect(await reloaded.execute(redo, user)).toMatchObject({
+      replayed: true,
+    });
+    expect(await database.canvasMessage.count()).toBe(1);
+
+    // The room queue must see the reply before evaluating the guarded delete.
+    const reply: CanvasCommand = {
+      id: randomUUID(),
+      body: {
+        type: 'message',
+        input: { nodeId, id: randomUUID(), text: 'Keep this reply' },
+      },
+    };
+    const [, rejected] = await Promise.all([
+      reloaded.execute(reply, {
+        ...user,
+        userId: randomUUID(),
+        username: 'Bob',
+      }),
+      reloaded.execute({ ...undo, id: randomUUID() }, user),
+    ]);
+    expect(rejected).toMatchObject({ result: { ok: false, code: 'conflict' } });
+    expect(await database.canvasMessage.count()).toBe(2);
+    expect(
+      await new PersistentCanvas('room', persistence).snapshot(),
+    ).toMatchObject([{ id: nodeId, data: { messageCount: 2 } }]);
+  } finally {
+    await database.$disconnect();
+  }
+});

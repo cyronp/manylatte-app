@@ -47,6 +47,14 @@ Drag a saved node to reposition it. Select one or more nodes and press
 to remove a thread, remove a reaction, or change a reaction's emoji. Changes
 appear for everyone in the lobby after they have been saved.
 
+Press `Ctrl+Z` to undo your most recent node insertion and `Ctrl+Y` to redo it
+(`Cmd+Z` and `Cmd+Shift+Z` also work on Mac). History covers your last 100 saved
+reaction and message-thread insertions in this lobby session and resets when
+you reload or leave. Redo restores the node with the same content and position;
+inserting a new node clears redo history. These shortcuts keep their normal
+text-editing behavior inside inputs. A thread that has received replies cannot
+be undone, to protect the conversation.
+
 Use the controls in the lower-right corner to zoom. You can pan around the
 canvas with scroll gestures or by holding `Space` while dragging. Arrow keys
 move focused nodes, and `Enter` selects a focused node.

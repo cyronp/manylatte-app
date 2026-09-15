@@ -6,6 +6,8 @@ import {
   lobbyOwnershipSchema,
   type CursorUser,
   type CanvasCommandBody,
+  type CanvasCommand,
+  type CanvasChange,
   type CanvasCommandResult,
 } from '@app/shared';
 import {
@@ -26,6 +28,7 @@ import {
   type SocketStatus,
 } from '../../lib/socket-lifecycle';
 import { createCommandQueue } from '../../lib/canvas-commands';
+import { createCanvasInsertionHistory } from '../../lib/canvas-insertion-history';
 import { LobbyKickedDialog } from '../../features/lobby/lobby-kicked-dialog';
 export type { SocketStatus } from '../../lib/socket-lifecycle';
 
@@ -39,6 +42,8 @@ interface SocketContextValue {
     operationId?: string,
   ) => Promise<CanvasCommandResult>;
   retryConnect: () => void;
+  undoInsertion: () => Promise<CanvasCommandResult | undefined>;
+  redoInsertion: () => Promise<CanvasCommandResult | undefined>;
   setUserColor: (color: string) => void;
   socket: CursorSocket;
   status: SocketStatus;
@@ -69,19 +74,22 @@ export const SocketProvider = ({
   );
   const retryRef = useRef<() => void>(() => socket.connect());
   const retryConnect = useCallback(() => retryRef.current(), []);
-  const execute = useCallback(
-    async (
-      body: CanvasCommandBody,
-      operationId: string = crypto.randomUUID(),
-    ) => {
-      const result = await commands.send({
-        id: operationId,
-        body,
-      });
+  const sendCommand = useCallback(
+    async (command: CanvasCommand) => {
+      const result = await commands.send(command);
       setError(result.ok ? undefined : result.message);
       return result;
     },
     [commands],
+  );
+  const history = useMemo(
+    () => createCanvasInsertionHistory(sendCommand),
+    [sendCommand],
+  );
+  const execute = useCallback(
+    (body: CanvasCommandBody, operationId: string = crypto.randomUUID()) =>
+      history.execute({ id: operationId, body }),
+    [history],
   );
   const [status, setStatus] = useState<SocketStatus>('connecting');
   const [error, setError] = useState<string>();
@@ -150,12 +158,17 @@ export const SocketProvider = ({
     setOwnerId(null);
 
     const handleDisconnect = () => {
+      history.disconnect();
       setOwnerId(null);
       setUser(undefined);
       setUsers([]);
     };
     const handleCanvasError = ({ message }: { message: string }) =>
       setError(message);
+    const handleSnapshot: Parameters<
+      typeof socket.on<'canvas:snapshot'>
+    >[1] = ({ nodes }) => history.snapshot(nodes.map(({ id }) => id));
+    const handleChange = (change: CanvasChange) => history.change(change);
     const handleSession: Parameters<typeof socket.on<'cursor:session'>>[1] = (
       session,
     ) => {
@@ -211,6 +224,8 @@ export const SocketProvider = ({
     };
     socket.on('lobby:ownership', handleOwnership);
     socket.on(CANVAS_EVENTS.error, handleCanvasError);
+    socket.on(CANVAS_EVENTS.snapshot, handleSnapshot);
+    socket.on(CANVAS_EVENTS.change, handleChange);
     socket.on('disconnect', handleDisconnect);
     socket.on(CURSOR_EVENTS.session, handleSession);
     socket.on(CURSOR_EVENTS.presence, handlePresence);
@@ -218,9 +233,12 @@ export const SocketProvider = ({
     socket.connect();
 
     return () => {
+      history.disconnect();
       lifecycle.dispose();
       socket.off('lobby:ownership', handleOwnership);
       socket.off(CANVAS_EVENTS.error, handleCanvasError);
+      socket.off(CANVAS_EVENTS.snapshot, handleSnapshot);
+      socket.off(CANVAS_EVENTS.change, handleChange);
       socket.off('disconnect', handleDisconnect);
       socket.off(CURSOR_EVENTS.session, handleSession);
       socket.off(CURSOR_EVENTS.presence, handlePresence);
@@ -233,13 +251,15 @@ export const SocketProvider = ({
 
       socket.disconnect();
     };
-  }, [socket, commands]);
+  }, [socket, commands, history]);
 
   const value = useMemo(
     () => ({
       ownerId,
       error,
       execute,
+      undoInsertion: history.undo,
+      redoInsertion: history.redo,
       retryConnect,
       setUserColor,
       socket,
@@ -251,6 +271,7 @@ export const SocketProvider = ({
       ownerId,
       error,
       execute,
+      history,
       retryConnect,
       setUserColor,
       socket,
