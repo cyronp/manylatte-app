@@ -1,10 +1,23 @@
 import { useEffect } from 'react';
+import { toast } from 'sonner';
 import { useSocket } from '@/components/socket-provider';
 
 export function useInsertionShortcuts() {
   const { status, undoInsertion, redoInsertion } = useSocket();
 
   useEffect(() => {
+    const applyHistory = async (direction: 'undo' | 'redo') => {
+      const result = await (direction === 'undo'
+        ? undoInsertion()
+        : redoInsertion());
+      if (result?.ok)
+        toast.success(
+          direction === 'undo' ? 'Node insertion undone' : 'Node restored',
+          {
+            id: 'canvas-insertion-history',
+          },
+        );
+    };
     const keydown = (event: KeyboardEvent) => {
       if (
         status !== 'connected' ||
@@ -29,13 +42,13 @@ export function useInsertionShortcuts() {
       const key = event.key.toLowerCase();
       if (key === 'z' && !event.shiftKey) {
         event.preventDefault();
-        void undoInsertion();
+        void applyHistory('undo');
       } else if (
         (key === 'y' && !event.shiftKey) ||
         (key === 'z' && event.shiftKey)
       ) {
         event.preventDefault();
-        void redoInsertion();
+        void applyHistory('redo');
       }
     };
     window.addEventListener('keydown', keydown);

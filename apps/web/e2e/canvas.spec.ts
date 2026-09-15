@@ -35,6 +35,11 @@ test('Ctrl+Z and Ctrl+Y undo and restore only this participant’s node insertio
   const lobby = await response.json();
   const first = await browser.newPage();
   const second = await browser.newPage();
+  const violations: string[] = [];
+  first.on('console', (message) => {
+    if (/Content Security Policy|violates the following/.test(message.text()))
+      violations.push(message.text());
+  });
   try {
     await join(first, lobby.code, 'Alice');
     await join(second, lobby.code, 'Bob');
@@ -57,8 +62,20 @@ test('Ctrl+Z and Ctrl+Y undo and restore only this participant’s node insertio
     await first.keyboard.press('Control+z');
     await expect(reactions(first)).toHaveCount(0);
     await expect(reactions(second)).toHaveCount(0);
+    await expect(first.locator('[data-sonner-toast]')).toContainText(
+      'Node insertion undone',
+    );
+    await expect(second.locator('[data-sonner-toast]')).toHaveCount(0);
     await first.keyboard.press('Control+y');
     await expect(reactions(second)).toHaveCount(1);
+    await expect(first.locator('[data-sonner-toast]')).toContainText(
+      'Node restored',
+    );
+    expect(
+      await first
+        .locator('[data-sonner-toast]')
+        .evaluate((node) => getComputedStyle(node).position),
+    ).toBe('absolute');
     await expect(reactions(first)).toHaveAttribute('data-id', reactionId!);
     expect(
       await reactions(first).evaluate(
@@ -98,6 +115,7 @@ test('Ctrl+Z and Ctrl+Y undo and restore only this participant’s node insertio
     await expect(
       second.getByText('Restore this message', { exact: true }).last(),
     ).toBeVisible();
+    expect(violations).toEqual([]);
     await second
       .getByRole('textbox', { name: 'Message', exact: true })
       .fill('Reply stays safe');

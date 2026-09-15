@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { Toaster } from '@/components/ui/sonner';
 import { LobbySession } from '../features/lobby/lobby-session';
 import { JoinLobbyPage } from '../features/lobby/join-lobby-page';
 import { lobbySearch } from '../lib/lobby';
@@ -30,6 +31,7 @@ function RootLayout() {
 
   return (
     <TooltipProvider>
+      <Toaster position="bottom-center" duration={3000} closeButton />
       {roomId === undefined ? (
         <JoinLobbyPage />
       ) : !username ? (

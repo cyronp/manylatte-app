@@ -3,6 +3,10 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { useInsertionShortcuts } from './use-insertion-shortcuts';
+import { toast } from 'sonner';
+import type { CanvasCommandResult } from '@app/shared';
+
+vi.mock('sonner', () => ({ toast: { success: vi.fn() } }));
 
 const socket = vi.hoisted(() => ({
   status: 'connected',
@@ -34,6 +38,8 @@ const press = (
 };
 beforeEach(async () => {
   vi.clearAllMocks();
+  socket.undoInsertion.mockReset().mockResolvedValue(undefined);
+  socket.redoInsertion.mockReset().mockResolvedValue(undefined);
   socket.status = 'connected';
   container = document.createElement('div');
   document.body.append(container);
@@ -91,4 +97,41 @@ it('does not undo while disconnected', async () => {
   await act(async () => root.render(<Shortcuts />));
   expect(press('z').defaultPrevented).toBe(false);
   expect(socket.undoInsertion).not.toHaveBeenCalled();
+});
+
+it('shows a toast only after the server confirms undo or redo', async () => {
+  let confirm!: (result: CanvasCommandResult) => void;
+  socket.undoInsertion.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        confirm = resolve;
+      }),
+  );
+  press('z');
+  expect(toast.success).not.toHaveBeenCalled();
+  confirm({ ok: true, operationId: 'undo' });
+  await Promise.resolve();
+  expect(toast.success).toHaveBeenLastCalledWith('Node insertion undone', {
+    id: 'canvas-insertion-history',
+  });
+  socket.redoInsertion.mockResolvedValueOnce({ ok: true, operationId: 'redo' });
+  press('y');
+  await Promise.resolve();
+  expect(toast.success).toHaveBeenLastCalledWith('Node restored', {
+    id: 'canvas-insertion-history',
+  });
+});
+
+it('does not announce success for empty history or rejected edits', async () => {
+  press('z');
+  await Promise.resolve();
+  socket.undoInsertion.mockResolvedValueOnce({
+    ok: false,
+    operationId: 'undo',
+    code: 'storage',
+    message: 'Try again.',
+  });
+  press('z');
+  await Promise.resolve();
+  expect(toast.success).not.toHaveBeenCalled();
 });

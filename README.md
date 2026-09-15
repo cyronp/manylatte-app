@@ -54,6 +54,7 @@ you reload or leave. Redo restores the node with the same content and position;
 inserting a new node clears redo history. These shortcuts keep their normal
 text-editing behavior inside inputs. A thread that has received replies cannot
 be undone, to protect the conversation.
+A toast confirms when undo or redo has been saved.
 
 Use the controls in the lower-right corner to zoom. You can pan around the
 canvas with scroll gestures or by holding `Space` while dragging. Arrow keys

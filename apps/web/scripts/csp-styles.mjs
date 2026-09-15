@@ -49,6 +49,8 @@ const { default: PickerModule } = await import('emoji-picker-react');
 const Picker = PickerModule.default ?? PickerModule;
 const { HexColorPicker } = await import('react-colorful');
 const { Dialog, ScrollArea } = await import('radix-ui');
+// Sonner injects its stylesheet when imported; include it in the same policy.
+await import('sonner');
 let renderError;
 const root = createRoot(document.getElementById('root'), {
   onUncaughtError: (error) => {
