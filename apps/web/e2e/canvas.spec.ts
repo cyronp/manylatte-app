@@ -1,5 +1,6 @@
 import { io } from 'socket.io-client';
 import { test, expect, type Page } from '@playwright/test';
+import { CANVAS_HEIGHT, CANVAS_WIDTH } from '@app/shared';
 
 async function join(page: Page, code: string, username: string) {
   await page.addInitScript(
@@ -365,7 +366,7 @@ test('group dragging persists every selected node', async ({
   );
   publisher.connect();
   await ready;
-  for (const x of [700, 1000]) {
+  for (const x of [CANVAS_WIDTH / 2 - 150, CANVAS_WIDTH / 2 + 150]) {
     const result = await publisher.timeout(3000).emitWithAck('canvas:command', {
       id: crypto.randomUUID(),
       body: {
@@ -375,7 +376,7 @@ test('group dragging persists every selected node', async ({
           node: {
             id: crypto.randomUUID(),
             type: 'emoji',
-            position: { x, y: 500 },
+            position: { x, y: CANVAS_HEIGHT / 2 },
             data: { emoji: '☕', label: 'Coffee' },
           },
         },
