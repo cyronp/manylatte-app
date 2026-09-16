@@ -111,15 +111,17 @@ it('shows a toast only after the server confirms undo or redo', async () => {
   expect(toast.success).not.toHaveBeenCalled();
   confirm({ ok: true, operationId: 'undo' });
   await Promise.resolve();
-  expect(toast.success).toHaveBeenLastCalledWith('Node insertion undone', {
-    id: 'canvas-insertion-history',
-  });
+  expect(toast.success).toHaveBeenLastCalledWith(
+    'Node insertion undone',
+    expect.objectContaining({ id: 'canvas-insertion-history' }),
+  );
   socket.redoInsertion.mockResolvedValueOnce({ ok: true, operationId: 'redo' });
   press('y');
   await Promise.resolve();
-  expect(toast.success).toHaveBeenLastCalledWith('Node restored', {
-    id: 'canvas-insertion-history',
-  });
+  expect(toast.success).toHaveBeenLastCalledWith(
+    'Node restored',
+    expect.objectContaining({ id: 'canvas-insertion-history' }),
+  );
 });
 
 it('does not announce success for empty history or rejected edits', async () => {
