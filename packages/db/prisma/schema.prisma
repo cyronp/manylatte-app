@@ -47,6 +47,7 @@ model CanvasNode {
   y              Float
   emoji          String?
   label          String?
+  postitText     String?
   authorId       String?
   authorUsername String?
   authorColor    String?

@@ -5,12 +5,22 @@ import { useSocket } from '@/components/socket-provider';
 import type { EmojiNode } from './components/emoji-canvas-node';
 import type { MessageNode } from './components/message-canvas-node';
 import type { MessageDraftNode } from './components/message-draft-canvas-node';
+import type { PostitNode } from './components/postit-canvas-node';
 
-export type FlowCanvasNode = EmojiNode | MessageNode | MessageDraftNode;
-export const toFlowCanvasNode = (node: CanvasNode): EmojiNode | MessageNode =>
-  node.type === 'emoji'
-    ? { ...node, ariaLabel: node.data.label, origin: [0.5, 0.5] }
-    : { ...node, data: { ...node.data, typingUsers: [] }, origin: [0.5, 0] };
+export type FlowCanvasNode =
+  EmojiNode | MessageNode | MessageDraftNode | PostitNode;
+export const toFlowCanvasNode = (
+  node: CanvasNode,
+): EmojiNode | MessageNode | PostitNode =>
+  node.type === 'postit'
+    ? {
+        ...node,
+        ariaLabel: `Post-it by ${node.data.user.username}`,
+        origin: [0.5, 0],
+      }
+    : node.type === 'emoji'
+      ? { ...node, ariaLabel: node.data.label, origin: [0.5, 0.5] }
+      : { ...node, data: { ...node.data, typingUsers: [] }, origin: [0.5, 0] };
 
 export function applyCanvasChange(
   nodes: FlowCanvasNode[],
@@ -59,7 +69,8 @@ export function useCanvasSync() {
         ...canonical.current,
         ...current.filter(
           (node) =>
-            node.type === 'messageDraft' &&
+            (node.type === 'messageDraft' ||
+              (node.type === 'postit' && node.data.draft)) &&
             !incoming.some(({ id }) => id === node.id),
         ),
       ]);

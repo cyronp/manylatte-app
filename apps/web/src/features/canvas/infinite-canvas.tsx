@@ -29,6 +29,7 @@ import {
   type MessageDraftNode,
 } from './components/message-draft-canvas-node';
 import { MessageCanvasNode } from './components/message-canvas-node';
+import { PostitCanvasNode } from './components/postit-canvas-node';
 
 const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 2;
@@ -47,6 +48,7 @@ const INITIAL_VIEW_BOUNDS = {
 };
 
 const NODE_TYPES = {
+  postit: PostitCanvasNode,
   emoji: EmojiCanvasNode,
   message: MessageCanvasNode,
   messageDraft: MessageDraftCanvasNode,
@@ -59,7 +61,7 @@ import { Button } from '@/components/ui/button';
 
 export const InfiniteCanvas = () => {
   useInsertionShortcuts();
-  const { execute, status, error, retryConnect } = useSocket();
+  const { execute, status, error, retryConnect, user } = useSocket();
   const { mouseWheelBehavior, showGrid, snapToGrid } = useUserPreferences();
   const { screenToFlowPosition } = useReactFlow();
   const { nodes, setNodes, onNodesChange } = useCanvasSync();
@@ -67,6 +69,7 @@ export const InfiniteCanvas = () => {
   const [contextMenuPosition, setContextMenuPosition] = useState<XYPosition>();
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const pendingMessageDraftPositionRef = useRef<XYPosition>(undefined);
+  const pendingPostitPositionRef = useRef<XYPosition>(undefined);
 
   const handleInit = useCallback(
     (instance: ReactFlowInstance<FlowCanvasNode>) => {
@@ -222,6 +225,39 @@ export const InfiniteCanvas = () => {
         </ContextMenuTrigger>
         <CanvasContextMenu
           onCloseAutoFocus={(event) => {
+            const postitPosition = pendingPostitPositionRef.current;
+            if (postitPosition && user) {
+              pendingPostitPositionRef.current = undefined;
+              event.preventDefault();
+              const id = crypto.randomUUID();
+              setNodes((current) => [
+                ...current,
+                {
+                  id,
+                  type: 'postit',
+                  position: postitPosition,
+                  origin: [0.5, 0],
+                  draggable: false,
+                  data: {
+                    text: '',
+                    user,
+                    draft: {
+                      position: postitPosition,
+                      onCancel: () =>
+                        setNodes((nodes) =>
+                          nodes.filter(
+                            (node) =>
+                              node.id !== id ||
+                              node.type !== 'postit' ||
+                              !node.data.draft,
+                          ),
+                        ),
+                    },
+                  },
+                },
+              ]);
+              return;
+            }
             const draftPosition = pendingMessageDraftPositionRef.current;
 
             if (!draftPosition) {
@@ -234,6 +270,18 @@ export const InfiniteCanvas = () => {
           }}
           disabled={status !== 'connected'}
           onMessageSelect={handleMessageSelect}
+          onPostitSelect={() => {
+            if (!contextMenuPosition) return;
+            const position = constrainCursorPosition(
+              screenToFlowPosition(contextMenuPosition, {
+                snapGrid: CANVAS_SNAP_GRID,
+                snapToGrid,
+              }),
+            );
+            if (!position) return;
+            pendingPostitPositionRef.current = position;
+            setContextMenuOpen(false);
+          }}
           onReactionSelect={handleReactionSelect}
         />
       </ContextMenu>
