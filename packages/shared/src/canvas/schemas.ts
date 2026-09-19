@@ -20,6 +20,8 @@ export const canvasMessageSchema = z.object({
 
 export type CanvasMessage = z.infer<typeof canvasMessageSchema>;
 
+export const canvasPostitTextSchema = z.string().max(1_000);
+
 export const canvasMessageInputSchema = z.object({
   id: z.uuidv4(),
   nodeId: z.uuidv4(),
@@ -62,6 +64,10 @@ const canvasEmojiDataSchema = canvasEmojiInputDataSchema.extend({
 
 export const canvasNodeSchema = z.discriminatedUnion('type', [
   canvasNodeBaseSchema.extend({
+    data: z.object({ text: canvasPostitTextSchema, user: cursorUserSchema }),
+    type: z.literal('postit'),
+  }),
+  canvasNodeBaseSchema.extend({
     data: canvasEmojiDataSchema,
     type: z.literal('emoji'),
   }),
@@ -79,6 +85,12 @@ export type CanvasNode = z.infer<typeof canvasNodeSchema>;
 
 export const canvasNodeCreateSchema = z.discriminatedUnion('type', [
   z.strictObject({
+    data: z.strictObject({ text: canvasPostitTextSchema }),
+    id: z.uuidv4(),
+    position: canvasPositionSchema,
+    type: z.literal('postit'),
+  }),
+  z.strictObject({
     data: canvasEmojiInputDataSchema,
     id: z.uuidv4(),
     position: canvasPositionSchema,
@@ -94,6 +106,11 @@ export const canvasNodeCreateSchema = z.discriminatedUnion('type', [
 export type CanvasNodeCreate = z.infer<typeof canvasNodeCreateSchema>;
 
 export const canvasNodeMutationSchema = z.discriminatedUnion('action', [
+  z.strictObject({
+    action: z.literal('update-postit'),
+    nodeId: z.uuidv4(),
+    text: canvasPostitTextSchema,
+  }),
   z.strictObject({
     action: z.literal('update-reaction'),
     nodeId: z.uuidv4(),

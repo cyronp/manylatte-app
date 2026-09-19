@@ -20,6 +20,8 @@ export type CanvasMutationResult =
         | 'node-limit'
         | 'node-missing'
         | 'thread-changed'
+        | 'not-postit-node'
+        | 'not-owner'
         | 'not-emoji-node';
       status: 'rejected';
     };
@@ -44,6 +46,7 @@ const createCanvasNode = (
   user: CursorUser,
 ): CanvasNode => {
   if (node.type === 'message') return { ...node, data: { messages: [] } };
+  if (node.type === 'postit') return { ...node, data: { ...node.data, user } };
   return { ...node, data: { ...node.data, user } };
 };
 
@@ -78,6 +81,17 @@ export class CanvasState {
     mutation: CanvasNodeMutation,
     user: CursorUser,
   ): CanvasMutationResult {
+    if (mutation.action === 'update-postit') {
+      const node = this.#nodes.get(mutation.nodeId);
+      if (!node) return { reason: 'node-missing', status: 'rejected' };
+      if (node.type !== 'postit')
+        return { reason: 'not-postit-node', status: 'rejected' };
+      if (node.data.user.userId !== user.userId)
+        return { reason: 'not-owner', status: 'rejected' };
+      const nextNode = { ...node, data: { ...node.data, text: mutation.text } };
+      this.#nodes.set(node.id, nextNode);
+      return { node: nextNode, status: 'applied' };
+    }
     if (mutation.action === 'delete') {
       if (mutation.expectedMessageId) {
         const node = this.#nodes.get(mutation.nodeId);

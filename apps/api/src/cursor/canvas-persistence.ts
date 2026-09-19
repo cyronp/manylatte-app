@@ -77,6 +77,16 @@ async function mutate(
       where: { id: mutation.nodeId, roomId },
       data: { x: mutation.position.x, y: mutation.position.y },
     });
+  } else if (mutation.action === 'update-postit') {
+    await database.canvasNode.update({
+      where: {
+        id: mutation.nodeId,
+        roomId,
+        type: 'postit',
+        authorId: user.userId,
+      },
+      data: { postitText: mutation.text },
+    });
   } else if (mutation.action === 'update-reaction') {
     await database.canvasNode.update({
       where: { id: mutation.nodeId, roomId, type: 'emoji' },
@@ -91,6 +101,14 @@ async function mutate(
         type: node.type,
         x: node.position.x,
         y: node.position.y,
+        ...(node.type === 'postit'
+          ? {
+              postitText: node.data.text,
+              authorId: user.userId,
+              authorUsername: user.username,
+              authorColor: user.color,
+            }
+          : {}),
         ...(node.type === 'emoji'
           ? {
               emoji: node.data.emoji,
@@ -150,25 +168,34 @@ export const createCanvasPersistence = (
         type: node.type,
         position: { x: node.x, y: node.y },
         data:
-          node.type === 'emoji'
+          node.type === 'postit'
             ? {
-                emoji: node.emoji,
-                label: node.label,
-                ...(node.authorId && node.authorUsername && node.authorColor
-                  ? {
-                      user: {
-                        userId: node.authorId,
-                        username: node.authorUsername,
-                        color: node.authorColor,
-                      },
-                    }
-                  : {}),
+                text: node.postitText ?? '',
+                user: {
+                  userId: node.authorId,
+                  username: node.authorUsername,
+                  color: node.authorColor,
+                },
               }
-            : {
-                messages: node.messages.reverse().map(toMessage),
-                messageCount: node.messageCount,
-                textBytes: node.textBytes,
-              },
+            : node.type === 'emoji'
+              ? {
+                  emoji: node.emoji,
+                  label: node.label,
+                  ...(node.authorId && node.authorUsername && node.authorColor
+                    ? {
+                        user: {
+                          userId: node.authorId,
+                          username: node.authorUsername,
+                          color: node.authorColor,
+                        },
+                      }
+                    : {}),
+                }
+              : {
+                  messages: node.messages.reverse().map(toMessage),
+                  messageCount: node.messageCount,
+                  textBytes: node.textBytes,
+                },
       }),
     );
   },
