@@ -6,9 +6,10 @@ import type { EmojiNode } from './components/emoji-canvas-node';
 import type { MessageNode } from './components/message-canvas-node';
 import type { MessageDraftNode } from './components/message-draft-canvas-node';
 import type { PostitNode } from './components/postit-canvas-node';
+import type { ScreenShareNode } from '../screen-share/screen-share-node';
 
 export type FlowCanvasNode =
-  EmojiNode | MessageNode | MessageDraftNode | PostitNode;
+  EmojiNode | MessageNode | MessageDraftNode | PostitNode | ScreenShareNode;
 export const toFlowCanvasNode = (
   node: CanvasNode,
 ): EmojiNode | MessageNode | PostitNode =>

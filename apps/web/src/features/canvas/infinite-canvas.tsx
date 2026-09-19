@@ -11,6 +11,7 @@ import {
   type ReactFlowInstance,
   type SnapGrid,
   type XYPosition,
+  type NodeChange,
   useReactFlow,
 } from '@xyflow/react';
 import { useCallback, useRef, useState } from 'react';
@@ -30,6 +31,8 @@ import {
 } from './components/message-draft-canvas-node';
 import { MessageCanvasNode } from './components/message-canvas-node';
 import { PostitCanvasNode } from './components/postit-canvas-node';
+import { ScreenShareCanvasNode } from '../screen-share/screen-share-node';
+import { useScreenShareNode } from '../screen-share/use-screen-share-node';
 
 const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 2;
@@ -48,6 +51,7 @@ const INITIAL_VIEW_BOUNDS = {
 };
 
 const NODE_TYPES = {
+  screenShare: ScreenShareCanvasNode,
   postit: PostitCanvasNode,
   emoji: EmojiCanvasNode,
   message: MessageCanvasNode,
@@ -65,6 +69,18 @@ export const InfiniteCanvas = () => {
   const { mouseWheelBehavior, showGrid, snapToGrid } = useUserPreferences();
   const { screenToFlowPosition } = useReactFlow();
   const { nodes, setNodes, onNodesChange } = useCanvasSync();
+  const {
+    screen,
+    node: screenNode,
+    onChanges: onScreenChanges,
+  } = useScreenShareNode(status === 'connected');
+  const handleNodesChange = (changes: NodeChange<FlowCanvasNode>[]) => {
+    const persisted = changes.filter(
+      (change) => !('id' in change) || change.id !== screenNode?.id,
+    );
+    if (persisted.length) onNodesChange(persisted);
+    onScreenChanges(changes);
+  };
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState<XYPosition>();
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
@@ -169,6 +185,16 @@ export const InfiniteCanvas = () => {
 
   return (
     <>
+      {(screen.starting || (!screen.share && screen.error)) && (
+        <div
+          role={screen.error ? 'alert' : 'status'}
+          className="absolute bottom-16 left-3 z-20 max-w-sm rounded border bg-background p-3 text-sm shadow"
+        >
+          {screen.starting
+            ? 'Choose a screen, window, or tab to share…'
+            : screen.error}
+        </div>
+      )}
       {status !== 'connected' && (
         <div className="absolute left-3 top-3 z-20 flex max-w-[calc(100%-1.5rem)] flex-wrap gap-2">
           <Button variant="outline" onClick={retryConnect}>
@@ -202,11 +228,11 @@ export const InfiniteCanvas = () => {
               minZoom={MIN_ZOOM}
               nodeExtent={CANVAS_EXTENT}
               nodeTypes={NODE_TYPES}
-              nodes={nodes}
+              nodes={screenNode ? [...nodes, screenNode] : nodes}
               nodesConnectable={false}
               nodesDraggable={status === 'connected'}
               onInit={handleInit}
-              onNodesChange={onNodesChange}
+              onNodesChange={handleNodesChange}
               panActivationKeyCode="Space"
               panOnDrag={[1]}
               panOnScroll={mouseWheelBehavior === 'pan'}
@@ -269,6 +295,20 @@ export const InfiniteCanvas = () => {
             createMessageDraft(draftPosition);
           }}
           disabled={status !== 'connected'}
+          screenShareDisabled={
+            !screen.ready || screen.starting || Boolean(screen.share)
+          }
+          onScreenShareSelect={() => {
+            if (!contextMenuPosition) return;
+            const position = constrainCursorPosition(
+              screenToFlowPosition(contextMenuPosition, {
+                snapGrid: CANVAS_SNAP_GRID,
+                snapToGrid,
+              }),
+            );
+            if (position) screen.start(position);
+            setContextMenuOpen(false);
+          }}
           onMessageSelect={handleMessageSelect}
           onPostitSelect={() => {
             if (!contextMenuPosition) return;
