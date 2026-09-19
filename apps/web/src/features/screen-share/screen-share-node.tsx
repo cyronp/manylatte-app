@@ -2,7 +2,18 @@ import { useEffect, useRef, useState } from 'react';
 import type { Node, NodeProps } from '@xyflow/react';
 import type { ScreenShareState } from './screen-share-session';
 import { Button } from '@/components/ui/button';
-import { ArrowsInIcon, ArrowsInSimpleIcon, ArrowsOutIcon, ArrowsOutSimpleIcon, CaretDownIcon, MonitorIcon, StopIcon } from '@phosphor-icons/react';
+import {
+  ArrowsInIcon,
+  ArrowsInSimpleIcon,
+  ArrowsOutIcon,
+  ArrowsOutSimpleIcon,
+  CaretDownIcon,
+  DotsThreeCircleVerticalIcon,
+  DotsThreeIcon,
+  DotsThreeVerticalIcon,
+  MonitorIcon,
+  StopIcon,
+} from '@phosphor-icons/react';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -64,11 +75,10 @@ export function ScreenShareCanvasNode({ data }: NodeProps<ScreenShareNode>) {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
-                variant="outline"
-                size="sm"
+                variant="ghost"
+                size="icon-sm"
                 aria-label="Screen share controls"
               >
-                {data.changing ? 'Changing screen…' : 'Controls'}
                 <CaretDownIcon />
               </Button>
             </DropdownMenuTrigger>
@@ -88,7 +98,7 @@ export function ScreenShareCanvasNode({ data }: NodeProps<ScreenShareNode>) {
                 disabled={fullscreen}
                 onSelect={() => setExpanded(!expanded)}
               >
-                {expanded ? <ArrowsInIcon/> : <ArrowsOutIcon/>}
+                {expanded ? <ArrowsInIcon /> : <ArrowsOutIcon />}
                 {expanded ? 'Shrink' : 'Expand'}
               </DropdownMenuItem>
               {data.stream && (
@@ -103,7 +113,11 @@ export function ScreenShareCanvasNode({ data }: NodeProps<ScreenShareNode>) {
                     else setExpanded(true);
                   }}
                 >
-                  {fullscreen ? <ArrowsInSimpleIcon/> : <ArrowsOutSimpleIcon/>}
+                  {fullscreen ? (
+                    <ArrowsInSimpleIcon />
+                  ) : (
+                    <ArrowsOutSimpleIcon />
+                  )}
                   {fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
                 </DropdownMenuItem>
               )}
