@@ -1,4 +1,5 @@
 export { z } from 'zod';
+export * from './screen-share.js';
 export * from './canvas/commands.js';
 export {
   canvasMessageTextSchema,

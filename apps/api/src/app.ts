@@ -4,6 +4,7 @@ import {
   type ServerToClientEvents,
 } from '@app/shared';
 import cors from '@fastify/cors';
+import type { ScreenShareConfig } from './screen-share-config.js';
 import { createStorageHealth } from './storage-health.js';
 import type { TrustedProxies } from './client-address.js';
 import { connectDatabase, createDatabase, type Database } from '@app/db';
@@ -31,6 +32,7 @@ import {
 type InterServerEvents = Record<never, never>;
 
 export interface CreateAppOptions {
+  screenShareConfig?: ScreenShareConfig;
   database?: Database;
   databaseUrl?: string;
   allowedOrigins?: readonly string[];
@@ -47,6 +49,7 @@ export interface CreateAppOptions {
 }
 
 export const createApp = async ({
+  screenShareConfig,
   database: suppliedDatabase,
   databaseUrl,
   allowedOrigins = DEFAULT_ALLOWED_ORIGINS,
@@ -117,6 +120,7 @@ export const createApp = async ({
       serveClient: false,
     });
     const cursorServer = registerCursorServer(io, {
+      screenShareConfig,
       lobbyDatabase: database,
       canvasPersistence: createCanvasPersistence(database),
       authorizeRoom: async (roomId) =>

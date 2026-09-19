@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { readScreenShareConfig } from './screen-share-config.js';
 import { parseTrustedProxies } from './client-address.js';
 import { DEFAULT_DATABASE_URL, resolveDatabaseUrl } from '@app/db';
 
@@ -133,6 +134,7 @@ export const readApiEnvironment = (
   }
 
   return {
+    screenShareConfig: readScreenShareConfig(environment),
     maxLobbies: result.data.MAX_LOBBIES,
     databaseUrl: resolveDatabaseUrl(result.data.DATABASE_URL),
     allowedOrigins: parseAllowedOrigins(

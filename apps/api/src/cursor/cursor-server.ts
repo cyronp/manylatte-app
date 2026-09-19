@@ -1,4 +1,9 @@
 import { randomUUID } from 'node:crypto';
+import { registerScreenShare } from './register-screen-share.js';
+import {
+  screenShareIceServers,
+  type ScreenShareConfig,
+} from '../screen-share-config.js';
 import type { Database } from '@app/db';
 import { registerLobbyModeration } from './register-lobby-moderation.js';
 import { createSocketGuards } from './socket-guards.js';
@@ -44,6 +49,7 @@ import { registerTyping, clearTyping } from './typing-presence.js';
 import { OperationMetrics } from './operation-metrics.js';
 import { WorkBudget } from './work-budget.js';
 export interface CursorServerOptions {
+  screenShareConfig?: ScreenShareConfig;
   lobbyDatabase?: Database;
   canvasPersistence: CanvasPersistence;
   authorizeRoom: (roomId: CursorRoomId) => boolean | Promise<boolean>;
@@ -60,6 +66,10 @@ export interface CursorServerOptions {
 export const registerCursorServer = (
   io: CursorIo,
   {
+    screenShareConfig = {
+      stunUrls: ['stun:stun.l.google.com:19302'],
+      turnUrls: [],
+    },
     lobbyDatabase,
     canvasPersistence,
     authorizeRoom,
@@ -248,6 +258,15 @@ export const registerCursorServer = (
         (event) => acceptMessageBudget(socket, participant, event),
         logger,
       );
+
+    registerScreenShare(
+      io,
+      socket,
+      room,
+      participant,
+      (event) => acceptMessageBudget(socket, participant, event),
+      () => screenShareIceServers(screenShareConfig, socket.id),
+    );
 
     registerPresence(
       io,
