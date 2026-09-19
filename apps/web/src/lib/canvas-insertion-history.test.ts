@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { CanvasCommand, CanvasCommandResult } from '@app/shared';
+import {
+  hexColorSchema,
+  type CanvasCommand,
+  type CanvasCommandResult,
+} from '@app/shared';
 import { createCanvasInsertionHistory } from './canvas-insertion-history';
 
 const reaction = (id = crypto.randomUUID()): CanvasCommand => ({
@@ -33,6 +37,38 @@ const setup = () => {
 };
 
 describe('canvas insertion history', () => {
+  it('restores the latest saved Post-it text on redo', async () => {
+    const { send, history } = setup();
+    const node = {
+      id: crypto.randomUUID(),
+      type: 'postit' as const,
+      position: { x: 20, y: 30 },
+      data: { text: '' },
+    };
+    await history.execute({
+      id: crypto.randomUUID(),
+      body: { type: 'mutation', mutation: { action: 'create', node } },
+    });
+    history.change({
+      type: 'upsert',
+      node: {
+        ...node,
+        data: {
+          text: 'Edited note',
+          user: {
+            userId: crypto.randomUUID(),
+            username: 'Alice',
+            color: hexColorSchema.parse('#193CB8'),
+          },
+        },
+      },
+    });
+    await history.undo();
+    await history.redo();
+    expect(send.mock.lastCall?.[0].body).toMatchObject({
+      mutation: { node: { type: 'postit', data: { text: 'Edited note' } } },
+    });
+  });
   it('serializes insertion, undo, redo, and repeated cycles with fresh operation IDs', async () => {
     const { send, history } = setup();
     const first = reaction();

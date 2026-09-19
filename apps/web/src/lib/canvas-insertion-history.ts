@@ -64,6 +64,20 @@ export function createCanvasInsertionHistory(
       // Keep the latest position/reaction for redo without recording extra actions.
       for (const entry of undo) {
         const id = nodeId(entry.body);
+        if (
+          change.type === 'upsert' &&
+          change.node.id === id &&
+          change.node.type === 'postit' &&
+          entry.body.type === 'mutation'
+        ) {
+          const { id, position, data } = change.node;
+          entry.body.mutation.node = {
+            id,
+            position,
+            type: 'postit',
+            data: { text: data.text },
+          };
+        }
         if (change.type === 'move' && change.nodeId === id) {
           if (entry.body.type === 'thread')
             entry.body.position = change.position;
