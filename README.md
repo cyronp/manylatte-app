@@ -13,6 +13,7 @@ and can customize their cursor color.
 - Private lobbies with short, shareable invite codes
 - Live cursors, participant presence, and typing indicators
 - Draggable message threads with paginated history
+- Native WebRTC screen-sharing nodes with opt-in viewing and fullscreen
 - Emoji reactions that can be moved, changed, or removed
 - Persistent canvas content and lobby ownership
 - Owner controls for removing participants and transferring ownership
@@ -63,6 +64,55 @@ move focused nodes, and `Enter` selects a focused node.
 If a message thread contains more than 50 messages, choose **Load older
 messages** to retrieve the previous page. A typing indicator appears while
 other participants compose a reply.
+
+### Share a screen
+
+Right-click the canvas and choose **Share screen**, then select a screen,
+window, or tab in your browser's picker. Other participants see a live node
+and select **Watch screen** to connect. The presenter can drag the node;
+**Expand**, **Shrink**, and **Fullscreen** affect only your own view.
+Use the header's **Controls** dropdown for these actions and **Stop sharing**.
+Presenters can also choose **Change screen** to select another screen, window,
+or tab while retaining the node and viewer connections. Cancelling that picker
+keeps the current screen live.
+
+Each lobby supports one presenter and up to eight viewers. This first version
+shares video only, without microphone or system audio. It requires browser
+screen-capture support and HTTPS (localhost also works). If a connection fails,
+viewers can select **Retry connection**. Leaving and rejoining requires selecting
+**Watch screen** again; capture never resumes automatically.
+
+**Stop sharing**, the browser's stop-capture control, leaving, being kicked, or
+losing the signaling connection stops capture and removes the live node.
+Screen nodes are temporary and are not recorded or saved in SQLite. Existing
+messages, reactions, and Post-its retain their normal persistence behavior.
+
+Socket.IO carries only validated, lobby-scoped signaling and node metadata.
+The browser sends one WebRTC video stream per viewer, so presenter upload usage
+grows with viewer count. Network discovery uses the configured STUN service;
+some networks also require a TURN relay. No additional JavaScript media package
+or media server is required for direct connections.
+
+The API supports these optional network settings:
+
+```dotenv
+WEBRTC_STUN_URLS=stun:stun.l.google.com:19302
+WEBRTC_TURN_URLS=turn:turn.example.com:3478,turns:turn.example.com:5349
+WEBRTC_TURN_SECRET=your-coturn-static-auth-secret
+```
+
+STUN defaults to Google's public discovery service. Set `WEBRTC_STUN_URLS` to
+an empty string for local-network-only discovery, or use your own STUN URLs.
+TURN is optional and must be provisioned separately. Configure a Coturn-compatible
+service with REST/shared-secret authentication (`use-auth-secret` and the matching
+`static-auth-secret`), reachable relay ports, and the advertised public address.
+The API issues 24-hour credentials to admitted lobby participants; the shared
+secret remains on the server. TURN URLs and secret must be set together.
+
+For existing installations, raise `SOCKET_MAX_HTTP_BUFFER_BYTES` to `32768`
+to accommodate WebRTC session descriptions. Restart the API after changing its
+environment. The frontend Permissions Policy must allow `display-capture=(self)`;
+this is already included in the generated deployment headers.
 
 ### Invite and manage participants
 
@@ -191,7 +241,7 @@ API variables are read from `apps/api/.env`. Prisma commands separately read
 | `CURSOR_MAX_CONNECTIONS_PER_IP`     | `20`                              | Per-IP concurrent connection limit                                |
 | `CURSOR_MAX_PARTICIPANTS_PER_ROOM`  | `100`                             | Per-lobby participant limit                                       |
 | `CURSOR_MAX_TOTAL_CONNECTIONS`      | `1000`                            | Process-wide connection limit                                     |
-| `SOCKET_MAX_HTTP_BUFFER_BYTES`      | `4096`                            | Maximum Socket.IO payload size                                    |
+| `SOCKET_MAX_HTTP_BUFFER_BYTES`      | `32768`                           | Maximum Socket.IO payload size, including WebRTC signaling        |
 | `TRUST_PROXY`                       | `false`                           | Trusted proxy IPs or CIDR ranges used to resolve client addresses |
 
 Frontend API URLs must be exact HTTP or HTTPS origins without credentials,
