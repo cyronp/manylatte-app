@@ -52,7 +52,7 @@ function setup() {
           color: hexColorSchema.parse('#000000'),
         },
       } satisfies ScreenShare);
-      return { ok: true };
+      return { ok: true, iceServers: [] };
     }),
   };
   const { track, stream } = fakeCapture();

@@ -58,7 +58,7 @@ describe('screen sharing signaling', () => {
       await socket
         .timeout(2000)
         .emitWithAck('screen:start', { shareId, position: { x: 100, y: 200 } }),
-    ).toEqual({ ok: true });
+    ).toMatchObject({ ok: true, iceServers: [] });
     return shareId;
   };
   const watch = async (socket: Client, shareId: string) => {
@@ -67,7 +67,7 @@ describe('screen sharing signaling', () => {
       await socket
         .timeout(2000)
         .emitWithAck('screen:watch', { shareId, connectionId }),
-    ).toEqual({ ok: true });
+    ).toMatchObject({ ok: true, iceServers: [] });
     return connectionId;
   };
 

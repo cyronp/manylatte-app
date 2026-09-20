@@ -1,6 +1,8 @@
 import { createHmac } from 'node:crypto';
 import type { ScreenShareIceServer } from '@app/shared';
 
+export const SCREEN_SHARE_TURN_CREDENTIAL_TTL_SECONDS = 15 * 60;
+
 export interface ScreenShareConfig {
   stunUrls: string[];
   turnUrls: string[];
@@ -51,7 +53,7 @@ export function screenShareIceServers(
     : [];
   if (config.turnUrls.length && config.turnSecret) {
     // Coturn REST authentication: the shared secret stays on the API server.
-    const username = `${Math.floor(Date.now() / 1000) + 86_400}:${socketId}`;
+    const username = `${Math.floor(Date.now() / 1000) + SCREEN_SHARE_TURN_CREDENTIAL_TTL_SECONDS}:${socketId}`;
     servers.push({
       urls: config.turnUrls,
       username,

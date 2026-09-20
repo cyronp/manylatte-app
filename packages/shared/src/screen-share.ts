@@ -49,7 +49,9 @@ export interface ScreenShareIceServer {
   username?: string;
   credential?: string;
 }
-export type ScreenShareResult = { ok: true } | { ok: false; message: string };
+export type ScreenShareResult =
+  | { ok: true; iceServers: ScreenShareIceServer[] }
+  | { ok: false; message: string };
 export interface ScreenShareSync {
   share: ScreenShare | null;
   iceServers: ScreenShareIceServer[];

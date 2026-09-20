@@ -106,8 +106,9 @@ an empty string for local-network-only discovery, or use your own STUN URLs.
 TURN is optional and must be provisioned separately. Configure a Coturn-compatible
 service with REST/shared-secret authentication (`use-auth-secret` and the matching
 `static-auth-secret`), reachable relay ports, and the advertised public address.
-The API issues 24-hour credentials to admitted lobby participants; the shared
-secret remains on the server. TURN URLs and secret must be set together.
+The API issues short-lived credentials when a participant starts or watches a
+share; the shared secret remains on the server. TURN URLs and secret must be set
+together.
 
 For existing installations, raise `SOCKET_MAX_HTTP_BUFFER_BYTES` to `32768`
 to accommodate WebRTC session descriptions. Restart the API after changing its

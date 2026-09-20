@@ -2,6 +2,7 @@ import { createHmac } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
   readScreenShareConfig,
+  SCREEN_SHARE_TURN_CREDENTIAL_TTL_SECONDS,
   screenShareIceServers,
 } from './screen-share-config.js';
 
@@ -21,8 +22,10 @@ describe('screen share network configuration', () => {
         .digest('base64'),
     );
     expect(JSON.stringify(server)).not.toContain('server-only-secret');
-    expect(Number(server.username!.split(':')[0])).toBeGreaterThan(
-      Date.now() / 1000,
+    const expiresAt = Number(server.username!.split(':')[0]);
+    expect(expiresAt).toBeGreaterThan(Date.now() / 1000);
+    expect(expiresAt).toBeLessThanOrEqual(
+      Math.ceil(Date.now() / 1000) + SCREEN_SHARE_TURN_CREDENTIAL_TTL_SECONDS,
     );
   });
   it('rejects invalid or incomplete relay configuration and supports local-only discovery', () => {

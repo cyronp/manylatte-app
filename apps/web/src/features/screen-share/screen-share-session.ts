@@ -205,6 +205,7 @@ export class ScreenShareSession {
         .timeout(5_000)
         .emitWithAck('screen:start', { shareId, position });
       if (!result.ok) throw new Error(result.message);
+      this.iceServers = result.iceServers;
       if (
         this.disposed ||
         generation !== this.generation ||
@@ -335,6 +336,7 @@ export class ScreenShareSession {
         .timeout(5_000)
         .emitWithAck('screen:watch', { shareId: share.id, connectionId });
       if (!result.ok) throw new Error(result.message);
+      this.iceServers = result.iceServers;
     } catch (error) {
       if (this.connectionId !== connectionId) return;
       this.unwatch();

@@ -55,7 +55,7 @@ export function registerScreenShare(
   };
   socket.on('screen:sync', (ack) => {
     if (typeof ack === 'function' && accept('screen:sync'))
-      ack({ share: room.screenShare?.share ?? null, iceServers: iceServers() });
+      ack({ share: room.screenShare?.share ?? null, iceServers: [] });
   });
   socket.on('screen:start', (input, ack) => {
     if (typeof ack !== 'function') return;
@@ -84,7 +84,7 @@ export function registerScreenShare(
       viewers: new Map(),
     };
     broadcast();
-    ack({ ok: true });
+    ack({ ok: true, iceServers: iceServers() });
   });
   socket.on('screen:stop', (input) => {
     // Cleanup remains possible after a signaling burst exhausts the message budget.
@@ -136,7 +136,7 @@ export function registerScreenShare(
         message: `This screen share already has ${MAX_SCREEN_SHARE_VIEWERS} viewers.`,
       });
     if (current.viewers.get(socket.id) === parsed.data.connectionId)
-      return ack({ ok: true });
+      return ack({ ok: true, iceServers: iceServers() });
     unwatch();
     current.viewers.set(socket.id, parsed.data.connectionId);
     io.to(current.share.presenterId).emit('screen:viewer', {
@@ -145,7 +145,7 @@ export function registerScreenShare(
       joined: true,
     });
     broadcast();
-    ack({ ok: true });
+    ack({ ok: true, iceServers: iceServers() });
   });
   socket.on('screen:unwatch', (input) => {
     accept('screen:unwatch');
