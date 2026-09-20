@@ -1,5 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { registerScreenShare } from './register-screen-share.js';
+import {
+  registerScreenShare,
+  type ScreenShareMetrics,
+} from './register-screen-share.js';
 import {
   screenShareIceServers,
   type ScreenShareConfig,
@@ -130,6 +133,18 @@ export const registerCursorServer = (
   const rooms = new Map<CursorRoomId, CursorRoom>();
   const workBudget = new WorkBudget();
   const metrics = new OperationMetrics();
+  const screenShareMetrics: ScreenShareMetrics = {
+    activeShares: 0,
+    activeViewers: 0,
+    credentialRequests: 0,
+    invalidMessages: 0,
+    signalMessages: 0,
+    starts: 0,
+    stops: 0,
+    unwatchers: 0,
+    watchRejects: 0,
+    watches: 0,
+  };
 
   const getRoom = (roomId: CursorRoomId) => {
     const existingRoom = rooms.get(roomId);
@@ -265,7 +280,13 @@ export const registerCursorServer = (
       room,
       participant,
       (event) => acceptMessageBudget(socket, participant, event),
-      () => screenShareIceServers(screenShareConfig, socket.id),
+      (reason, issueCodes) =>
+        recordViolation(socket, participant, reason, issueCodes),
+      () => {
+        screenShareMetrics.credentialRequests++;
+        return screenShareIceServers(screenShareConfig, socket.id);
+      },
+      screenShareMetrics,
     );
 
     registerPresence(
@@ -408,6 +429,7 @@ export const registerCursorServer = (
   return {
     metrics: () => ({
       ...metrics.snapshot(),
+      screenShare: { ...screenShareMetrics },
       activeRooms: rooms.size,
       connections: io.engine.clientsCount,
       pendingWork: workBudget.pending,

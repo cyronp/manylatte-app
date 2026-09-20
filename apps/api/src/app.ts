@@ -168,7 +168,7 @@ export const createApp = async ({
             ...storage.snapshot(),
             heapBytes: process.memoryUsage().heapUsed,
           },
-          'Canvas operational metrics',
+          'Cursor operational metrics',
         ),
       60_000,
     );

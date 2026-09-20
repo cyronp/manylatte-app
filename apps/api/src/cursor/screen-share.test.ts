@@ -233,4 +233,17 @@ describe('screen sharing signaling', () => {
     expect((await sync(presenter)).share?.viewerCount).toBe(8);
     expect(presenter.connected).toBe(true);
   });
+
+  it('disconnects a client that repeatedly sends malformed screen messages', async () => {
+    const presenter = await connect();
+    for (let index = 0; index < 20; index++)
+      presenter.emit(
+        'screen:signal',
+        { malformed: true } as unknown as ScreenShareSignal,
+      );
+
+    await expect
+      .poll(() => presenter.connected, { timeout: 1_000 })
+      .toBe(false);
+  });
 });

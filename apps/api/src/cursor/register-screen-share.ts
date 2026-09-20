@@ -19,13 +19,28 @@ export interface RoomScreenShare {
   viewers: Map<string, string>;
 }
 
+export interface ScreenShareMetrics {
+  activeShares: number;
+  activeViewers: number;
+  credentialRequests: number;
+  invalidMessages: number;
+  signalMessages: number;
+  starts: number;
+  stops: number;
+  unwatchers: number;
+  watchRejects: number;
+  watches: number;
+}
+
 export function registerScreenShare(
   io: CursorIo,
   socket: CursorSocket,
   room: CursorRoom,
   participant: Participant,
   acceptMessage: (event: string) => number | undefined,
+  recordViolation: (reason: string, issueCodes?: string[]) => void,
   iceServers: () => ScreenShareIceServer[],
+  metrics: ScreenShareMetrics,
 ) {
   const roomId = socket.data.cursorRoomId;
   let moveBroadcastTimer: ReturnType<typeof setTimeout> | undefined;
@@ -33,8 +48,14 @@ export function registerScreenShare(
     if (!socket.connected) return false;
     const time = acceptMessage(event);
     if (time === undefined) return false;
-    participant.lastActivityAt = time;
-    return true;
+    return time;
+  };
+  const markActivity = (time: number | false) => {
+    if (time !== false) participant.lastActivityAt = time;
+  };
+  const invalid = (event: string, issues: string[]) => {
+    metrics.invalidMessages++;
+    recordViolation(`invalid:${event}`, issues);
   };
   const broadcast = () => {
     if (room.screenShare)
@@ -54,11 +75,22 @@ export function registerScreenShare(
     }, 50);
     moveBroadcastTimer.unref?.();
   };
+  const stopShare = () => {
+    if (!room.screenShare) return;
+    metrics.activeShares--;
+    metrics.activeViewers -= room.screenShare.viewers.size;
+    metrics.stops++;
+    room.screenShare = undefined;
+    cancelMoveBroadcast();
+    broadcast();
+  };
   const unwatch = () => {
     const current = room.screenShare;
     const connectionId = current?.viewers.get(socket.id);
     if (!current || !connectionId) return;
     current.viewers.delete(socket.id);
+    metrics.activeViewers--;
+    metrics.unwatchers++;
     io.to(current.share.presenterId).emit('screen:viewer', {
       shareId: current.share.id,
       peerId: socket.id,
@@ -68,16 +100,26 @@ export function registerScreenShare(
     broadcast();
   };
   socket.on('screen:sync', (ack) => {
-    if (typeof ack === 'function' && accept('screen:sync'))
-      ack({ share: room.screenShare?.share ?? null, iceServers: [] });
+    if (typeof ack !== 'function') return;
+    const acceptedAt = accept('screen:sync');
+    if (acceptedAt === false) return;
+    markActivity(acceptedAt);
+    ack({ share: room.screenShare?.share ?? null, iceServers: [] });
   });
   socket.on('screen:start', (input, ack) => {
     if (typeof ack !== 'function') return;
-    if (!accept('screen:start'))
+    const acceptedAt = accept('screen:start');
+    if (acceptedAt === false)
       return ack({ ok: false, message: 'Reconnect or try again shortly.' });
     const parsed = screenShareStartSchema.safeParse(input);
-    if (!parsed.success)
+    if (!parsed.success) {
+      invalid(
+        'screen:start',
+        parsed.error.issues.map((issue) => issue.code),
+      );
       return ack({ ok: false, message: 'Invalid screen share.' });
+    }
+    markActivity(acceptedAt);
     if (room.screenShare)
       return ack({
         ok: false,
@@ -97,63 +139,97 @@ export function registerScreenShare(
       },
       viewers: new Map(),
     };
+    metrics.activeShares++;
+    metrics.starts++;
     broadcast();
     ack({ ok: true, iceServers: iceServers() });
   });
   socket.on('screen:stop', (input) => {
     // Cleanup remains possible after a signaling burst exhausts the message budget.
-    accept('screen:stop');
+    const acceptedAt = accept('screen:stop');
     const parsed = screenShareIdSchema.safeParse(input);
+    if (!parsed.success) {
+      if (acceptedAt !== false)
+        invalid(
+          'screen:stop',
+          parsed.error.issues.map((issue) => issue.code),
+        );
+      return;
+    }
     if (
-      parsed.success &&
       room.screenShare?.share.id === parsed.data.shareId &&
       room.screenShare.share.presenterId === socket.id
     ) {
-      room.screenShare = undefined;
-      cancelMoveBroadcast();
-      broadcast();
+      markActivity(acceptedAt);
+      stopShare();
     }
   });
   socket.on('screen:move', (input) => {
-    if (!accept('screen:move')) return;
+    const acceptedAt = accept('screen:move');
+    if (acceptedAt === false) return;
     const parsed = screenShareStartSchema.safeParse(input);
+    if (!parsed.success) {
+      invalid(
+        'screen:move',
+        parsed.error.issues.map((issue) => issue.code),
+      );
+      return;
+    }
     if (
-      parsed.success &&
       room.screenShare?.share.id === parsed.data.shareId &&
       room.screenShare.share.presenterId === socket.id
     ) {
+      markActivity(acceptedAt);
       room.screenShare.share.position = parsed.data.position;
       broadcastMove();
     }
   });
   socket.on('screen:watch', (input, ack) => {
     if (typeof ack !== 'function') return;
-    if (!accept('screen:watch'))
+    const acceptedAt = accept('screen:watch');
+    if (acceptedAt === false)
       return ack({ ok: false, message: 'Reconnect or try again shortly.' });
     const parsed = screenShareWatchSchema.safeParse(input);
-    const current = room.screenShare;
-    if (
-      !parsed.success ||
-      !current ||
-      current.share.id !== parsed.data.shareId ||
-      current.share.presenterId === socket.id
-    )
+    if (!parsed.success) {
+      invalid(
+        'screen:watch',
+        parsed.error.issues.map((issue) => issue.code),
+      );
+      metrics.watchRejects++;
       return ack({
         ok: false,
         message: 'This screen share is no longer available.',
       });
+    }
+    markActivity(acceptedAt);
+    const current = room.screenShare;
+    if (
+      !current ||
+      current.share.id !== parsed.data.shareId ||
+      current.share.presenterId === socket.id
+    ) {
+      metrics.watchRejects++;
+      return ack({
+        ok: false,
+        message: 'This screen share is no longer available.',
+      });
+    }
     if (
       !current.viewers.has(socket.id) &&
       current.viewers.size >= MAX_SCREEN_SHARE_VIEWERS
-    )
+    ) {
+      metrics.watchRejects++;
       return ack({
         ok: false,
         message: `This screen share already has ${MAX_SCREEN_SHARE_VIEWERS} viewers.`,
       });
+    }
     if (current.viewers.get(socket.id) === parsed.data.connectionId)
       return ack({ ok: true, iceServers: iceServers() });
     unwatch();
     current.viewers.set(socket.id, parsed.data.connectionId);
+    metrics.activeViewers++;
+    metrics.watches++;
     io.to(current.share.presenterId).emit('screen:viewer', {
       ...parsed.data,
       peerId: socket.id,
@@ -163,20 +239,38 @@ export function registerScreenShare(
     ack({ ok: true, iceServers: iceServers() });
   });
   socket.on('screen:unwatch', (input) => {
-    accept('screen:unwatch');
+    const acceptedAt = accept('screen:unwatch');
     const parsed = screenShareWatchSchema.safeParse(input);
+    if (!parsed.success) {
+      if (acceptedAt !== false)
+        invalid(
+          'screen:unwatch',
+          parsed.error.issues.map((issue) => issue.code),
+        );
+      return;
+    }
     if (
-      parsed.success &&
       room.screenShare?.share.id === parsed.data.shareId &&
       room.screenShare.viewers.get(socket.id) === parsed.data.connectionId
-    )
+    ) {
+      markActivity(acceptedAt);
       unwatch();
+    }
   });
   socket.on('screen:signal', (input) => {
-    if (!accept('screen:signal')) return;
+    const acceptedAt = accept('screen:signal');
+    if (acceptedAt === false) return;
+    metrics.signalMessages++;
     const parsed = screenShareSignalSchema.safeParse(input);
+    if (!parsed.success) {
+      invalid(
+        'screen:signal',
+        parsed.error.issues.map((issue) => issue.code),
+      );
+      return;
+    }
     const current = room.screenShare;
-    if (!parsed.success || !current || current.share.id !== parsed.data.shareId)
+    if (!current || current.share.id !== parsed.data.shareId)
       return;
     const { peerId, connectionId, signal } = parsed.data;
     if (!room.participants.has(peerId) || peerId === socket.id) return;
@@ -193,25 +287,33 @@ export function registerScreenShare(
       (signal.type === 'answer' && isPresenter)
     )
       return;
+    markActivity(acceptedAt);
     // Never trust a client-supplied sender identity or room identifier.
     io.to(peerId).emit('screen:signal', { ...parsed.data, peerId: socket.id });
   });
   socket.on('screen:heartbeat', (input) => {
+    const acceptedAt = accept('screen:heartbeat');
+    if (acceptedAt === false) return;
     const parsed = screenShareIdSchema.safeParse(input);
+    if (!parsed.success) {
+      invalid(
+        'screen:heartbeat',
+        parsed.error.issues.map((issue) => issue.code),
+      );
+      return;
+    }
     const current = room.screenShare;
     if (
-      parsed.success &&
       current?.share.id === parsed.data.shareId &&
       (current.share.presenterId === socket.id ||
         current.viewers.has(socket.id))
     )
-      accept('screen:heartbeat');
+      markActivity(acceptedAt);
   });
   socket.on('disconnect', () => {
     cancelMoveBroadcast();
     if (room.screenShare?.share.presenterId === socket.id) {
-      room.screenShare = undefined;
-      broadcast();
+      stopShare();
     } else unwatch();
   });
 }
