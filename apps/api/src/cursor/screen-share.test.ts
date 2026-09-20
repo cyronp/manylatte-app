@@ -276,12 +276,10 @@ describe('screen sharing signaling', () => {
     for (let i = 0; i < 18; i++) {
       const results = await Promise.all(
         viewers.map((viewer) =>
-          viewer
-            .timeout(2000)
-            .emitWithAck('screen:watch', {
-              shareId,
-              connectionId: randomUUID(),
-            }),
+          viewer.timeout(2000).emitWithAck('screen:watch', {
+            shareId,
+            connectionId: randomUUID(),
+          }),
         ),
       );
       rejected += results.filter((result) => !result.ok).length;

@@ -157,3 +157,31 @@ it('refreshes credentials only for active share participants and throttles renew
     iceServersExpiresAt: Date.now() + 900_000,
   });
 });
+
+it('gives viewers a single-peer signal budget while allowing presenter fanout', () => {
+  const { presenter, viewer, shareId, watch, emit } = setup();
+  const connectionId = watch();
+  const signal = { type: 'candidate', candidate: { candidate: 'candidate' } };
+  emit.mockClear();
+  for (let i = 0; i < 100; i++)
+    viewer.emit('screen:signal', {
+      shareId,
+      connectionId,
+      peerId: 'presenter',
+      signal,
+    });
+  expect(
+    emit.mock.calls.filter(([event]) => event === 'screen:signal'),
+  ).toHaveLength(80);
+  emit.mockClear();
+  for (let i = 0; i < 100; i++)
+    presenter.emit('screen:signal', {
+      shareId,
+      connectionId,
+      peerId: 'viewer',
+      signal,
+    });
+  expect(
+    emit.mock.calls.filter(([event]) => event === 'screen:signal'),
+  ).toHaveLength(100);
+});

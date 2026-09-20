@@ -57,7 +57,8 @@ export function registerScreenShare(
     iceServersExpiresAt:
       Date.now() + SCREEN_SHARE_TURN_CREDENTIAL_TTL_SECONDS * 1_000,
   });
-  const signalBudget = new TokenBucket(
+  const viewerSignalBudget = new TokenBucket(80, 20);
+  const presenterSignalBudget = new TokenBucket(
     80 * MAX_SCREEN_SHARE_VIEWERS,
     20 * MAX_SCREEN_SHARE_VIEWERS,
   );
@@ -340,6 +341,10 @@ export function registerScreenShare(
     // Fanout produces legitimate bursts of offers and ICE. Bound that traffic
     // separately; peer-induced responses must not kick the presenter for abuse.
     const acceptedAt = Date.now();
+    const signalBudget =
+      room.screenShare?.share.presenterId === socket.id
+        ? presenterSignalBudget
+        : viewerSignalBudget;
     if (!socket.connected || !signalBudget.take(acceptedAt)) return;
     metrics.signalMessages++;
     const parsed = screenShareSignalSchema.safeParse(input);
