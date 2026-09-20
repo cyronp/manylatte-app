@@ -110,8 +110,7 @@ The API issues short-lived credentials when a participant starts or watches a
 share; the shared secret remains on the server. TURN URLs and secret must be set
 together.
 
-Use [the Coturn configuration template](deploy/turnserver.conf.example) as a
-starting point. Generate a secret with
+Generate a secret with
 `node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`
 and configure the same value in the API and Coturn. The API rejects secrets
 shorter than 32 bytes or containing whitespace. Store the real configuration
@@ -126,7 +125,7 @@ and management networks. Include your own infrastructure's public addresses in
 the egress policy. Do not add broad `allowed-peer-ip` exceptions; they override
 denials. These controls must be applied to the actual relay deployment. See
 [Coturn's configuration reference](https://github.com/coturn/coturn/blob/master/examples/etc/turnserver.conf)
-for option semantics and tune the template's quotas to your capacity.
+for option semantics and choose quotas appropriate to your capacity.
 
 The API limits viewer retries, expires pending viewers after 30 seconds unless
 the presenter confirms connection, and releases failed peers. Active clients
