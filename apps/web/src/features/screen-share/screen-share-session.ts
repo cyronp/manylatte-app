@@ -55,6 +55,9 @@ export class ScreenShareSession {
   private retiringStream?: MediaStream;
   private localShareId?: string;
   private connectionId?: string;
+  private earlySignals: ScreenShareSignal[] = [];
+  private startingViewers = new Map<string, ScreenShareViewer>();
+  private localIceReady = false;
   private generation = 0;
   private disposed = false;
   private heartbeat: ReturnType<typeof setInterval>;
@@ -119,6 +122,9 @@ export class ScreenShareSession {
   }
 
   private clearMedia() {
+    this.earlySignals = [];
+    this.startingViewers.clear();
+    this.localIceReady = false;
     for (const peerId of this.peers.keys()) this.closePeer(peerId);
     for (const track of [
       ...(this.localStream?.getTracks() ?? []),
@@ -207,7 +213,6 @@ export class ScreenShareSession {
         .timeout(5_000)
         .emitWithAck('screen:start', { shareId, position });
       if (!result.ok) throw new Error(result.message);
-      this.iceServers = result.iceServers;
       if (
         this.disposed ||
         generation !== this.generation ||
@@ -217,6 +222,11 @@ export class ScreenShareSession {
         stream.getTracks().forEach((item) => item.stop());
         return;
       }
+      this.iceServers = result.iceServers;
+      this.localIceReady = true;
+      for (const viewer of this.startingViewers.values())
+        this.receiveViewer(viewer);
+      this.startingViewers.clear();
       this.publish({ stream, local: true, status: 'live' });
     } catch (error) {
       stream?.getTracks().forEach((track) => track.stop());
@@ -333,12 +343,21 @@ export class ScreenShareSession {
     this.connectionId = connectionId;
     this.publish({ watching: true, status: 'connecting', error: undefined });
     try {
-      this.createPeer(share.presenterId, connectionId);
       const result = await this.socket
         .timeout(5_000)
         .emitWithAck('screen:watch', { shareId: share.id, connectionId });
+      if (
+        this.disposed ||
+        !this.socket.connected ||
+        this.connectionId !== connectionId ||
+        this.state.share?.id !== share.id
+      )
+        return;
       if (!result.ok) throw new Error(result.message);
       this.iceServers = result.iceServers;
+      this.createPeer(share.presenterId, connectionId);
+      for (const signal of this.earlySignals.splice(0))
+        this.receiveSignal(signal);
     } catch (error) {
       if (this.connectionId !== connectionId) return;
       this.unwatch();
@@ -353,6 +372,7 @@ export class ScreenShareSession {
   };
 
   unwatch = () => {
+    this.earlySignals = [];
     if (this.connectionId && this.state.share && this.socket.connected)
       this.socket.emit('screen:unwatch', {
         shareId: this.state.share.id,
@@ -468,6 +488,11 @@ export class ScreenShareSession {
 
   private receiveViewer = (viewer: ScreenShareViewer) => {
     if (!this.localStream || viewer.shareId !== this.localShareId) return;
+    if (!this.localIceReady) {
+      if (viewer.joined) this.startingViewers.set(viewer.peerId, viewer);
+      else this.startingViewers.delete(viewer.peerId);
+      return;
+    }
     if (!viewer.joined) {
       if (this.peers.get(viewer.peerId)?.id === viewer.connectionId)
         this.closePeer(viewer.peerId);
@@ -497,6 +522,22 @@ export class ScreenShareSession {
   private receiveSignal = (input: ScreenShareSignal) => {
     if (input.shareId !== (this.localShareId ?? this.state.share?.id)) return;
     const peer = this.peers.get(input.peerId);
+    if (
+      !peer &&
+      this.connectionId === input.connectionId &&
+      input.peerId === this.state.share?.presenterId
+    ) {
+      if (this.earlySignals.length < 65) this.earlySignals.push(input);
+      else {
+        this.unwatch();
+        this.publish({
+          status: 'failed',
+          error:
+            'Too much signaling before the connection was ready. Retry to watch again.',
+        });
+      }
+      return;
+    }
     if (!peer || peer.id !== input.connectionId) return;
     this.enqueue(input.peerId, peer, async () => {
       const { signal } = input;

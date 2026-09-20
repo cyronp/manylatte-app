@@ -70,6 +70,43 @@ function setup() {
 describe('screen capture lifetime', () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  it('waits for presenter ICE configuration when viewers join before the start acknowledgement', async () => {
+    const { session, socket, listeners } = setup();
+    const iceServers = [
+      {
+        urls: ['turn:example.invalid'],
+        username: 'presenter',
+        credential: 'test',
+      },
+    ];
+    const pc = {
+      addTrack: vi.fn(),
+      close: vi.fn(),
+      createOffer: vi.fn().mockResolvedValue({ type: 'offer', sdp: 'offer' }),
+      setLocalDescription: vi.fn().mockResolvedValue(undefined),
+    };
+    const constructor = vi.fn(function () {
+      return pc;
+    });
+    vi.stubGlobal('RTCPeerConnection', constructor);
+    socket.emitWithAck.mockImplementation(async (_event, input) => {
+      listeners.get('screen:viewer')?.({
+        shareId: input.shareId,
+        peerId: 'viewer',
+        connectionId: 'connection',
+        joined: true,
+      });
+      expect(constructor).not.toHaveBeenCalled();
+      return { ok: true, iceServers };
+    });
+    try {
+      await session.start({ x: 0, y: 0 });
+      expect(constructor).toHaveBeenCalledWith({ iceServers });
+    } finally {
+      session.dispose();
+    }
+  });
+
   it('reports connected and failed viewer connections to release server reservations', async () => {
     const { session, socket, listeners, update } = setup();
     const pc = {
