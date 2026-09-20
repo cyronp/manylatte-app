@@ -3,6 +3,7 @@ import type {
   ScreenShareSignal,
   ScreenShareSync,
   ScreenShareViewer,
+  ScreenShareWatch,
 } from '@app/shared';
 import type { CursorSocket } from '@/lib/socket';
 
@@ -67,6 +68,7 @@ export class ScreenShareSession {
     socket.on('screen:state', this.receiveState);
     socket.on('screen:viewer', this.receiveViewer);
     socket.on('screen:signal', this.receiveSignal);
+    socket.on('screen:ended', this.receiveEnded);
     this.heartbeat = setInterval(() => {
       if (
         socket.connected &&
@@ -378,6 +380,7 @@ export class ScreenShareSession {
 
   private fail(peerId: string, peer: Peer) {
     if (this.peers.get(peerId) !== peer) return;
+    this.reportPeer(peerId, peer, false);
     this.closePeer(peerId);
     if (!this.localStream) {
       this.unwatch();
@@ -392,6 +395,29 @@ export class ScreenShareSession {
           'A viewer could not connect. They can retry from the screen node.',
       });
   }
+
+  private reportPeer(peerId: string, peer: Peer, connected: boolean) {
+    if (this.localShareId && this.socket.connected)
+      this.socket.emit('screen:peer-status', {
+        shareId: this.localShareId,
+        peerId,
+        connectionId: peer.id,
+        connected,
+      });
+  }
+
+  private receiveEnded = (input: ScreenShareWatch) => {
+    if (
+      input.shareId !== this.state.share?.id ||
+      input.connectionId !== this.connectionId
+    )
+      return;
+    this.unwatch();
+    this.publish({
+      status: 'failed',
+      error: 'The screen connection ended. Retry to watch again.',
+    });
+  };
 
   private createPeer(peerId: string, connectionId: string) {
     this.closePeer(peerId);
@@ -417,6 +443,7 @@ export class ScreenShareSession {
     };
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'connected') {
+        this.reportPeer(peerId, peer, true);
         clearTimeout(peer.timeout);
         peer.timeout = undefined;
         if (!this.localStream)
@@ -457,6 +484,12 @@ export class ScreenShareSession {
       });
     } catch {
       this.closePeer(viewer.peerId);
+      this.socket.emit('screen:peer-status', {
+        shareId: viewer.shareId,
+        peerId: viewer.peerId,
+        connectionId: viewer.connectionId,
+        connected: false,
+      });
       this.publish({ error: 'Could not connect a viewer to this screen.' });
     }
   };
@@ -497,5 +530,6 @@ export class ScreenShareSession {
     this.socket.off('screen:state', this.receiveState);
     this.socket.off('screen:viewer', this.receiveViewer);
     this.socket.off('screen:signal', this.receiveSignal);
+    this.socket.off('screen:ended', this.receiveEnded);
   }
 }

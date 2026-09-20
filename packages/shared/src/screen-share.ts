@@ -11,6 +11,11 @@ export const screenShareStartSchema = z.strictObject({
 export const screenShareWatchSchema = screenShareIdSchema.extend({
   connectionId: z.uuidv4(),
 });
+export const screenSharePeerStatusSchema = screenShareWatchSchema.extend({
+  peerId: z.string().min(1).max(128),
+  connected: z.boolean(),
+});
+export type ScreenSharePeerStatus = z.infer<typeof screenSharePeerStatusSchema>;
 export const screenShareSignalSchema = screenShareWatchSchema.extend({
   peerId: z.string().min(1).max(128),
   signal: z.discriminatedUnion('type', [

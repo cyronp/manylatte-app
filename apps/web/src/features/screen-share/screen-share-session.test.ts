@@ -70,6 +70,48 @@ function setup() {
 describe('screen capture lifetime', () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  it('reports connected and failed viewer connections to release server reservations', async () => {
+    const { session, socket, listeners, update } = setup();
+    const pc = {
+      connectionState: 'new',
+      onconnectionstatechange: null as (() => void) | null,
+      addTrack: vi.fn(),
+      close: vi.fn(),
+      createOffer: vi.fn().mockResolvedValue({ type: 'offer', sdp: 'offer' }),
+      setLocalDescription: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.stubGlobal(
+      'RTCPeerConnection',
+      vi.fn(function () {
+        return pc;
+      }),
+    );
+    try {
+      await session.start({ x: 0, y: 0 });
+      const peer = {
+        shareId: update.mock.lastCall?.[0].share.id,
+        peerId: 'viewer',
+        connectionId: 'connection',
+      };
+      listeners.get('screen:viewer')?.({ ...peer, joined: true });
+      pc.connectionState = 'connected';
+      pc.onconnectionstatechange?.();
+      expect(socket.emit).toHaveBeenCalledWith('screen:peer-status', {
+        ...peer,
+        connected: true,
+      });
+      pc.connectionState = 'failed';
+      pc.onconnectionstatechange?.();
+      expect(socket.emit).toHaveBeenCalledWith('screen:peer-status', {
+        ...peer,
+        connected: false,
+      });
+      expect(pc.close).toHaveBeenCalledOnce();
+    } finally {
+      session.dispose();
+    }
+  });
+
   it('stops a capture that resolves after leaving without publishing it', async () => {
     const { session, capture, stream, track, socket } = setup();
     let finish!: (stream: MediaStream) => void;

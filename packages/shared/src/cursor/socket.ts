@@ -51,6 +51,9 @@ export interface ClientToServerEvents {
     ack: (result: ScreenShareResult) => void,
   ) => void;
   'screen:unwatch': (input: ScreenShareWatch) => void;
+  'screen:peer-status': (
+    input: import('../screen-share.js').ScreenSharePeerStatus,
+  ) => void;
   'screen:signal': (input: ScreenShareSignal) => void;
   'screen:heartbeat': (input: { shareId: string }) => void;
   'lobby:moderate': (
@@ -73,6 +76,7 @@ export interface ClientToServerEvents {
 export interface ServerToClientEvents {
   'screen:state': (share: ScreenShare | null) => void;
   'screen:viewer': (viewer: ScreenShareViewer) => void;
+  'screen:ended': (input: ScreenShareWatch) => void;
   'screen:signal': (input: ScreenShareSignal) => void;
   'lobby:ownership': (ownership: LobbyOwnership) => void;
   'canvas:change': (change: CanvasChange) => void;

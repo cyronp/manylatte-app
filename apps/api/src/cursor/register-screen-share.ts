@@ -4,6 +4,7 @@ import {
   screenShareStartSchema,
   screenShareWatchSchema,
   screenShareSignalSchema,
+  screenSharePeerStatusSchema,
   type ScreenShare,
   type ScreenShareIceServer,
 } from '@app/shared';
@@ -19,6 +20,7 @@ export interface RoomScreenShare {
   share: ScreenShare;
   viewers: Map<string, string>;
   negotiations: TokenBucket;
+  pendingViewers: Map<string, ReturnType<typeof setTimeout>>;
 }
 
 export interface ScreenShareMetrics {
@@ -85,6 +87,8 @@ export function registerScreenShare(
   };
   const stopShare = () => {
     if (!room.screenShare) return;
+    for (const timer of room.screenShare.pendingViewers.values())
+      clearTimeout(timer);
     metrics.activeShares--;
     metrics.activeViewers -= room.screenShare.viewers.size;
     metrics.stops++;
@@ -92,18 +96,24 @@ export function registerScreenShare(
     cancelMoveBroadcast();
     broadcast();
   };
-  const unwatch = () => {
+  const unwatch = (peerId = socket.id) => {
     const current = room.screenShare;
-    const connectionId = current?.viewers.get(socket.id);
+    const connectionId = current?.viewers.get(peerId);
     if (!current || !connectionId) return;
-    current.viewers.delete(socket.id);
+    clearTimeout(current.pendingViewers.get(peerId));
+    current.pendingViewers.delete(peerId);
+    current.viewers.delete(peerId);
     metrics.activeViewers--;
     metrics.unwatchers++;
     io.to(current.share.presenterId).emit('screen:viewer', {
       shareId: current.share.id,
-      peerId: socket.id,
+      peerId,
       connectionId,
       joined: false,
+    });
+    io.to(peerId).emit('screen:ended', {
+      shareId: current.share.id,
+      connectionId,
     });
     broadcast();
   };
@@ -147,6 +157,7 @@ export function registerScreenShare(
       },
       viewers: new Map(),
       negotiations: new TokenBucket(16, 1),
+      pendingViewers: new Map(),
     };
     metrics.activeShares++;
     metrics.starts++;
@@ -247,6 +258,15 @@ export function registerScreenShare(
     }
     unwatch();
     current.viewers.set(socket.id, parsed.data.connectionId);
+    const timer = setTimeout(() => {
+      if (
+        room.screenShare === current &&
+        current.viewers.get(socket.id) === parsed.data.connectionId
+      )
+        unwatch();
+    }, 30_000);
+    timer.unref?.();
+    current.pendingViewers.set(socket.id, timer);
     metrics.activeViewers++;
     metrics.watches++;
     io.to(current.share.presenterId).emit('screen:viewer', {
@@ -310,6 +330,31 @@ export function registerScreenShare(
     markActivity(acceptedAt);
     // Never trust a client-supplied sender identity or room identifier.
     io.to(peerId).emit('screen:signal', { ...parsed.data, peerId: socket.id });
+  });
+  socket.on('screen:peer-status', (input) => {
+    const acceptedAt = accept('screen:peer-status');
+    if (acceptedAt === false) return;
+    const parsed = screenSharePeerStatusSchema.safeParse(input);
+    if (!parsed.success) {
+      invalid(
+        'screen:peer-status',
+        parsed.error.issues.map((issue) => issue.code),
+      );
+      return;
+    }
+    const current = room.screenShare;
+    const { shareId, peerId, connectionId, connected } = parsed.data;
+    if (
+      !current ||
+      current.share.id !== shareId ||
+      current.share.presenterId !== socket.id ||
+      current.viewers.get(peerId) !== connectionId
+    )
+      return;
+    markActivity(acceptedAt);
+    if (!connected) return unwatch(peerId);
+    clearTimeout(current.pendingViewers.get(peerId));
+    current.pendingViewers.delete(peerId);
   });
   socket.on('screen:heartbeat', (input) => {
     const acceptedAt = accept('screen:heartbeat');
