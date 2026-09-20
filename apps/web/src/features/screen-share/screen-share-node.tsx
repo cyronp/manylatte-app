@@ -1,17 +1,18 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Node, NodeProps } from '@xyflow/react';
 import type { ScreenShareState } from './screen-share-session';
+import { useScreenSharePlayback } from './use-screen-share-playback';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import {
   ArrowsInIcon,
   ArrowsInSimpleIcon,
   ArrowsOutIcon,
   ArrowsOutSimpleIcon,
-  CaretDownIcon,
-  DotsThreeCircleVerticalIcon,
   DotsThreeIcon,
-  DotsThreeVerticalIcon,
   MonitorIcon,
+  PlayIcon,
+  ScreencastIcon,
   StopIcon,
 } from '@phosphor-icons/react';
 import {
@@ -33,53 +34,56 @@ export type ScreenShareNode = Node<
 >;
 
 export function ScreenShareCanvasNode({ data }: NodeProps<ScreenShareNode>) {
-  const video = useRef<HTMLVideoElement>(null);
+  const { video, needsResume, resume } = useScreenSharePlayback(data.stream);
   const [panel, setPanel] = useState<HTMLElement | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const [playbackError, setPlaybackError] = useState(false);
   useEffect(() => {
     const changed = () => setFullscreen(document.fullscreenElement === panel);
     document.addEventListener('fullscreenchange', changed);
     return () => document.removeEventListener('fullscreenchange', changed);
   }, [panel]);
-  useEffect(() => {
-    const element = video.current;
-    if (!element) return;
-    element.srcObject = data.stream ?? null;
-    if (data.stream) void element.play().catch(() => setPlaybackError(true));
-    return () => {
-      element.srcObject = null;
-    };
-  }, [data.stream]);
-
-  const watch = () => {
-    setPlaybackError(false);
-    data.watch();
-  };
+  const waiting = !data.stream || data.status === 'connecting';
   return (
     <section
       ref={setPanel}
       aria-label={`Screen shared by ${data.share?.user.username}`}
-      className="overflow-hidden rounded-xl border bg-background shadow-xl"
-      style={{ width: expanded ? 800 : 480 }}
+      className={cn(
+        'flex flex-col gap-3',
+        fullscreen && 'h-full bg-background p-4',
+      )}
+      style={{ width: fullscreen ? '100%' : expanded ? 800 : 480 }}
     >
-      <header className="flex items-center justify-between gap-3 border-b p-3">
-        <span className="text-sm font-medium">
-          {data.share?.user.username}’s screen
-        </span>
+      <header className="flex w-full shrink-0 items-center justify-between gap-3 rounded-full border bg-popover px-4 py-2 text-popover-foreground shadow-sm">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <MonitorIcon className="size-4 shrink-0 text-muted-foreground" />
+          <span className="truncate text-xs font-medium">
+            {data.share?.user.username}’s screen
+          </span>
+        </div>
         <div
-          className="nodrag nopan"
+          className="nodrag nopan flex shrink-0 items-center gap-0.5"
           onKeyDown={(event) => event.stopPropagation()}
         >
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={expanded ? 'Shrink screen' : 'Expand screen'}
+            title={expanded ? 'Shrink screen' : 'Expand screen'}
+            disabled={fullscreen}
+            onClick={() => setExpanded(!expanded)}
+          >
+            {expanded ? <ArrowsInSimpleIcon /> : <ArrowsOutSimpleIcon />}
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon-sm"
                 aria-label="Screen share controls"
+                title="More options"
               >
-                <CaretDownIcon />
+                <DotsThreeIcon className="size-5" weight="bold" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
@@ -137,7 +141,14 @@ export function ScreenShareCanvasNode({ data }: NodeProps<ScreenShareNode>) {
           </DropdownMenu>
         </div>
       </header>
-      <div className="nodrag nopan relative aspect-video bg-black text-white">
+      <div
+        className={cn(
+          'nodrag nopan relative w-full overflow-hidden rounded-2xl border bg-popover shadow-sm',
+          fullscreen ? 'min-h-0 flex-1' : 'aspect-video',
+          !waiting && 'bg-black',
+        )}
+        onKeyDown={(event) => event.stopPropagation()}
+      >
         <video
           ref={video}
           autoPlay
@@ -146,50 +157,55 @@ export function ScreenShareCanvasNode({ data }: NodeProps<ScreenShareNode>) {
           aria-label="Shared screen"
           className="h-full w-full object-contain"
         />
-        {(!data.stream || data.status === 'connecting') && (
-          <div
-            role="status"
-            className="absolute inset-0 flex items-center justify-center bg-black/60 p-6 text-center text-sm"
-          >
-            {data.status === 'connecting'
-              ? 'Connecting to the shared screen…'
-              : data.status === 'failed'
-                ? 'Screen connection unavailable'
-                : 'Watch this screen to join the presentation.'}
-          </div>
-        )}
-      </div>
-      {(data.error || playbackError || (!data.local && !data.watching)) && (
-        <footer
-          className="nodrag nopan space-y-2 p-3"
-          onKeyDown={(event) => event.stopPropagation()}
-        >
-          {data.error && (
-            <p role="alert" className="text-sm text-destructive">
-              {data.error}
-            </p>
-          )}
-          <div className="flex flex-wrap gap-2">
-            {playbackError && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  void video.current
-                    ?.play()
-                    .then(() => setPlaybackError(false))
-                    .catch(() => setPlaybackError(true));
-                }}
-              >
-                Play video
-              </Button>
-            )}
+        {waiting && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-muted/50 p-6 text-center">
+            <span className="flex size-10 items-center justify-center rounded-2xl border bg-background text-muted-foreground">
+              <ScreencastIcon className="size-5" />
+            </span>
+            <div role="status">
+              <p className="text-sm font-medium">
+                {data.status === 'connecting'
+                  ? 'Connecting to the shared screen…'
+                  : data.status === 'failed'
+                    ? 'Screen connection unavailable'
+                    : `A seat at ${data.share?.user.username}’s screen`}
+              </p>
+              {data.status === 'idle' && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Join in whenever you’re ready.
+                </p>
+              )}
+            </div>
             {!data.local && !data.watching && (
-              <Button size="sm" onClick={watch}>
+              <Button size="sm" onClick={data.watch}>
+                <PlayIcon weight="fill" className="size-3" />
                 {data.status === 'failed' ? 'Retry connection' : 'Watch screen'}
               </Button>
             )}
           </div>
+        )}
+        {!waiting && needsResume && (
+          <button
+            type="button"
+            aria-label="Resume screen"
+            onClick={resume}
+            className="absolute inset-0 flex cursor-pointer flex-col items-center justify-center gap-3 bg-black/30 text-white outline-none transition-colors hover:bg-black/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
+          >
+            <span className="flex size-12 items-center justify-center rounded-full border border-white/20 bg-popover text-popover-foreground shadow-sm">
+              <PlayIcon weight="fill" className="size-5" />
+            </span>
+            <span className="text-xs font-medium">Resume screen</span>
+          </button>
+        )}
+      </div>
+      {data.error && (
+        <footer
+          className="nodrag nopan shrink-0 rounded-2xl border bg-popover p-3 shadow-sm"
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          <p role="alert" className="text-sm text-destructive">
+            {data.error}
+          </p>
         </footer>
       )}
     </section>
