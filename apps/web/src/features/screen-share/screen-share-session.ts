@@ -4,6 +4,7 @@ import type {
   ScreenShareSync,
   ScreenShareViewer,
   ScreenShareWatch,
+  ScreenShareResult,
 } from '@app/shared';
 import type { CursorSocket } from '@/lib/socket';
 
@@ -50,6 +51,8 @@ const captureScreen = () =>
 export class ScreenShareSession {
   private state: ScreenShareState = { ...initialScreenShareState };
   private iceServers: RTCIceServer[] = [];
+  private iceExpiresAt = Infinity;
+  private iceRefresh?: Promise<void>;
   private peers = new Map<string, Peer>();
   private localStream?: MediaStream;
   private retiringStream?: MediaStream;
@@ -77,8 +80,11 @@ export class ScreenShareSession {
         socket.connected &&
         this.state.share &&
         (this.localStream || this.connectionId)
-      )
+      ) {
         socket.emit('screen:heartbeat', { shareId: this.state.share.id });
+        // Keep active relay credentials fresh; a transient error retries on the next heartbeat.
+        void this.refreshIce().catch(() => undefined);
+      }
     }, 15_000);
     if (socket.connected) this.sync();
   }
@@ -122,6 +128,9 @@ export class ScreenShareSession {
   }
 
   private clearMedia() {
+    this.iceServers = [];
+    this.iceExpiresAt = Infinity;
+    this.iceRefresh = undefined;
     this.earlySignals = [];
     this.startingViewers.clear();
     this.localIceReady = false;
@@ -222,7 +231,7 @@ export class ScreenShareSession {
         stream.getTracks().forEach((item) => item.stop());
         return;
       }
-      this.iceServers = result.iceServers;
+      this.applyIce(result);
       this.localIceReady = true;
       for (const viewer of this.startingViewers.values())
         this.receiveViewer(viewer);
@@ -354,7 +363,7 @@ export class ScreenShareSession {
       )
         return;
       if (!result.ok) throw new Error(result.message);
-      this.iceServers = result.iceServers;
+      this.applyIce(result);
       this.createPeer(share.presenterId, connectionId);
       for (const signal of this.earlySignals.splice(0))
         this.receiveSignal(signal);
@@ -424,6 +433,44 @@ export class ScreenShareSession {
         connectionId: peer.id,
         connected,
       });
+  }
+
+  private applyIce(result: Extract<ScreenShareResult, { ok: true }>) {
+    this.iceServers = result.iceServers;
+    this.iceExpiresAt = result.iceServersExpiresAt ?? Infinity;
+  }
+
+  private refreshIce(): Promise<void> {
+    if (Date.now() < this.iceExpiresAt - 60_000) return Promise.resolve();
+    if (this.iceRefresh) return this.iceRefresh;
+    const shareId =
+      this.localShareId ??
+      (this.connectionId ? this.state.share?.id : undefined);
+    if (!shareId || !this.socket.connected || this.disposed)
+      return Promise.resolve();
+    const generation = this.generation;
+    const pending = this.socket
+      .timeout(5_000)
+      .emitWithAck('screen:credentials', { shareId })
+      .then((result) => {
+        if (
+          this.disposed ||
+          generation !== this.generation ||
+          shareId !==
+            (this.localShareId ??
+              (this.connectionId ? this.state.share?.id : undefined))
+        )
+          return;
+        if (!result.ok) throw new Error(result.message);
+        this.applyIce(result);
+        for (const peer of this.peers.values())
+          peer.pc.setConfiguration({ iceServers: this.iceServers });
+      })
+      .finally(() => {
+        if (this.iceRefresh === pending) this.iceRefresh = undefined;
+      });
+    this.iceRefresh = pending;
+    return pending;
   }
 
   private receiveEnded = (input: ScreenShareWatch) => {
@@ -503,6 +550,8 @@ export class ScreenShareSession {
       for (const track of this.localStream.getVideoTracks())
         peer.pc.addTrack(track, this.localStream);
       this.enqueue(viewer.peerId, peer, async () => {
+        await this.refreshIce();
+        if (this.peers.get(viewer.peerId) !== peer) return;
         const offer = await peer.pc.createOffer();
         await peer.pc.setLocalDescription(offer);
         this.send(viewer.peerId, peer, { type: 'offer', sdp: offer.sdp! });

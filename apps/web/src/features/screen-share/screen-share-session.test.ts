@@ -4,6 +4,7 @@ import type {
   ScreenShare,
   ScreenShareStart,
   ScreenShareSync,
+  ScreenShareResult,
 } from '@app/shared';
 import type { CursorSocket } from '@/lib/socket';
 import { ScreenShareSession } from './screen-share-session';
@@ -40,20 +41,25 @@ function setup() {
           iceServers: [],
         });
     }),
-    emitWithAck: vi.fn(async (_event: string, input: ScreenShareStart) => {
-      listeners.get('screen:state')?.({
-        id: input.shareId,
-        presenterId: socket.id,
-        position: input.position,
-        viewerCount: 0,
-        user: {
-          userId: 'user',
-          username: 'Presenter',
-          color: hexColorSchema.parse('#000000'),
-        },
-      } satisfies ScreenShare);
-      return { ok: true, iceServers: [] };
-    }),
+    emitWithAck: vi.fn(
+      async (
+        _event: string,
+        input: ScreenShareStart,
+      ): Promise<ScreenShareResult> => {
+        listeners.get('screen:state')?.({
+          id: input.shareId,
+          presenterId: socket.id,
+          position: input.position,
+          viewerCount: 0,
+          user: {
+            userId: 'user',
+            username: 'Presenter',
+            color: hexColorSchema.parse('#000000'),
+          },
+        } satisfies ScreenShare);
+        return { ok: true, iceServers: [] };
+      },
+    ),
   };
   const { track, stream } = fakeCapture();
   const capture = vi.fn().mockResolvedValue(stream);
@@ -68,7 +74,71 @@ function setup() {
 }
 
 describe('screen capture lifetime', () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it('refreshes expired presenter credentials before offering to a late viewer', async () => {
+    vi.useFakeTimers();
+    const { session, socket, listeners } = setup();
+    const oldServers = [
+      {
+        urls: ['turn:example.invalid'],
+        username: 'presenter',
+        credential: 'old',
+      },
+    ];
+    const newServers = [{ ...oldServers[0]!, credential: 'new' }];
+    const pc = {
+      addTrack: vi.fn(),
+      close: vi.fn(),
+      setConfiguration: vi.fn(),
+      createOffer: vi.fn().mockResolvedValue({ type: 'offer', sdp: 'offer' }),
+      setLocalDescription: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.stubGlobal(
+      'RTCPeerConnection',
+      vi.fn(function () {
+        return pc;
+      }),
+    );
+    socket.emitWithAck.mockResolvedValueOnce({
+      ok: true,
+      iceServers: oldServers,
+      iceServersExpiresAt: Date.now() + 60_000,
+    });
+    socket.emitWithAck.mockResolvedValue({
+      ok: true,
+      iceServers: newServers,
+      iceServersExpiresAt: Date.now() + 900_000,
+    });
+    try {
+      await session.start({ x: 0, y: 0 });
+      const shareId = socket.emitWithAck.mock.calls[0]![1].shareId;
+      // Model a throttled background tab whose refresh timer has not run.
+      vi.setSystemTime(Date.now() + 70_000);
+      listeners.get('screen:viewer')?.({
+        shareId,
+        peerId: 'viewer',
+        connectionId: 'connection',
+        joined: true,
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(socket.emitWithAck).toHaveBeenLastCalledWith(
+        'screen:credentials',
+        { shareId },
+      );
+      expect(pc.setConfiguration).toHaveBeenCalledWith({
+        iceServers: newServers,
+      });
+      expect(pc.setConfiguration.mock.invocationCallOrder[0]).toBeLessThan(
+        pc.createOffer.mock.invocationCallOrder[0]!,
+      );
+    } finally {
+      session.dispose();
+    }
+  });
 
   it('waits for presenter ICE configuration when viewers join before the start acknowledgement', async () => {
     const { session, socket, listeners } = setup();

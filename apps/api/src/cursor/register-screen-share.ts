@@ -15,6 +15,7 @@ import type {
   Participant,
 } from './cursor-types.js';
 import { TokenBucket } from './token-bucket.js';
+import { SCREEN_SHARE_TURN_CREDENTIAL_TTL_SECONDS } from '../screen-share-config.js';
 
 export interface RoomScreenShare {
   share: ScreenShare;
@@ -49,6 +50,13 @@ export function registerScreenShare(
   const roomId = socket.data.cursorRoomId;
   // A retry is expensive for the presenter even when the viewer sends no media.
   const watchBudget = new TokenBucket(3, 1 / 5);
+  const credentialBudget = new TokenBucket(1, 1 / 60);
+  const credentials = () => ({
+    ok: true as const,
+    iceServers: iceServers(),
+    iceServersExpiresAt:
+      Date.now() + SCREEN_SHARE_TURN_CREDENTIAL_TTL_SECONDS * 1_000,
+  });
   const signalBudget = new TokenBucket(
     80 * MAX_SCREEN_SHARE_VIEWERS,
     20 * MAX_SCREEN_SHARE_VIEWERS,
@@ -162,7 +170,7 @@ export function registerScreenShare(
     metrics.activeShares++;
     metrics.starts++;
     broadcast();
-    ack({ ok: true, iceServers: iceServers() });
+    ack(credentials());
   });
   socket.on('screen:stop', (input) => {
     // Cleanup remains possible after a signaling burst exhausts the message budget.
@@ -245,7 +253,7 @@ export function registerScreenShare(
       });
     }
     if (current.viewers.get(socket.id) === parsed.data.connectionId)
-      return ack({ ok: true, iceServers: iceServers() });
+      return ack(credentials());
     if (
       !watchBudget.take(acceptedAt) ||
       !current.negotiations.take(acceptedAt)
@@ -275,7 +283,39 @@ export function registerScreenShare(
       joined: true,
     });
     broadcast();
-    ack({ ok: true, iceServers: iceServers() });
+    ack(credentials());
+  });
+  socket.on('screen:credentials', (input, ack) => {
+    if (typeof ack !== 'function') return;
+    const acceptedAt = accept('screen:credentials');
+    if (acceptedAt === false)
+      return ack({ ok: false, message: 'Reconnect or try again shortly.' });
+    const parsed = screenShareIdSchema.safeParse(input);
+    if (!parsed.success) {
+      invalid(
+        'screen:credentials',
+        parsed.error.issues.map((issue) => issue.code),
+      );
+      return ack({ ok: false, message: 'Invalid screen share.' });
+    }
+    const current = room.screenShare;
+    if (
+      !current ||
+      current.share.id !== parsed.data.shareId ||
+      (current.share.presenterId !== socket.id &&
+        !current.viewers.has(socket.id))
+    )
+      return ack({
+        ok: false,
+        message: 'This screen share is no longer available.',
+      });
+    if (!credentialBudget.take(acceptedAt))
+      return ack({
+        ok: false,
+        message: 'Please wait before refreshing credentials.',
+      });
+    markActivity(acceptedAt);
+    ack(credentials());
   });
   socket.on('screen:unwatch', (input) => {
     const acceptedAt = accept('screen:unwatch');

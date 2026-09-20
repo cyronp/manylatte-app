@@ -45,6 +45,10 @@ export interface ClientToServerEvents {
     ack: (result: ScreenShareResult) => void,
   ) => void;
   'screen:stop': (input: { shareId: string }) => void;
+  'screen:credentials': (
+    input: { shareId: string },
+    ack: (result: ScreenShareResult) => void,
+  ) => void;
   'screen:move': (input: ScreenShareStart) => void;
   'screen:watch': (
     input: ScreenShareWatch,

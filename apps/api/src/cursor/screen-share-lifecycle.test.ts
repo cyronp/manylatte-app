@@ -67,7 +67,9 @@ function setup() {
     const connectionId = randomUUID();
     const ack = vi.fn();
     viewer.emit('screen:watch', { shareId, connectionId }, ack);
-    expect(ack).toHaveBeenCalledWith({ ok: true, iceServers: [] });
+    expect(ack).toHaveBeenCalledWith(
+      expect.objectContaining({ ok: true, iceServers: [] }),
+    );
     return connectionId;
   };
   return { presenter, viewer, shareId, watch, room, emit, metrics };
@@ -126,4 +128,32 @@ it('cancels pending slot timers when the presenter disconnects', () => {
   expect(room.screenShare).toBeUndefined();
   expect(metrics.activeViewers).toBe(0);
   expect(vi.getTimerCount()).toBe(0);
+});
+
+it('refreshes credentials only for active share participants and throttles renewal', () => {
+  const { presenter, viewer, shareId, watch } = setup();
+  const ack = vi.fn();
+  viewer.emit('screen:credentials', { shareId }, ack);
+  expect(ack.mock.lastCall?.[0].ok).toBe(false);
+  const connectionId = watch();
+  viewer.emit('screen:credentials', { shareId: randomUUID() }, ack);
+  expect(ack.mock.lastCall?.[0].ok).toBe(false);
+  viewer.emit('screen:credentials', { shareId }, ack);
+  expect(ack.mock.lastCall?.[0]).toMatchObject({
+    ok: true,
+    iceServersExpiresAt: Date.now() + 900_000,
+  });
+  viewer.emit('screen:credentials', { shareId }, ack);
+  expect(ack.mock.lastCall?.[0].ok).toBe(false);
+  presenter.emit('screen:credentials', { shareId }, ack);
+  expect(ack.mock.lastCall?.[0].ok).toBe(true);
+  viewer.emit('screen:unwatch', { shareId, connectionId });
+  vi.advanceTimersByTime(60_000);
+  viewer.emit('screen:credentials', { shareId }, ack);
+  expect(ack.mock.lastCall?.[0].ok).toBe(false);
+  presenter.emit('screen:credentials', { shareId }, ack);
+  expect(ack.mock.lastCall?.[0]).toMatchObject({
+    ok: true,
+    iceServersExpiresAt: Date.now() + 900_000,
+  });
 });

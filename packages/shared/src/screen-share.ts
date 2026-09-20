@@ -55,7 +55,11 @@ export interface ScreenShareIceServer {
   credential?: string;
 }
 export type ScreenShareResult =
-  | { ok: true; iceServers: ScreenShareIceServer[] }
+  | {
+      ok: true;
+      iceServers: ScreenShareIceServer[];
+      iceServersExpiresAt?: number;
+    }
   | { ok: false; message: string };
 export interface ScreenShareSync {
   share: ScreenShare | null;
