@@ -237,13 +237,58 @@ describe('screen sharing signaling', () => {
   it('disconnects a client that repeatedly sends malformed screen messages', async () => {
     const presenter = await connect();
     for (let index = 0; index < 20; index++)
-      presenter.emit(
-        'screen:signal',
-        { malformed: true } as unknown as ScreenShareSignal,
-      );
+      presenter.emit('screen:signal', {
+        malformed: true,
+      } as unknown as ScreenShareSignal);
 
     await expect
       .poll(() => presenter.connected, { timeout: 1_000 })
       .toBe(false);
+  });
+
+  it('bounds viewer retry fanout without charging automatic offers to the presenter message budget', async () => {
+    const presenter = await connect();
+    const shareId = await start(presenter);
+    const viewers: Client[] = [];
+    for (let i = 0; i < 8; i++) viewers.push(await connect());
+    let negotiations = 0;
+    presenter.on('screen:viewer', ({ joined, peerId, connectionId }) => {
+      if (!joined) return;
+      negotiations++;
+      presenter.emit('screen:signal', {
+        shareId,
+        peerId,
+        connectionId,
+        signal: { type: 'offer', sdp: 'offer' },
+      });
+      for (let i = 0; i < 8; i++)
+        presenter.emit('screen:signal', {
+          shareId,
+          peerId,
+          connectionId,
+          signal: {
+            type: 'candidate',
+            candidate: { candidate: `candidate:${i}` },
+          },
+        });
+    });
+    let rejected = 0;
+    for (let i = 0; i < 18; i++) {
+      const results = await Promise.all(
+        viewers.map((viewer) =>
+          viewer
+            .timeout(2000)
+            .emitWithAck('screen:watch', {
+              shareId,
+              connectionId: randomUUID(),
+            }),
+        ),
+      );
+      rejected += results.filter((result) => !result.ok).length;
+    }
+    expect(rejected).toBeGreaterThan(100);
+    expect(negotiations).toBeLessThanOrEqual(18);
+    expect((await sync(presenter)).share?.id).toBe(shareId);
+    expect(presenter.connected).toBe(true);
   });
 });

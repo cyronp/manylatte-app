@@ -13,10 +13,12 @@ import type {
   CursorRoom,
   Participant,
 } from './cursor-types.js';
+import { TokenBucket } from './token-bucket.js';
 
 export interface RoomScreenShare {
   share: ScreenShare;
   viewers: Map<string, string>;
+  negotiations: TokenBucket;
 }
 
 export interface ScreenShareMetrics {
@@ -43,6 +45,12 @@ export function registerScreenShare(
   metrics: ScreenShareMetrics,
 ) {
   const roomId = socket.data.cursorRoomId;
+  // A retry is expensive for the presenter even when the viewer sends no media.
+  const watchBudget = new TokenBucket(3, 1 / 5);
+  const signalBudget = new TokenBucket(
+    80 * MAX_SCREEN_SHARE_VIEWERS,
+    20 * MAX_SCREEN_SHARE_VIEWERS,
+  );
   let moveBroadcastTimer: ReturnType<typeof setTimeout> | undefined;
   const accept = (event: string) => {
     if (!socket.connected) return false;
@@ -138,6 +146,7 @@ export function registerScreenShare(
         },
       },
       viewers: new Map(),
+      negotiations: new TokenBucket(16, 1),
     };
     metrics.activeShares++;
     metrics.starts++;
@@ -226,6 +235,16 @@ export function registerScreenShare(
     }
     if (current.viewers.get(socket.id) === parsed.data.connectionId)
       return ack({ ok: true, iceServers: iceServers() });
+    if (
+      !watchBudget.take(acceptedAt) ||
+      !current.negotiations.take(acceptedAt)
+    ) {
+      metrics.watchRejects++;
+      return ack({
+        ok: false,
+        message: 'Please wait a few seconds before retrying.',
+      });
+    }
     unwatch();
     current.viewers.set(socket.id, parsed.data.connectionId);
     metrics.activeViewers++;
@@ -258,8 +277,10 @@ export function registerScreenShare(
     }
   });
   socket.on('screen:signal', (input) => {
-    const acceptedAt = accept('screen:signal');
-    if (acceptedAt === false) return;
+    // Fanout produces legitimate bursts of offers and ICE. Bound that traffic
+    // separately; peer-induced responses must not kick the presenter for abuse.
+    const acceptedAt = Date.now();
+    if (!socket.connected || !signalBudget.take(acceptedAt)) return;
     metrics.signalMessages++;
     const parsed = screenShareSignalSchema.safeParse(input);
     if (!parsed.success) {
@@ -270,8 +291,7 @@ export function registerScreenShare(
       return;
     }
     const current = room.screenShare;
-    if (!current || current.share.id !== parsed.data.shareId)
-      return;
+    if (!current || current.share.id !== parsed.data.shareId) return;
     const { peerId, connectionId, signal } = parsed.data;
     if (!room.participants.has(peerId) || peerId === socket.id) return;
     const isPresenter = current.share.presenterId === socket.id;
