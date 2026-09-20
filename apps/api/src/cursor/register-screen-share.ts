@@ -28,6 +28,7 @@ export function registerScreenShare(
   iceServers: () => ScreenShareIceServer[],
 ) {
   const roomId = socket.data.cursorRoomId;
+  let moveBroadcastTimer: ReturnType<typeof setTimeout> | undefined;
   const accept = (event: string) => {
     if (!socket.connected) return false;
     const time = acceptMessage(event);
@@ -39,6 +40,19 @@ export function registerScreenShare(
     if (room.screenShare)
       room.screenShare.share.viewerCount = room.screenShare.viewers.size;
     io.to(roomId).emit('screen:state', room.screenShare?.share ?? null);
+  };
+  const cancelMoveBroadcast = () => {
+    if (moveBroadcastTimer === undefined) return;
+    clearTimeout(moveBroadcastTimer);
+    moveBroadcastTimer = undefined;
+  };
+  const broadcastMove = () => {
+    if (moveBroadcastTimer !== undefined) return;
+    moveBroadcastTimer = setTimeout(() => {
+      moveBroadcastTimer = undefined;
+      broadcast();
+    }, 50);
+    moveBroadcastTimer.unref?.();
   };
   const unwatch = () => {
     const current = room.screenShare;
@@ -96,6 +110,7 @@ export function registerScreenShare(
       room.screenShare.share.presenterId === socket.id
     ) {
       room.screenShare = undefined;
+      cancelMoveBroadcast();
       broadcast();
     }
   });
@@ -108,7 +123,7 @@ export function registerScreenShare(
       room.screenShare.share.presenterId === socket.id
     ) {
       room.screenShare.share.position = parsed.data.position;
-      broadcast();
+      broadcastMove();
     }
   });
   socket.on('screen:watch', (input, ack) => {
@@ -193,6 +208,7 @@ export function registerScreenShare(
       accept('screen:heartbeat');
   });
   socket.on('disconnect', () => {
+    cancelMoveBroadcast();
     if (room.screenShare?.share.presenterId === socket.id) {
       room.screenShare = undefined;
       broadcast();

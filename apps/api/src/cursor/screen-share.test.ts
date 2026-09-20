@@ -96,6 +96,27 @@ describe('screen sharing signaling', () => {
     expect(await start(viewer)).not.toBe(shareId);
   });
 
+  it('coalesces rapid presenter position updates without losing the latest position', async () => {
+    const presenter = await connect();
+    const viewer = await connect();
+    const states = vi.fn();
+    viewer.on('screen:state', states);
+    const shareId = await start(presenter);
+    await expect.poll(() => states.mock.calls.length).toBe(1);
+    states.mockClear();
+
+    for (let index = 0; index < 5; index++)
+      presenter.emit('screen:move', {
+        shareId,
+        position: { x: index * 10, y: index * 20 },
+      });
+
+    await expect
+      .poll(() => states.mock.calls.length, { timeout: 1_000 })
+      .toBe(1);
+    expect(states.mock.lastCall?.[0].position).toEqual({ x: 40, y: 80 });
+  });
+
   it('relays offers, answers and ICE only between the presenter and registered same-lobby viewers', async () => {
     const presenter = await connect();
     const viewer = await connect();
