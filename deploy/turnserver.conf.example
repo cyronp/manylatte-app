@@ -1,0 +1,65 @@
+# Coturn starting configuration. Provision and validate on the actual relay host.
+# Reference: https://github.com/coturn/coturn/blob/master/examples/etc/turnserver.conf
+# Keep the completed file outside the repository, readable only by the service.
+# Authentication remains unusable until you configure the generated secret.
+use-auth-secret
+# static-auth-secret=<same randomly generated secret as WEBRTC_TURN_SECRET>
+realm=turn.example.com
+fingerprint
+listening-port=3478
+tls-listening-port=5349
+# Configure your real addresses, advertised NAT mapping, and TLS certificate.
+# listening-ip=<relay-interface-address>
+# relay-ip=<relay-interface-address>
+# external-ip=<public-ip>/<private-ip>
+# cert=/etc/coturn/tls/fullchain.pem
+# pkey=/etc/coturn/tls/privkey.pem
+
+# Capacity examples, not a guarantee of adequate bandwidth for every deployment.
+# Bandwidth is bytes/second per direction. Account for up to 8 peers per presenter.
+user-quota=24
+total-quota=128
+max-bps=1000000
+bps-capacity=16000000
+min-port=49152
+max-port=49551
+stale-nonce=600
+max-allocate-timeout=30
+
+# WebRTC uses UDP relay allocations even when clients connect to TURN over TLS/TCP.
+no-tcp-relay
+no-multicast-peers
+no-cli
+no-tlsv1
+no-tlsv1_1
+# Never enable no-auth, allow-loopback-peers, cli, or web-admin on a public relay.
+
+# Deny non-public destinations. Also enforce an egress firewall including YOUR
+# internal/management networks and infrastructure public IPs. Avoid allow-list
+# overrides, which take precedence over these denials. Keep special ranges updated.
+denied-peer-ip=0.0.0.0-0.255.255.255
+denied-peer-ip=10.0.0.0-10.255.255.255
+denied-peer-ip=100.64.0.0-100.127.255.255
+denied-peer-ip=127.0.0.0-127.255.255.255
+denied-peer-ip=169.254.0.0-169.254.255.255
+denied-peer-ip=172.16.0.0-172.31.255.255
+denied-peer-ip=192.0.0.0-192.0.0.255
+denied-peer-ip=192.0.2.0-192.0.2.255
+denied-peer-ip=192.88.99.0-192.88.99.255
+denied-peer-ip=192.168.0.0-192.168.255.255
+denied-peer-ip=198.18.0.0-198.19.255.255
+denied-peer-ip=198.51.100.0-198.51.100.255
+denied-peer-ip=203.0.113.0-203.0.113.255
+denied-peer-ip=224.0.0.0-255.255.255.255
+denied-peer-ip=::-::1
+denied-peer-ip=::ffff:0:0-::ffff:ffff:ffff
+denied-peer-ip=64:ff9b::-64:ff9b::ffff:ffff
+denied-peer-ip=64:ff9b:1::-64:ff9b:1:ffff:ffff:ffff:ffff:ffff
+denied-peer-ip=100::-100::ffff:ffff:ffff:ffff
+denied-peer-ip=2001::-2001:1ff:ffff:ffff:ffff:ffff:ffff:ffff
+denied-peer-ip=2001:db8::-2001:db8:ffff:ffff:ffff:ffff:ffff:ffff
+denied-peer-ip=2002::-2002:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+denied-peer-ip=fe80::-febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+denied-peer-ip=fec0::-feff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+denied-peer-ip=ff00::-ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff

@@ -41,6 +41,13 @@ export function readScreenShareConfig(
     throw new Error(
       'Invalid API environment: WEBRTC_TURN_URLS and WEBRTC_TURN_SECRET must be configured together',
     );
+  if (
+    turnSecret &&
+    (Buffer.byteLength(turnSecret, 'utf8') < 32 || /\s/.test(turnSecret))
+  )
+    throw new Error(
+      'Invalid API environment: WEBRTC_TURN_SECRET must contain at least 32 bytes and no whitespace',
+    );
   return { stunUrls, turnUrls, turnSecret };
 }
 

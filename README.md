@@ -98,7 +98,7 @@ The API supports these optional network settings:
 ```dotenv
 WEBRTC_STUN_URLS=stun:stun.l.google.com:19302
 WEBRTC_TURN_URLS=turn:turn.example.com:3478,turns:turn.example.com:5349
-WEBRTC_TURN_SECRET=your-coturn-static-auth-secret
+WEBRTC_TURN_SECRET=<generated-secret>
 ```
 
 STUN defaults to Google's public discovery service. Set `WEBRTC_STUN_URLS` to
@@ -109,6 +109,36 @@ service with REST/shared-secret authentication (`use-auth-secret` and the matchi
 The API issues short-lived credentials when a participant starts or watches a
 share; the shared secret remains on the server. TURN URLs and secret must be set
 together.
+
+Use [the Coturn configuration template](deploy/turnserver.conf.example) as a
+starting point. Generate a secret with
+`node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"`
+and configure the same value in the API and Coturn. The API rejects secrets
+shorter than 32 bytes or containing whitespace. Store the real configuration
+outside this repository with access limited to the service account.
+
+TURN credentials are bearer credentials: a participant can reuse them outside
+the app until expiry. Socket IDs in their usernames do not restrict relay
+destinations or revoke access on disconnect. Enforce per-user/global allocation
+and bandwidth limits on Coturn, deny private/reserved peer addresses for IPv4
+and IPv6, and isolate relay egress from internal services, metadata endpoints,
+and management networks. Include your own infrastructure's public addresses in
+the egress policy. Do not add broad `allowed-peer-ip` exceptions; they override
+denials. These controls must be applied to the actual relay deployment. See
+[Coturn's configuration reference](https://github.com/coturn/coturn/blob/master/examples/etc/turnserver.conf)
+for option semantics and tune the template's quotas to your capacity.
+
+The API limits viewer retries, expires pending viewers after 30 seconds unless
+the presenter confirms connection, and releases failed peers. Active clients
+refresh TURN credentials before the 15-minute expiry; late viewer negotiations
+also refresh stale presenter credentials. Deploy the API and frontend together
+because slot confirmation and credential renewal use new signaling events.
+
+After provisioning the relay, verify a share with direct connectivity blocked,
+keep it running beyond 15 minutes, and join with a new viewer. Separately verify
+that private/metadata destinations and allocations exceeding your quota are
+rejected. Guest identity bans remain bypassable as described below; sensitive
+sessions require stronger admission controls than possession of an invite.
 
 For existing installations, raise `SOCKET_MAX_HTTP_BUFFER_BYTES` to `32768`
 to accommodate WebRTC session descriptions. Restart the API after changing its
