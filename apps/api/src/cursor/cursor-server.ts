@@ -1,4 +1,12 @@
 import { randomUUID } from 'node:crypto';
+import {
+  registerScreenShare,
+  type ScreenShareMetrics,
+} from './register-screen-share.js';
+import {
+  screenShareIceServers,
+  type ScreenShareConfig,
+} from '../screen-share-config.js';
 import type { Database } from '@app/db';
 import { registerLobbyModeration } from './register-lobby-moderation.js';
 import { createSocketGuards } from './socket-guards.js';
@@ -44,6 +52,7 @@ import { registerTyping, clearTyping } from './typing-presence.js';
 import { OperationMetrics } from './operation-metrics.js';
 import { WorkBudget } from './work-budget.js';
 export interface CursorServerOptions {
+  screenShareConfig?: ScreenShareConfig;
   lobbyDatabase?: Database;
   canvasPersistence: CanvasPersistence;
   authorizeRoom: (roomId: CursorRoomId) => boolean | Promise<boolean>;
@@ -60,6 +69,10 @@ export interface CursorServerOptions {
 export const registerCursorServer = (
   io: CursorIo,
   {
+    screenShareConfig = {
+      stunUrls: ['stun:stun.l.google.com:19302'],
+      turnUrls: [],
+    },
     lobbyDatabase,
     canvasPersistence,
     authorizeRoom,
@@ -120,6 +133,18 @@ export const registerCursorServer = (
   const rooms = new Map<CursorRoomId, CursorRoom>();
   const workBudget = new WorkBudget();
   const metrics = new OperationMetrics();
+  const screenShareMetrics: ScreenShareMetrics = {
+    activeShares: 0,
+    activeViewers: 0,
+    credentialRequests: 0,
+    invalidMessages: 0,
+    signalMessages: 0,
+    starts: 0,
+    stops: 0,
+    unwatchers: 0,
+    watchRejects: 0,
+    watches: 0,
+  };
 
   const getRoom = (roomId: CursorRoomId) => {
     const existingRoom = rooms.get(roomId);
@@ -248,6 +273,21 @@ export const registerCursorServer = (
         (event) => acceptMessageBudget(socket, participant, event),
         logger,
       );
+
+    registerScreenShare(
+      io,
+      socket,
+      room,
+      participant,
+      (event) => acceptMessageBudget(socket, participant, event),
+      (reason, issueCodes) =>
+        recordViolation(socket, participant, reason, issueCodes),
+      () => {
+        screenShareMetrics.credentialRequests++;
+        return screenShareIceServers(screenShareConfig, socket.id);
+      },
+      screenShareMetrics,
+    );
 
     registerPresence(
       io,
@@ -389,6 +429,7 @@ export const registerCursorServer = (
   return {
     metrics: () => ({
       ...metrics.snapshot(),
+      screenShare: { ...screenShareMetrics },
       activeRooms: rooms.size,
       connections: io.engine.clientsCount,
       pendingWork: workBudget.pending,

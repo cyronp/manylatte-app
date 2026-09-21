@@ -1,4 +1,9 @@
-import { ChatIcon, SmileyStickerIcon, NoteIcon } from '@phosphor-icons/react';
+import {
+  ChatIcon,
+  SmileyStickerIcon,
+  NoteIcon,
+  MonitorIcon,
+} from '@phosphor-icons/react';
 import type { ComponentProps } from 'react';
 
 import {
@@ -14,6 +19,8 @@ interface CanvasContextMenuProps {
   onReactionSelect: () => void;
   onMessageSelect: () => void;
   onPostitSelect: () => void;
+  onScreenShareSelect: () => void;
+  screenShareDisabled?: boolean;
 }
 
 export const CanvasContextMenu = ({
@@ -22,8 +29,17 @@ export const CanvasContextMenu = ({
   onReactionSelect,
   onMessageSelect,
   onPostitSelect,
+  onScreenShareSelect,
+  screenShareDisabled,
 }: CanvasContextMenuProps) => (
   <ContextMenuContent className="w-48" onCloseAutoFocus={onCloseAutoFocus}>
+    <ContextMenuItem
+      disabled={disabled || screenShareDisabled}
+      onSelect={onScreenShareSelect}
+    >
+      <MonitorIcon />
+      Share screen
+    </ContextMenuItem>
     <ContextMenuItem disabled={disabled} onSelect={onPostitSelect}>
       <NoteIcon />
       Post-it

@@ -59,6 +59,7 @@ export interface Participant {
 }
 
 export interface CursorRoom {
+  screenShare?: import('./register-screen-share.js').RoomScreenShare;
   moderation?: Promise<void>;
   canvas: PersistentCanvas;
   participants: Map<string, Participant>;

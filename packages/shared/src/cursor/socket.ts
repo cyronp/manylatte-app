@@ -1,4 +1,13 @@
 import type {
+  ScreenShare,
+  ScreenShareStart,
+  ScreenShareWatch,
+  ScreenShareSignal,
+  ScreenShareResult,
+  ScreenShareSync,
+  ScreenShareViewer,
+} from '../screen-share.js';
+import type {
   LobbyModeration,
   LobbyModerationResult,
   LobbyOwnership,
@@ -30,6 +39,27 @@ import type {
 } from '../canvas/commands.js';
 
 export interface ClientToServerEvents {
+  'screen:sync': (ack: (result: ScreenShareSync) => void) => void;
+  'screen:start': (
+    input: ScreenShareStart,
+    ack: (result: ScreenShareResult) => void,
+  ) => void;
+  'screen:stop': (input: { shareId: string }) => void;
+  'screen:credentials': (
+    input: { shareId: string },
+    ack: (result: ScreenShareResult) => void,
+  ) => void;
+  'screen:move': (input: ScreenShareStart) => void;
+  'screen:watch': (
+    input: ScreenShareWatch,
+    ack: (result: ScreenShareResult) => void,
+  ) => void;
+  'screen:unwatch': (input: ScreenShareWatch) => void;
+  'screen:peer-status': (
+    input: import('../screen-share.js').ScreenSharePeerStatus,
+  ) => void;
+  'screen:signal': (input: ScreenShareSignal) => void;
+  'screen:heartbeat': (input: { shareId: string }) => void;
   'lobby:moderate': (
     input: LobbyModeration,
     ack: (result: LobbyModerationResult) => void,
@@ -48,6 +78,10 @@ export interface ClientToServerEvents {
 }
 
 export interface ServerToClientEvents {
+  'screen:state': (share: ScreenShare | null) => void;
+  'screen:viewer': (viewer: ScreenShareViewer) => void;
+  'screen:ended': (input: ScreenShareWatch) => void;
+  'screen:signal': (input: ScreenShareSignal) => void;
   'lobby:ownership': (ownership: LobbyOwnership) => void;
   'canvas:change': (change: CanvasChange) => void;
   'canvas:error': (error: { message: string }) => void;

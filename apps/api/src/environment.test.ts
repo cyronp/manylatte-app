@@ -8,7 +8,7 @@ describe('API environment', () => {
     const environment = readApiEnvironment({});
 
     expect(environment.allowedOrigins).toEqual(DEFAULT_ALLOWED_ORIGINS);
-    expect(environment.maxHttpBufferBytes).toBe(4_096);
+    expect(environment.maxHttpBufferBytes).toBe(32_768);
     expect(environment.port).toBe(3_000);
     expect(environment.databaseUrl).toMatch(/^file:.*manylatte\.db$/);
   });
