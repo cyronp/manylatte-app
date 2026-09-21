@@ -18,7 +18,7 @@
     "@xyflow/react": "^12.11.6",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "cn": "^0.2.6",
+    "cn": "^0.3.0",
     "emoji-picker-react": "^4.22.2",
     "input-otp": "^1.5.0",
     "radix-ui": "^1.6.7",
