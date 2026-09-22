@@ -19,9 +19,7 @@ import { cn } from '@/lib/utils';
 import {
   ArrowUpIcon,
   CircleDashedIcon,
-  DotsThreeVerticalIcon,
   MinusIcon,
-  TrashIcon,
 } from '@phosphor-icons/react';
 import { Popover as PopoverPrimitive } from 'radix-ui';
 import {
@@ -39,12 +37,6 @@ import {
   useRef,
   useState,
 } from 'react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 
 import { useMessageSubmit } from '../use-message-submit';
 import { useMessageHistory } from '../use-message-history';
@@ -74,7 +66,7 @@ export type MessageNode = Node<
 >;
 
 export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
-  const { socket, execute, status, user, users } = useSocket();
+  const { socket, status, user, users } = useSocket();
   const zoom = useStore((state) => state.transform[2]);
   const [draft, setDraft] = useState('');
   const [isOpen, setIsOpen] = useState(() => data.messages.length === 0);
@@ -217,51 +209,18 @@ export const MessageCanvasNode = ({ data, id }: NodeProps<MessageNode>) => {
         >
           <div className="flex w-full items-center justify-between gap-2 bg-background border-b border-border p-2 pl-4">
             <span className="text-sm font-medium">Messages</span>
-            <div className="flex flex-row gap-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    aria-label="Message options"
-                    variant="ghost"
-                    size="icon-sm"
-                    className="nodrag"
-                  >
-                    <DotsThreeVerticalIcon />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  <DropdownMenuItem
-                    disabled={status !== 'connected'}
-                    onSelect={() => {
-                      if (!socket.connected) return;
-                      stopTyping();
-                      void execute({
-                        type: 'mutation',
-                        mutation: {
-                          action: 'delete',
-                          nodeId: id,
-                        },
-                      });
-                    }}
-                    variant="destructive"
-                  >
-                    <TrashIcon /> Delete message
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <PopoverPrimitive.Close asChild>
-                <Button
-                  aria-label="Close messages"
-                  className="nodrag"
-                  size="icon-sm"
-                  title="Close messages"
-                  type="button"
-                  variant="ghost"
-                >
-                  <MinusIcon />
-                </Button>
-              </PopoverPrimitive.Close>
-            </div>
+            <PopoverPrimitive.Close asChild>
+              <Button
+                aria-label="Close messages"
+                className="nodrag"
+                size="icon-sm"
+                title="Close messages"
+                type="button"
+                variant="ghost"
+              >
+                <MinusIcon />
+              </Button>
+            </PopoverPrimitive.Close>
           </div>
           <div
             className="nowheel flex flex-1 flex-col gap-6 overflow-y-auto p-4"
