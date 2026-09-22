@@ -1,8 +1,8 @@
 import {
   ChatIcon,
   SmileyStickerIcon,
-  NoteIcon,
   MonitorIcon,
+  NoteBlankIcon,
 } from '@phosphor-icons/react';
 import type { ComponentProps } from 'react';
 
@@ -41,7 +41,7 @@ export const CanvasContextMenu = ({
       Share screen
     </ContextMenuItem>
     <ContextMenuItem disabled={disabled} onSelect={onPostitSelect}>
-      <NoteIcon />
+      <NoteBlankIcon />
       Post-it
     </ContextMenuItem>
     <ContextMenuItem disabled={disabled} onSelect={onReactionSelect}>

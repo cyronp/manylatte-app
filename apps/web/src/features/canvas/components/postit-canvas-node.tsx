@@ -119,11 +119,11 @@ export const PostitCanvasNode = ({ id, data }: NodeProps<PostitNode>) => {
           setEditing(true);
         }
       }}
-      className={`w-64 cursor-grab rounded-none ${color} text-black shadow-md active:cursor-grabbing`}
+      className={`flex size-64 cursor-grab flex-col rounded-none ${color} text-black shadow-md active:cursor-grabbing`}
     >
       {isOwner && editing ? (
         <div
-          className="nodrag nopan cursor-auto p-4"
+          className="nodrag nopan nowheel min-h-0 flex-1 overflow-y-auto cursor-auto p-4"
           onKeyDown={(event) => {
             event.stopPropagation();
             if (event.key === 'Escape' && !pending.current) {
@@ -135,7 +135,7 @@ export const PostitCanvasNode = ({ id, data }: NodeProps<PostitNode>) => {
             }
           }}
         >
-          <div className="relative min-h-40 whitespace-pre-wrap break-words text-sm leading-relaxed">
+          <div className="relative min-h-40 whitespace-pre-wrap wrap-break-words text-sm leading-relaxed">
             <div aria-hidden="true" className="invisible min-h-40">
               {text + ' '}
             </div>
@@ -162,12 +162,12 @@ export const PostitCanvasNode = ({ id, data }: NodeProps<PostitNode>) => {
           )}
         </div>
       ) : (
-        <p className="min-h-48 select-none whitespace-pre-wrap break-words p-4 text-sm leading-relaxed">
+        <p className="nowheel min-h-0 flex-1 overflow-y-auto select-none whitespace-pre-wrap wrap-break-words p-4 text-sm leading-relaxed">
           {text ||
             (isOwner ? 'Double-click to write a note…' : 'Empty Post-it')}
         </p>
       )}
-      <footer className="break-words px-4 pb-3 text-xs text-black/60">
+      <footer className="shrink-0 wrap-break-words px-4 pb-3 text-xs text-black/60">
         {data.user.username}
       </footer>
     </section>
