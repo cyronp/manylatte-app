@@ -28,7 +28,7 @@ export function PostitActions({
     <div
       role="group"
       aria-label="Post-it actions"
-      className="nodrag nopan nowheel absolute bottom-full left-1/2 z-10 mb-2 flex -translate-x-1/2 cursor-auto items-center gap-2 rounded-xl border bg-background p-2 text-foreground shadow-lg"
+      className="nodrag nopan nowheel absolute bottom-full left-1/2 z-10 mb-2 flex -translate-x-1/2 cursor-auto items-center gap-2 rounded-full border bg-background p-2 text-foreground shadow-lg"
       onClick={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => {

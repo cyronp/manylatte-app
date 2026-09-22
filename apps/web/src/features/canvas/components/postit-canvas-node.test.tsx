@@ -130,7 +130,9 @@ it('creates a new Post-it only after text is entered and clicked outside', async
     },
   });
   expect(container.querySelector('textarea')).not.toBeNull();
-  expect(container.querySelector('button')).toBeNull();
+  expect(
+    container.querySelector('[aria-label="Post-it actions"]'),
+  ).not.toBeNull();
   expect(socket.execute).not.toHaveBeenCalled();
   await edit('First line\nSecond line');
   expect(socket.execute).not.toHaveBeenCalled();
@@ -234,7 +236,6 @@ it('keeps actions local for a draft and saves its selected color on creation', a
       draft: { position: { x: 20, y: 30 }, onCancel },
     },
   });
-  await click('section');
   await click('[aria-label="Make Post-it green"]');
   expect(socket.execute).not.toHaveBeenCalled();
   expect(onCancel).not.toHaveBeenCalled();

@@ -41,6 +41,11 @@ test('Post-it actions appear above the note and sync colors and removal', async 
     await join(viewer, lobby.code, 'Bob');
     await openCanvasMenu(owner);
     await owner.getByRole('menuitem', { name: 'Post-it', exact: true }).click();
+    await expect(
+      owner.getByRole('group', { name: 'Post-it actions' }),
+    ).toBeVisible();
+    await owner.getByRole('button', { name: 'Make Post-it green' }).click();
+    await expect(viewer.locator('.react-flow__node-postit')).toHaveCount(0);
     await owner
       .getByRole('textbox', { name: 'Post-it text' })
       .fill('A colorful note');
@@ -50,6 +55,7 @@ test('Post-it actions appear above the note and sync colors and removal', async 
     const note = owner.locator('.react-flow__node-postit section');
     const peerNote = viewer.locator('.react-flow__node-postit section');
     await expect(peerNote).toContainText('A colorful note');
+    await expect(peerNote).toHaveClass(/bg-green-200/);
     await note.click();
     const actions = owner.getByRole('group', { name: 'Post-it actions' });
     await expect(actions).toBeVisible();

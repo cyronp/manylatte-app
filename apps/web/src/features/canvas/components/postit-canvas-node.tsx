@@ -22,7 +22,7 @@ export type PostitNode = Node<
 
 export const PostitCanvasNode = ({ id, data }: NodeProps<PostitNode>) => {
   const [draftColor, setDraftColor] = useState<CanvasPostitColor>();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(Boolean(data.draft));
   // Existing notes retain their original color until a color is chosen.
   const color =
     (data.draft ? draftColor : undefined) ??
