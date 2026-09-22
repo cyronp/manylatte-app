@@ -45,6 +45,10 @@ const startEditing = () =>
       .querySelector('section')!
       .dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
   });
+const click = (selector: string) =>
+  act(async () => {
+    container.querySelector<HTMLElement>(selector)!.click();
+  });
 const edit = async (value: string) => {
   const textarea = container.querySelector('textarea')!;
   await act(async () => {
@@ -126,7 +130,9 @@ it('creates a new Post-it only after text is entered and clicked outside', async
     },
   });
   expect(container.querySelector('textarea')).not.toBeNull();
-  expect(container.querySelector('button')).toBeNull();
+  expect(
+    container.querySelector('[aria-label="Post-it actions"]'),
+  ).not.toBeNull();
   expect(socket.execute).not.toHaveBeenCalled();
   await edit('First line\nSecond line');
   expect(socket.execute).not.toHaveBeenCalled();
@@ -180,4 +186,132 @@ it('does not submit twice when pointer and focus leave during a pending save', a
   expect(socket.execute).toHaveBeenCalledOnce();
   await act(async () => resolve({ ok: true }));
   expect(container.querySelector('textarea')).toBeNull();
+});
+
+it('opens actions on click and updates the color without overwriting text', async () => {
+  socket.execute.mockResolvedValue({ ok: true });
+  await render();
+  expect(container.querySelector('[aria-label="Post-it actions"]')).toBeNull();
+  await click('section');
+  await click('[aria-label="Make Post-it purple"]');
+  expect(socket.execute).toHaveBeenCalledWith({
+    type: 'mutation',
+    mutation: { action: 'update-postit', nodeId: 'note', color: 'purple' },
+  });
+  await render({ ...props, data: { ...props.data, color: 'purple' } });
+  expect(
+    container.querySelector('section')?.classList.contains('bg-purple-200'),
+  ).toBe(true);
+  expect(
+    container
+      .querySelector('[aria-label="Make Post-it purple"]')
+      ?.getAttribute('aria-pressed'),
+  ).toBe('true');
+  await clickOutside();
+  expect(container.querySelector('[aria-label="Post-it actions"]')).toBeNull();
+});
+
+it('removes a saved note and reports failed actions', async () => {
+  socket.execute.mockResolvedValue({ ok: false, message: 'Try again' });
+  await render();
+  await click('section');
+  await click('[aria-label="Remove Post-it"]');
+  expect(socket.execute).toHaveBeenCalledWith({
+    type: 'mutation',
+    mutation: { action: 'delete', nodeId: 'note' },
+  });
+  expect(container.querySelector('[role="alert"]')?.textContent).toBe(
+    'Try again',
+  );
+});
+
+it('keeps actions local for a draft and saves its selected color on creation', async () => {
+  socket.execute.mockResolvedValue({ ok: true });
+  const onCancel = vi.fn();
+  await render({
+    ...props,
+    data: {
+      ...props.data,
+      text: '',
+      draft: { position: { x: 20, y: 30 }, onCancel },
+    },
+  });
+  await click('[aria-label="Make Post-it green"]');
+  expect(socket.execute).not.toHaveBeenCalled();
+  expect(onCancel).not.toHaveBeenCalled();
+  expect(
+    container.querySelector('section')?.classList.contains('bg-green-200'),
+  ).toBe(true);
+  await edit('Saved note');
+  await clickOutside();
+  expect(socket.execute).toHaveBeenCalledWith({
+    type: 'mutation',
+    mutation: {
+      action: 'create',
+      node: {
+        id: 'note',
+        type: 'postit',
+        position: { x: 20, y: 30 },
+        data: { text: 'Saved note', color: 'green' },
+      },
+    },
+  });
+});
+
+it('cancels a draft from its actions without saving it', async () => {
+  const onCancel = vi.fn();
+  await render({
+    ...props,
+    data: { ...props.data, draft: { position: { x: 20, y: 30 }, onCancel } },
+  });
+  await click('section');
+  await click('[aria-label="Remove Post-it"]');
+  expect(onCancel).toHaveBeenCalledOnce();
+  expect(socket.execute).not.toHaveBeenCalled();
+});
+
+it('hides actions from visitors and disables saved-note actions while offline', async () => {
+  socket.user = { userId: 'visitor' };
+  await render();
+  await click('section');
+  expect(container.querySelector('[aria-label="Post-it actions"]')).toBeNull();
+  socket.user = { userId: 'owner' };
+  socket.status = 'disconnected';
+  await render();
+  await click('section');
+  expect(
+    [...container.querySelectorAll('button')].every(
+      (button) => button.disabled,
+    ),
+  ).toBe(true);
+  await click('[aria-label="Remove Post-it"]');
+  expect(socket.execute).not.toHaveBeenCalled();
+});
+
+it('opens with the keyboard or right-click and dismisses with Escape', async () => {
+  await render();
+  await act(async () => {
+    container
+      .querySelector('section')!
+      .dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+  });
+  expect(
+    container.querySelector('[aria-label="Post-it actions"]'),
+  ).not.toBeNull();
+  await act(async () => {
+    container
+      .querySelector('button')!
+      .dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+      );
+  });
+  expect(container.querySelector('[aria-label="Post-it actions"]')).toBeNull();
+  await act(async () => {
+    container
+      .querySelector('section')!
+      .dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
+  });
+  expect(
+    container.querySelector('[aria-label="Post-it actions"]'),
+  ).not.toBeNull();
 });

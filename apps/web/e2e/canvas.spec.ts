@@ -26,6 +26,57 @@ async function openCanvasMenu(page: Page) {
   });
 }
 
+test('Post-it actions appear above the note and sync colors and removal', async ({
+  browser,
+  request,
+}) => {
+  const response = await request.post('http://127.0.0.1:3000/lobbies', {
+    data: { name: 'Post-it actions' },
+  });
+  const lobby = await response.json();
+  const owner = await browser.newPage();
+  const viewer = await browser.newPage();
+  try {
+    await join(owner, lobby.code, 'Alice');
+    await join(viewer, lobby.code, 'Bob');
+    await openCanvasMenu(owner);
+    await owner.getByRole('menuitem', { name: 'Post-it', exact: true }).click();
+    await expect(
+      owner.getByRole('group', { name: 'Post-it actions' }),
+    ).toBeVisible();
+    await owner.getByRole('button', { name: 'Make Post-it green' }).click();
+    await expect(viewer.locator('.react-flow__node-postit')).toHaveCount(0);
+    await owner
+      .getByRole('textbox', { name: 'Post-it text' })
+      .fill('A colorful note');
+    await owner
+      .locator('.react-flow__pane')
+      .click({ position: { x: 100, y: 100 } });
+    const note = owner.locator('.react-flow__node-postit section');
+    const peerNote = viewer.locator('.react-flow__node-postit section');
+    await expect(peerNote).toContainText('A colorful note');
+    await expect(peerNote).toHaveClass(/bg-green-200/);
+    await note.click();
+    const actions = owner.getByRole('group', { name: 'Post-it actions' });
+    await expect(actions).toBeVisible();
+    const bounds = await note.boundingBox();
+    const menuBounds = await actions.boundingBox();
+    expect(bounds!.width).toBeCloseTo(bounds!.height, 0);
+    expect(menuBounds!.y + menuBounds!.height).toBeLessThan(bounds!.y);
+    await owner.getByRole('button', { name: 'Make Post-it blue' }).click();
+    await expect(peerNote).toHaveClass(/bg-blue-200/);
+    await owner.reload();
+    await expect(note).toHaveClass(/bg-blue-200/);
+    await note.click();
+    await owner.getByRole('button', { name: 'Remove Post-it' }).click();
+    await expect(note).toHaveCount(0);
+    await expect(peerNote).toHaveCount(0);
+  } finally {
+    await owner.close();
+    await viewer.close();
+  }
+});
+
 test('Ctrl+Z and Ctrl+Y undo and restore only this participant’s node insertions', async ({
   browser,
   request,

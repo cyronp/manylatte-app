@@ -3,6 +3,8 @@ export * from './screen-share.js';
 export * from './canvas/commands.js';
 export {
   canvasMessageTextSchema,
+  canvasPostitColorSchema,
+  type CanvasPostitColor,
   canvasPositionSchema,
 } from './canvas/schemas.js';
 export {

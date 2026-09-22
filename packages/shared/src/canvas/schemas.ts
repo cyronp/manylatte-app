@@ -21,6 +21,14 @@ export const canvasMessageSchema = z.object({
 export type CanvasMessage = z.infer<typeof canvasMessageSchema>;
 
 export const canvasPostitTextSchema = z.string().max(1_000);
+export const canvasPostitColorSchema = z.enum([
+  'yellow',
+  'pink',
+  'blue',
+  'green',
+  'purple',
+]);
+export type CanvasPostitColor = z.infer<typeof canvasPostitColorSchema>;
 
 export const canvasMessageInputSchema = z.object({
   id: z.uuidv4(),
@@ -64,7 +72,11 @@ const canvasEmojiDataSchema = canvasEmojiInputDataSchema.extend({
 
 export const canvasNodeSchema = z.discriminatedUnion('type', [
   canvasNodeBaseSchema.extend({
-    data: z.object({ text: canvasPostitTextSchema, user: cursorUserSchema }),
+    data: z.object({
+      text: canvasPostitTextSchema,
+      color: canvasPostitColorSchema.optional(),
+      user: cursorUserSchema,
+    }),
     type: z.literal('postit'),
   }),
   canvasNodeBaseSchema.extend({
@@ -85,7 +97,10 @@ export type CanvasNode = z.infer<typeof canvasNodeSchema>;
 
 export const canvasNodeCreateSchema = z.discriminatedUnion('type', [
   z.strictObject({
-    data: z.strictObject({ text: canvasPostitTextSchema }),
+    data: z.strictObject({
+      text: canvasPostitTextSchema,
+      color: canvasPostitColorSchema.optional(),
+    }),
     id: z.uuidv4(),
     position: canvasPositionSchema,
     type: z.literal('postit'),
@@ -106,11 +121,16 @@ export const canvasNodeCreateSchema = z.discriminatedUnion('type', [
 export type CanvasNodeCreate = z.infer<typeof canvasNodeCreateSchema>;
 
 export const canvasNodeMutationSchema = z.discriminatedUnion('action', [
-  z.strictObject({
-    action: z.literal('update-postit'),
-    nodeId: z.uuidv4(),
-    text: canvasPostitTextSchema,
-  }),
+  z
+    .strictObject({
+      action: z.literal('update-postit'),
+      nodeId: z.uuidv4(),
+      text: canvasPostitTextSchema.optional(),
+      color: canvasPostitColorSchema.optional(),
+    })
+    .refine(
+      (mutation) => mutation.text !== undefined || mutation.color !== undefined,
+    ),
   z.strictObject({
     action: z.literal('update-reaction'),
     nodeId: z.uuidv4(),

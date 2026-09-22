@@ -85,7 +85,7 @@ async function mutate(
         type: 'postit',
         authorId: user.userId,
       },
-      data: { postitText: mutation.text },
+      data: { postitText: mutation.text, postitColor: mutation.color },
     });
   } else if (mutation.action === 'update-reaction') {
     await database.canvasNode.update({
@@ -104,6 +104,7 @@ async function mutate(
         ...(node.type === 'postit'
           ? {
               postitText: node.data.text,
+              postitColor: node.data.color,
               authorId: user.userId,
               authorUsername: user.username,
               authorColor: user.color,
@@ -171,6 +172,7 @@ export const createCanvasPersistence = (
           node.type === 'postit'
             ? {
                 text: node.postitText ?? '',
+                ...(node.postitColor ? { color: node.postitColor } : {}),
                 user: {
                   userId: node.authorId,
                   username: node.authorUsername,

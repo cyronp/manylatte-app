@@ -1,14 +1,17 @@
-import type { CanvasNode } from '@app/shared';
+import type {
+  CanvasNode,
+  CanvasNodeMutation,
+  CanvasPostitColor,
+} from '@app/shared';
 import type { Node, NodeProps } from '@xyflow/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSocket } from '@/components/socket-provider';
 
-const POSTIT_COLORS = [
-  'bg-yellow-200',
-  'bg-pink-200',
-  'bg-blue-200',
-  'bg-green-200',
-] as const;
+import {
+  PostitActions,
+  POSTIT_COLORS,
+  POSTIT_COLOR_NAMES,
+} from './postit-actions';
 
 export type PostitNode = Node<
   Extract<CanvasNode, { type: 'postit' }>['data'] & {
@@ -18,8 +21,14 @@ export type PostitNode = Node<
 >;
 
 export const PostitCanvasNode = ({ id, data }: NodeProps<PostitNode>) => {
-  // The random UUID keeps each note's color consistent across viewers and reloads.
-  const color = POSTIT_COLORS[(Number.parseInt(id.slice(-1), 16) || 0) % 4];
+  const [draftColor, setDraftColor] = useState<CanvasPostitColor>();
+  const [menuOpen, setMenuOpen] = useState(Boolean(data.draft));
+  // Existing notes retain their original color until a color is chosen.
+  const color =
+    (data.draft ? draftColor : undefined) ??
+    data.color ??
+    POSTIT_COLOR_NAMES[(Number.parseInt(id.slice(-1), 16) || 0) % 4] ??
+    'yellow';
   const { execute, status, user } = useSocket();
   const [draft, setDraft] = useState<string>();
   const [saving, setSaving] = useState(false);
@@ -61,7 +70,7 @@ export const PostitCanvasNode = ({ id, data }: NodeProps<PostitNode>) => {
                 id,
                 type: 'postit',
                 position: data.draft.position,
-                data: { text },
+                data: { text, ...(draftColor ? { color: draftColor } : {}) },
               },
             }
           : { action: 'update-postit', nodeId: id, text },
@@ -76,16 +85,34 @@ export const PostitCanvasNode = ({ id, data }: NodeProps<PostitNode>) => {
       pending.current = false;
       setSaving(false);
     }
-  }, [data, execute, id, isOwner, status, text]);
+  }, [data, draftColor, execute, id, isOwner, status, text]);
+
+  const applyAction = async (mutation: CanvasNodeMutation) => {
+    if (pending.current || !isOwner || status !== 'connected') return;
+    pending.current = true;
+    setSaving(true);
+    setError(undefined);
+    try {
+      const result = await execute({ type: 'mutation', mutation });
+      if (!result.ok) setError(result.message);
+    } catch {
+      setError('Could not update your Post-it. Please try again.');
+    } finally {
+      pending.current = false;
+      setSaving(false);
+    }
+  };
 
   useEffect(() => {
-    if (!editing || !isOwner) return;
+    if ((!editing && !menuOpen) || !isOwner) return;
     const outside = (event: Event) => {
       if (
         event.target instanceof window.Node &&
         !section.current?.contains(event.target)
-      )
-        void finish();
+      ) {
+        setMenuOpen(false);
+        if (editing) void finish();
+      }
     };
     document.addEventListener('pointerdown', outside, true);
     document.addEventListener('focusin', outside, true);
@@ -93,7 +120,7 @@ export const PostitCanvasNode = ({ id, data }: NodeProps<PostitNode>) => {
       document.removeEventListener('pointerdown', outside, true);
       document.removeEventListener('focusin', outside, true);
     };
-  }, [editing, finish, isOwner]);
+  }, [editing, finish, isOwner, menuOpen]);
 
   return (
     <section
@@ -101,14 +128,37 @@ export const PostitCanvasNode = ({ id, data }: NodeProps<PostitNode>) => {
       aria-label={`Post-it by ${data.user.username}`}
       title={
         isOwner && !editing
-          ? 'Drag to move. Double-click or press Enter to edit.'
+          ? 'Click for actions. Drag to move. Double-click or press Enter to edit.'
           : undefined
       }
       tabIndex={isOwner ? 0 : undefined}
+      onClick={() => {
+        if (isOwner) setMenuOpen(true);
+      }}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (isOwner) setMenuOpen(true);
+      }}
       onDoubleClick={() => {
         if (isOwner) setEditing(true);
       }}
       onKeyDown={(event) => {
+        if (event.key === 'Escape' && menuOpen) {
+          event.stopPropagation();
+          setMenuOpen(false);
+          section.current?.focus();
+          return;
+        }
+        if (
+          isOwner &&
+          event.key === ' ' &&
+          event.target === event.currentTarget
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+          setMenuOpen(true);
+        }
         if (
           isOwner &&
           event.key === 'Enter' &&
@@ -119,11 +169,30 @@ export const PostitCanvasNode = ({ id, data }: NodeProps<PostitNode>) => {
           setEditing(true);
         }
       }}
-      className={`w-64 cursor-grab rounded-none ${color} text-black shadow-md active:cursor-grabbing`}
+      className={`relative flex size-64 cursor-grab flex-col rounded-none ${POSTIT_COLORS[color]} text-black shadow-md active:cursor-grabbing`}
     >
+      {isOwner && menuOpen && (
+        <PostitActions
+          color={color}
+          disabled={saving || (!data.draft && status !== 'connected')}
+          onColorChange={(nextColor) => {
+            if (data.draft) setDraftColor(nextColor);
+            else
+              void applyAction({
+                action: 'update-postit',
+                nodeId: id,
+                color: nextColor,
+              });
+          }}
+          onRemove={() => {
+            if (data.draft) data.draft.onCancel();
+            else void applyAction({ action: 'delete', nodeId: id });
+          }}
+        />
+      )}
       {isOwner && editing ? (
         <div
-          className="nodrag nopan cursor-auto p-4"
+          className="nodrag nopan nowheel min-h-0 flex-1 overflow-y-auto cursor-auto p-4"
           onKeyDown={(event) => {
             event.stopPropagation();
             if (event.key === 'Escape' && !pending.current) {
@@ -135,7 +204,7 @@ export const PostitCanvasNode = ({ id, data }: NodeProps<PostitNode>) => {
             }
           }}
         >
-          <div className="relative min-h-40 whitespace-pre-wrap break-words text-sm leading-relaxed">
+          <div className="relative min-h-40 whitespace-pre-wrap wrap-break-words text-sm leading-relaxed">
             <div aria-hidden="true" className="invisible min-h-40">
               {text + ' '}
             </div>
@@ -150,24 +219,24 @@ export const PostitCanvasNode = ({ id, data }: NodeProps<PostitNode>) => {
               onChange={(event) => setDraft(event.target.value)}
             />
           </div>
-          {saving && (
-            <p role="status" className="mt-2 text-xs">
-              Saving…
-            </p>
-          )}
-          {error && (
-            <p role="alert" className="mt-2 text-xs">
-              {error}
-            </p>
-          )}
         </div>
       ) : (
-        <p className="min-h-48 select-none whitespace-pre-wrap break-words p-4 text-sm leading-relaxed">
+        <p className="nowheel min-h-0 flex-1 overflow-y-auto select-none whitespace-pre-wrap wrap-break-words p-4 text-sm leading-relaxed">
           {text ||
             (isOwner ? 'Double-click to write a note…' : 'Empty Post-it')}
         </p>
       )}
-      <footer className="break-words px-4 pb-3 text-xs text-black/60">
+      <footer className="shrink-0 wrap-break-words px-4 pb-3 text-xs text-black/60">
+        {saving && (
+          <p role="status" className="mb-2">
+            Saving…
+          </p>
+        )}
+        {error && (
+          <p role="alert" className="mb-2 text-black">
+            {error}
+          </p>
+        )}
         {data.user.username}
       </footer>
     </section>
