@@ -55,7 +55,7 @@ export function applyCanvasChange(
 }
 
 export function useCanvasSync() {
-  const { socket, execute, status } = useSocket();
+  const { socket, execute, deleteNodes, status } = useSocket();
   const [nodes, setNodes] = useState<FlowCanvasNode[]>([]);
   const canonical = useRef<FlowCanvasNode[]>([]);
   const moves = useRef(new Map<string, { x: number; y: number }>());
@@ -154,15 +154,12 @@ export function useCanvasSync() {
   }, [execute]);
   const onNodesChange = useCallback(
     (changes: NodeChange<FlowCanvasNode>[]) => {
+      const removed: string[] = [];
       const local = changes.filter((change) => {
         if (change.type === 'remove') {
           const node = canonical.current.find(({ id }) => id === change.id);
           if (!node) return true;
-          if (status === 'connected')
-            void execute({
-              type: 'mutation',
-              mutation: { action: 'delete', nodeId: change.id },
-            });
+          if (status === 'connected') removed.push(change.id);
           return false;
         }
         if (change.type === 'position') {
@@ -172,10 +169,11 @@ export function useCanvasSync() {
         }
         return true;
       });
+      if (removed.length) void deleteNodes(removed);
       setNodes((current) => applyNodeChanges(local, current));
       void flushMoves();
     },
-    [execute, flushMoves, status],
+    [deleteNodes, flushMoves, status],
   );
   return { nodes, setNodes, onNodesChange };
 }

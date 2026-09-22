@@ -112,14 +112,14 @@ it('shows a toast only after the server confirms undo or redo', async () => {
   confirm({ ok: true, operationId: 'undo' });
   await Promise.resolve();
   expect(toast.success).toHaveBeenLastCalledWith(
-    'Node insertion undone',
+    'Canvas change undone',
     expect.objectContaining({ id: 'canvas-insertion-history' }),
   );
   socket.redoInsertion.mockResolvedValueOnce({ ok: true, operationId: 'redo' });
   press('y');
   await Promise.resolve();
   expect(toast.success).toHaveBeenLastCalledWith(
-    'Node restored',
+    'Canvas change redone',
     expect.objectContaining({ id: 'canvas-insertion-history' }),
   );
 });

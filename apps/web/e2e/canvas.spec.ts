@@ -78,6 +78,12 @@ test('Post-it colors and shared canvas deletion sync across clients', async ({
     await owner.getByRole('button', { name: 'Delete selected items' }).click();
     await expect(note).toHaveCount(0);
     await expect(peerNote).toHaveCount(0);
+    await owner.keyboard.press('Control+z');
+    await expect(note).toHaveClass(/bg-blue-200/);
+    await expect(peerNote).toContainText('A colorful note');
+    await owner.keyboard.press('Control+Shift+z');
+    await expect(note).toHaveCount(0);
+    await expect(peerNote).toHaveCount(0);
 
     // Deleting an unfinished draft must not trigger an outside-click save.
     await openCanvasMenu(owner);
@@ -139,13 +145,13 @@ test('Ctrl+Z and Ctrl+Y undo and restore only this participant’s node insertio
     await expect(reactions(first)).toHaveCount(0);
     await expect(reactions(second)).toHaveCount(0);
     await expect(first.locator('[data-sonner-toast]')).toContainText(
-      'Node insertion undone',
+      'Canvas change undone',
     );
     await expect(second.locator('[data-sonner-toast]')).toHaveCount(0);
     await first.keyboard.press('Control+y');
     await expect(reactions(second)).toHaveCount(1);
     await expect(first.locator('[data-sonner-toast]')).toContainText(
-      'Node restored',
+      'Canvas change redone',
     );
     expect(
       await first
@@ -366,6 +372,20 @@ test('two clients keep saved messages and keyboard moves/deletes in sync through
     );
   await node.press('Enter');
   await node.press('Delete');
+  await expect(second.locator('.react-flow__node-message')).toHaveCount(0);
+  await first.keyboard.press('Control+z');
+  await expect(node).toHaveCount(1);
+  await expect(second.locator('.react-flow__node-message')).toHaveCount(1);
+  await second
+    .getByRole('button', { name: 'Open messages', exact: true })
+    .click();
+  await expect(
+    second.getByText('Atomic first message', { exact: true }).last(),
+  ).toBeVisible();
+  await expect(
+    second.getByText('Draft survives reconnect', { exact: true }).last(),
+  ).toBeVisible();
+  await first.keyboard.press('Control+y');
   await expect(second.locator('.react-flow__node-message')).toHaveCount(0);
   await first.reload();
   await openCanvasMenu(first);
@@ -602,12 +622,22 @@ test('box selection and select-all delete groups across clients and reloads', as
     await viewer.reload();
     await expect(viewer.locator('.react-flow__node-emoji')).toHaveCount(1);
 
+    await owner.keyboard.press('Control+z');
+    await expect(nodes).toHaveCount(3);
+    await expect(viewer.locator('.react-flow__node-emoji')).toHaveCount(3);
+    await owner.keyboard.press('Control+y');
+    await expect(nodes).toHaveCount(1);
+    await expect(viewer.locator('.react-flow__node-emoji')).toHaveCount(1);
+
     // The platform-independent select-all shortcut also supports Command.
     await owner.keyboard.press('Meta+a');
     await expect(selected).toHaveCount(1);
     await owner.keyboard.press('Delete');
     await expect(nodes).toHaveCount(0);
     await expect(viewer.locator('.react-flow__node-emoji')).toHaveCount(0);
+    await owner.keyboard.press('Meta+z');
+    await expect(nodes).toHaveCount(1);
+    await expect(viewer.locator('.react-flow__node-emoji')).toHaveCount(1);
   } finally {
     publisher.disconnect();
     await owner.close();

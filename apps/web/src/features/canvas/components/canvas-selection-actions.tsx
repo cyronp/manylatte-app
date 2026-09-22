@@ -54,7 +54,9 @@ export function CanvasSelectionActions({ disabled }: { disabled: boolean }) {
       className="nodrag nopan nowheel flex cursor-auto items-center gap-2 rounded-full border bg-background px-4 py-2 text-foreground shadow-lg"
       onClick={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
-      onKeyDown={(event) => event.stopPropagation()}
+      onKeyDown={(event) => {
+        if (!(event.ctrlKey || event.metaKey)) event.stopPropagation();
+      }}
     >
       <span className=" text-sm whitespace-nowrap">
         {selected.length} selected

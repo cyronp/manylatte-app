@@ -16,7 +16,9 @@ export function useInsertionShortcuts() {
         : redoInsertion());
       if (result?.ok)
         toast.success(
-          direction === 'undo' ? 'Node insertion undone' : 'Node restored',
+          direction === 'undo'
+            ? 'Canvas change undone'
+            : 'Canvas change redone',
           {
             id: 'canvas-insertion-history',
             icon: createElement(

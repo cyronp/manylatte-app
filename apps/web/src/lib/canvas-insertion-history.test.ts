@@ -37,6 +37,111 @@ const setup = () => {
 };
 
 describe('canvas insertion history', () => {
+  it('undoes a group deletion in one step, preserves history order, and supports repeated redo', async () => {
+    const { send, history } = setup();
+    const ids = [crypto.randomUUID(), crypto.randomUUID()];
+    history.snapshot(ids);
+    const inserted = reaction();
+    await history.execute(inserted);
+    await history.deleteNodes(ids);
+    const deletions = send.mock.calls.slice(-2).map(([command]) => command.id);
+    await history.undo();
+    expect(send.mock.calls.slice(-2).map(([command]) => command.body)).toEqual(
+      deletions.map((deletionId) => ({ type: 'restore', deletionId })),
+    );
+    await history.undo();
+    expect(send.mock.lastCall?.[0].body).toMatchObject({
+      mutation: { action: 'delete' },
+    });
+    await history.redo();
+    expect(send.mock.lastCall?.[0].body).toEqual(inserted.body);
+    await history.redo();
+    const repeated = send.mock.calls.slice(-2).map(([command]) => command);
+    expect(repeated.map(({ body }) => body)).toEqual(
+      ids.map((nodeId) => ({
+        type: 'mutation',
+        mutation: { action: 'delete', nodeId },
+      })),
+    );
+    await history.undo();
+    expect(send.mock.calls.slice(-2).map(([command]) => command.body)).toEqual(
+      repeated.map(({ id: deletionId }) => ({ type: 'restore', deletionId })),
+    );
+  });
+
+  it('retries a partially restored group without repeating completed restores', async () => {
+    const { send, history } = setup();
+    const ids = [crypto.randomUUID(), crypto.randomUUID()];
+    history.snapshot(ids);
+    await history.deleteNodes(ids);
+    send.mockImplementationOnce(async (command) => saved(command));
+    send.mockImplementationOnce(async (command) => failed(command));
+    expect(await history.undo()).toMatchObject({ ok: false });
+    const pending = send.mock.lastCall?.[0];
+    const count = send.mock.calls.length;
+    expect(await history.undo()).toMatchObject({ ok: true });
+    expect(send).toHaveBeenCalledTimes(count + 1);
+    expect(send.mock.lastCall?.[0]).toEqual(pending);
+  });
+
+  it('records only successful removals, and does not restore a node deleted by a peer', async () => {
+    const { send, history } = setup();
+    const ids = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
+    history.snapshot(ids);
+    send.mockImplementationOnce(async (command) => saved(command));
+    send.mockImplementationOnce(async (command) => ({
+      ...saved(command),
+      undoableDeletion: false,
+    }));
+    send.mockImplementationOnce(async (command) => failed(command));
+    expect(await history.deleteNodes(ids)).toMatchObject({ ok: false });
+    const deletionId = send.mock.calls[0]![0].id;
+    send.mockClear();
+    await history.undo();
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.lastCall?.[0].body).toEqual({
+      type: 'restore',
+      deletionId,
+    });
+  });
+
+  it('does not resurrect a peer deletion after redoing a restored group', async () => {
+    const { send, history } = setup();
+    const id = crypto.randomUUID();
+    history.snapshot([id]);
+    await history.deleteNodes([id]);
+    await history.undo();
+    history.change({ type: 'remove', nodeId: id });
+    send.mockImplementationOnce(async (command) => ({
+      ...saved(command),
+      undoableDeletion: false,
+    }));
+    await history.redo();
+    send.mockClear();
+    await history.undo();
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('records individual deletes and clears redo after a new deletion', async () => {
+    const { send, history } = setup();
+    const id = crypto.randomUUID();
+    history.snapshot([id]);
+    await history.execute(reaction());
+    await history.undo();
+    const deletion: CanvasCommand = {
+      id: crypto.randomUUID(),
+      body: { type: 'mutation', mutation: { action: 'delete', nodeId: id } },
+    };
+    await history.execute(deletion);
+    send.mockClear();
+    await history.redo();
+    expect(send).not.toHaveBeenCalled();
+    await history.undo();
+    expect(send.mock.lastCall?.[0].body).toEqual({
+      type: 'restore',
+      deletionId: deletion.id,
+    });
+  });
   it('restores the latest saved Post-it text on redo', async () => {
     const { send, history } = setup();
     const node = {
