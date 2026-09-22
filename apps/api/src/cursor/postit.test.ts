@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { expect, it } from 'vitest';
 import {
   canvasCommandSchema,
+  canvasNodeMutationSchema,
   hexColorSchema,
   type CanvasNodeMutation,
 } from '@app/shared';
@@ -56,11 +57,36 @@ it('persists Post-it text and ownership and rejects edits by another user', asyn
       result: { ok: false, message: 'Only the owner can edit this Post-it.' },
     });
     const reloaded = new PersistentCanvas('room', persistence);
+    expect(
+      await execute({ action: 'update-postit', nodeId, color: 'pink' }),
+    ).toMatchObject({
+      result: {
+        ok: true,
+        change: {
+          type: 'upsert',
+          node: {
+            data: { color: 'pink', text: '  First line\nSecond line ☕' },
+          },
+        },
+      },
+    });
+    expect(
+      await execute(
+        { action: 'update-postit', nodeId, color: 'green' },
+        visitor,
+      ),
+    ).toMatchObject({
+      result: { ok: false, message: 'Only the owner can edit this Post-it.' },
+    });
     expect(await reloaded.snapshot()).toMatchObject([
       {
         id: nodeId,
         type: 'postit',
-        data: { user: owner, text: '  First line\nSecond line ☕' },
+        data: {
+          user: owner,
+          text: '  First line\nSecond line ☕',
+          color: 'pink',
+        },
       },
     ]);
     expect(
@@ -77,7 +103,7 @@ it('persists Post-it text and ownership and rejects edits by another user', asyn
     ).toMatchObject({ result: { ok: true } });
     expect(
       await new PersistentCanvas('room', persistence).snapshot(),
-    ).toMatchObject([{ data: { text: '', user: owner } }]);
+    ).toMatchObject([{ data: { text: '', user: owner, color: 'pink' } }]);
     expect(
       await execute({
         action: 'update-postit',
@@ -85,9 +111,28 @@ it('persists Post-it text and ownership and rejects edits by another user', asyn
         text: 'Missing',
       }),
     ).toMatchObject({ result: { ok: false } });
+    expect(await execute({ action: 'delete', nodeId })).toMatchObject({
+      result: { ok: true, change: { type: 'remove', nodeId } },
+    });
+    expect(await new PersistentCanvas('room', persistence).snapshot()).toEqual(
+      [],
+    );
   } finally {
     await database.$disconnect();
   }
+});
+
+it('accepts only predefined colors and rejects empty Post-it updates', () => {
+  const mutation = { action: 'update-postit', nodeId: randomUUID() };
+  for (const color of ['yellow', 'pink', 'blue', 'green']) {
+    expect(
+      canvasNodeMutationSchema.safeParse({ ...mutation, color }).success,
+    ).toBe(true);
+  }
+  expect(
+    canvasNodeMutationSchema.safeParse({ ...mutation, color: 'red' }).success,
+  ).toBe(false);
+  expect(canvasNodeMutationSchema.safeParse(mutation).success).toBe(false);
 });
 
 it('bounds Post-it text and rejects client-supplied ownership', () => {

@@ -88,7 +88,14 @@ export class CanvasState {
         return { reason: 'not-postit-node', status: 'rejected' };
       if (node.data.user.userId !== user.userId)
         return { reason: 'not-owner', status: 'rejected' };
-      const nextNode = { ...node, data: { ...node.data, text: mutation.text } };
+      const nextNode = {
+        ...node,
+        data: {
+          ...node.data,
+          ...(mutation.text !== undefined ? { text: mutation.text } : {}),
+          ...(mutation.color !== undefined ? { color: mutation.color } : {}),
+        },
+      };
       this.#nodes.set(node.id, nextNode);
       return { node: nextNode, status: 'applied' };
     }

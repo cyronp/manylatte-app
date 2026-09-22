@@ -48,6 +48,7 @@ model CanvasNode {
   emoji          String?
   label          String?
   postitText     String?
+  postitColor    String?
   authorId       String?
   authorUsername String?
   authorColor    String?
