@@ -7,6 +7,7 @@ export const POSTIT_COLORS = {
   pink: 'bg-pink-200',
   blue: 'bg-blue-200',
   green: 'bg-green-200',
+  purple: 'bg-purple-200',
 } satisfies Record<CanvasPostitColor, string>;
 
 export const POSTIT_COLOR_NAMES = Object.keys(

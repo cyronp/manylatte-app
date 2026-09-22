@@ -26,6 +26,7 @@ export const canvasPostitColorSchema = z.enum([
   'pink',
   'blue',
   'green',
+  'purple',
 ]);
 export type CanvasPostitColor = z.infer<typeof canvasPostitColorSchema>;
 

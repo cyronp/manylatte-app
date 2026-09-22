@@ -193,18 +193,18 @@ it('opens actions on click and updates the color without overwriting text', asyn
   await render();
   expect(container.querySelector('[aria-label="Post-it actions"]')).toBeNull();
   await click('section');
-  await click('[aria-label="Make Post-it blue"]');
+  await click('[aria-label="Make Post-it purple"]');
   expect(socket.execute).toHaveBeenCalledWith({
     type: 'mutation',
-    mutation: { action: 'update-postit', nodeId: 'note', color: 'blue' },
+    mutation: { action: 'update-postit', nodeId: 'note', color: 'purple' },
   });
-  await render({ ...props, data: { ...props.data, color: 'blue' } });
+  await render({ ...props, data: { ...props.data, color: 'purple' } });
   expect(
-    container.querySelector('section')?.classList.contains('bg-blue-200'),
+    container.querySelector('section')?.classList.contains('bg-purple-200'),
   ).toBe(true);
   expect(
     container
-      .querySelector('[aria-label="Make Post-it blue"]')
+      .querySelector('[aria-label="Make Post-it purple"]')
       ?.getAttribute('aria-pressed'),
   ).toBe('true');
   await clickOutside();

@@ -58,14 +58,14 @@ it('persists Post-it text and ownership and rejects edits by another user', asyn
     });
     const reloaded = new PersistentCanvas('room', persistence);
     expect(
-      await execute({ action: 'update-postit', nodeId, color: 'pink' }),
+      await execute({ action: 'update-postit', nodeId, color: 'purple' }),
     ).toMatchObject({
       result: {
         ok: true,
         change: {
           type: 'upsert',
           node: {
-            data: { color: 'pink', text: '  First line\nSecond line ☕' },
+            data: { color: 'purple', text: '  First line\nSecond line ☕' },
           },
         },
       },
@@ -85,7 +85,7 @@ it('persists Post-it text and ownership and rejects edits by another user', asyn
         data: {
           user: owner,
           text: '  First line\nSecond line ☕',
-          color: 'pink',
+          color: 'purple',
         },
       },
     ]);
@@ -103,7 +103,7 @@ it('persists Post-it text and ownership and rejects edits by another user', asyn
     ).toMatchObject({ result: { ok: true } });
     expect(
       await new PersistentCanvas('room', persistence).snapshot(),
-    ).toMatchObject([{ data: { text: '', user: owner, color: 'pink' } }]);
+    ).toMatchObject([{ data: { text: '', user: owner, color: 'purple' } }]);
     expect(
       await execute({
         action: 'update-postit',
@@ -124,7 +124,7 @@ it('persists Post-it text and ownership and rejects edits by another user', asyn
 
 it('accepts only predefined colors and rejects empty Post-it updates', () => {
   const mutation = { action: 'update-postit', nodeId: randomUUID() };
-  for (const color of ['yellow', 'pink', 'blue', 'green']) {
+  for (const color of ['yellow', 'pink', 'blue', 'green', 'purple']) {
     expect(
       canvasNodeMutationSchema.safeParse({ ...mutation, color }).success,
     ).toBe(true);
