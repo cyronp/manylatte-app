@@ -225,9 +225,13 @@ test('cancelled capture leaves no node and allows another attempt', async ({
   const { code } = await response.json();
   await page.addInitScript(() =>
     Object.defineProperty(navigator.mediaDevices, 'getDisplayMedia', {
-      value: async () => {
-        throw new DOMException('Cancelled', 'NotAllowedError');
-      },
+      value: () =>
+        new Promise<MediaStream>((_resolve, reject) => {
+          Object.assign(window, {
+            cancelTestScreenCapture: () =>
+              reject(new DOMException('Cancelled', 'NotAllowedError')),
+          });
+        }),
     }),
   );
   await join(page, code, 'Presenter');
@@ -237,9 +241,20 @@ test('cancelled capture leaves no node and allows another attempt', async ({
   await page
     .getByRole('menuitem', { name: 'Share screen', exact: true })
     .click();
-  await expect(page.getByRole('alert')).toContainText(
-    'cancelled or permission was denied',
+  const loadingToast = page.locator('[data-sonner-toast][data-type="loading"]');
+  await expect(loadingToast).toContainText(
+    'Choose a screen, window, or tab to share…',
   );
+  await expect(loadingToast).toHaveCount(1);
+  await page.evaluate(() =>
+    (
+      window as unknown as { cancelTestScreenCapture: () => void }
+    ).cancelTestScreenCapture(),
+  );
+  await expect(loadingToast).toHaveCount(0);
+  const errorToast = page.locator('[data-sonner-toast][data-type="error"]');
+  await expect(errorToast).toContainText('cancelled or permission was denied');
+  await expect(errorToast).toHaveCount(1);
   await expect(page.locator('.react-flow__node-screenShare')).toHaveCount(0);
   await page
     .locator('.react-flow__pane')
@@ -247,6 +262,18 @@ test('cancelled capture leaves no node and allows another attempt', async ({
   await expect(
     page.getByRole('menuitem', { name: 'Share screen', exact: true }),
   ).toBeEnabled();
+  await page
+    .getByRole('menuitem', { name: 'Share screen', exact: true })
+    .click();
+  await expect(loadingToast).toBeVisible();
+  await expect(errorToast).toHaveCount(0);
+  await page.evaluate(() =>
+    (
+      window as unknown as { cancelTestScreenCapture: () => void }
+    ).cancelTestScreenCapture(),
+  );
+  await expect(errorToast).toHaveCount(1);
+  await expect(loadingToast).toHaveCount(0);
 });
 
 test('kicking a presenter stops capture and removes the screen from remaining viewers', async ({

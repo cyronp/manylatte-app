@@ -14,7 +14,8 @@ import {
   type NodeChange,
   useReactFlow,
 } from '@xyflow/react';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 
 import { useSocket } from '@/components/socket-provider';
 import { useUserPreferences } from '@/components/user-preferences-provider';
@@ -74,6 +75,24 @@ export const InfiniteCanvas = () => {
     node: screenNode,
     onChanges: onScreenChanges,
   } = useScreenShareNode(status === 'connected');
+  useEffect(() => {
+    if (!screen.starting) return;
+    const toastId = toast.loading('Choose a screen, window, or tab to share…', {
+      id: 'screen-share-starting',
+    });
+    return () => {
+      toast.dismiss(toastId);
+    };
+  }, [screen.starting]);
+  const screenShareError =
+    !screen.share && !screen.starting ? screen.error : undefined;
+  useEffect(() => {
+    if (!screenShareError) return;
+    const toastId = toast.error(screenShareError, { id: 'screen-share-error' });
+    return () => {
+      toast.dismiss(toastId);
+    };
+  }, [screenShareError]);
   const handleNodesChange = (changes: NodeChange<FlowCanvasNode>[]) => {
     const persisted = changes.filter(
       (change) => !('id' in change) || change.id !== screenNode?.id,
@@ -185,16 +204,6 @@ export const InfiniteCanvas = () => {
 
   return (
     <>
-      {(screen.starting || (!screen.share && screen.error)) && (
-        <div
-          role={screen.error ? 'alert' : 'status'}
-          className="absolute bottom-16 left-3 z-20 max-w-sm rounded border bg-background p-3 text-sm shadow"
-        >
-          {screen.starting
-            ? 'Choose a screen, window, or tab to share…'
-            : screen.error}
-        </div>
-      )}
       {status !== 'connected' && (
         <div className="absolute left-3 top-3 z-20 flex max-w-[calc(100%-1.5rem)] flex-wrap gap-2">
           <Button variant="outline" onClick={retryConnect}>
