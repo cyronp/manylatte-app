@@ -46,7 +46,7 @@ export function CanvasSelectionActions({ disabled }: { disabled: boolean }) {
   return (
     <NodeToolbar
       nodeId={selected.map((node) => node.id)}
-      isVisible={selected.length > 1}
+      isVisible={selected.length > 0}
       offset={8}
       role="group"
       aria-label="Selection actions"

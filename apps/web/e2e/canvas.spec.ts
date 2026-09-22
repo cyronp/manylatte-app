@@ -26,7 +26,7 @@ async function openCanvasMenu(page: Page) {
   });
 }
 
-test('Post-it actions appear above the note and sync colors and removal', async ({
+test('Post-it colors and shared canvas deletion sync across clients', async ({
   browser,
   request,
 }) => {
@@ -62,13 +62,37 @@ test('Post-it actions appear above the note and sync colors and removal', async 
     const bounds = await note.boundingBox();
     const menuBounds = await actions.boundingBox();
     expect(bounds!.width).toBeCloseTo(bounds!.height, 0);
-    expect(menuBounds!.y + menuBounds!.height).toBeLessThan(bounds!.y);
+    expect(menuBounds!.y).toBeGreaterThan(bounds!.y + bounds!.height);
+    const deleteBounds = await owner
+      .getByRole('group', { name: 'Selection actions' })
+      .boundingBox();
+    expect(deleteBounds!.y + deleteBounds!.height).toBeLessThan(bounds!.y);
+    await expect(
+      owner.getByRole('button', { name: 'Remove Post-it' }),
+    ).toHaveCount(0);
     await owner.getByRole('button', { name: 'Make Post-it blue' }).click();
     await expect(peerNote).toHaveClass(/bg-blue-200/);
     await owner.reload();
     await expect(note).toHaveClass(/bg-blue-200/);
     await note.click();
-    await owner.getByRole('button', { name: 'Remove Post-it' }).click();
+    await owner.getByRole('button', { name: 'Delete selected items' }).click();
+    await expect(note).toHaveCount(0);
+    await expect(peerNote).toHaveCount(0);
+
+    // Deleting an unfinished draft must not trigger an outside-click save.
+    await openCanvasMenu(owner);
+    await owner.getByRole('menuitem', { name: 'Post-it', exact: true }).click();
+    await owner
+      .getByRole('textbox', { name: 'Post-it text' })
+      .fill('Discard this draft');
+    await owner.getByRole('button', { name: 'Delete selected items' }).click();
+    await expect(note).toHaveCount(0);
+    await owner.reload();
+    await openCanvasMenu(owner);
+    await expect(
+      owner.getByRole('menuitem', { name: 'Post-it', exact: true }),
+    ).toBeEnabled();
+    await owner.keyboard.press('Escape');
     await expect(note).toHaveCount(0);
     await expect(peerNote).toHaveCount(0);
   } finally {

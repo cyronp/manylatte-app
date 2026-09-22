@@ -272,10 +272,11 @@ export const InfiniteCanvas = () => {
               event.preventDefault();
               const id = crypto.randomUUID();
               setNodes((current) => [
-                ...current,
+                ...current.map((node) => ({ ...node, selected: false })),
                 {
                   id,
                   type: 'postit',
+                  selected: true,
                   position: postitPosition,
                   origin: [0.5, 0],
                   draggable: false,

@@ -109,6 +109,12 @@ export const PostitCanvasNode = ({ id, data }: NodeProps<PostitNode>) => {
   useEffect(() => {
     if ((!editing && !menuOpen) || !isOwner) return;
     const outside = (event: Event) => {
+      // Deleting a selection must not save an unfinished note first.
+      if (
+        event.target instanceof Element &&
+        event.target.closest('[data-canvas-selection-actions]')
+      )
+        return;
       if (
         event.target instanceof window.Node &&
         !section.current?.contains(event.target)
@@ -186,10 +192,6 @@ export const PostitCanvasNode = ({ id, data }: NodeProps<PostitNode>) => {
                 nodeId: id,
                 color: nextColor,
               });
-          }}
-          onRemove={() => {
-            if (data.draft) data.draft.onCancel();
-            else void applyAction({ action: 'delete', nodeId: id });
           }}
         />
       )}

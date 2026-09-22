@@ -1,6 +1,5 @@
 import type { CanvasPostitColor } from '@app/shared';
-import { CheckIcon, TrashIcon } from '@phosphor-icons/react';
-import { Button } from '@/components/ui/button';
+import { CheckIcon } from '@phosphor-icons/react';
 
 export const POSTIT_COLORS = {
   yellow: 'bg-yellow-200',
@@ -18,18 +17,16 @@ export function PostitActions({
   color,
   disabled,
   onColorChange,
-  onRemove,
 }: {
   color: CanvasPostitColor;
   disabled: boolean;
   onColorChange: (color: CanvasPostitColor) => void;
-  onRemove: () => void;
 }) {
   return (
     <div
       role="group"
       aria-label="Post-it actions"
-      className="nodrag nopan nowheel absolute bottom-full left-1/2 z-10 mb-2 flex -translate-x-1/2 cursor-auto items-center gap-2 rounded-full border bg-background p-2 text-foreground shadow-lg"
+      className="nodrag nopan nowheel absolute top-full left-1/2 z-10 mt-2 flex -translate-x-1/2 cursor-auto items-center gap-2 rounded-full border bg-background p-2 text-foreground shadow-lg"
       onClick={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => {
@@ -49,17 +46,6 @@ export function PostitActions({
           {color === option && <CheckIcon aria-hidden="true" size={16} />}
         </button>
       ))}
-      <span aria-hidden="true" className="h-6 w-px bg-border" />
-      <Button
-        aria-label="Remove Post-it"
-        title="Remove Post-it"
-        variant="destructive"
-        size="icon-sm"
-        disabled={disabled}
-        onClick={onRemove}
-      >
-        <TrashIcon aria-hidden="true" />
-      </Button>
     </div>
   );
 }

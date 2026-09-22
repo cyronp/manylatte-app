@@ -217,14 +217,14 @@ it('opens actions on click and updates the color without overwriting text', asyn
   expect(container.querySelector('[aria-label="Post-it actions"]')).toBeNull();
 });
 
-it('removes a saved note and reports failed actions', async () => {
+it('reports failed color changes', async () => {
   socket.execute.mockResolvedValue({ ok: false, message: 'Try again' });
   await render();
   await click('section');
-  await click('[aria-label="Remove Post-it"]');
+  await click('[aria-label="Make Post-it purple"]');
   expect(socket.execute).toHaveBeenCalledWith({
     type: 'mutation',
-    mutation: { action: 'delete', nodeId: 'note' },
+    mutation: { action: 'update-postit', nodeId: 'note', color: 'purple' },
   });
   expect(container.querySelector('[role="alert"]')?.textContent).toBe(
     'Try again',
@@ -264,14 +264,19 @@ it('keeps actions local for a draft and saves its selected color on creation', a
   });
 });
 
-it('cancels a draft from its actions without saving it', async () => {
+it('cancels a draft with Escape without saving it', async () => {
   const onCancel = vi.fn();
   await render({
     ...props,
     data: { ...props.data, draft: { position: { x: 20, y: 30 }, onCancel } },
   });
-  await click('section');
-  await click('[aria-label="Remove Post-it"]');
+  await act(async () => {
+    container
+      .querySelector('textarea')!
+      .dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+      );
+  });
   expect(onCancel).toHaveBeenCalledOnce();
   expect(socket.execute).not.toHaveBeenCalled();
 });
@@ -290,7 +295,7 @@ it('hides actions from visitors and disables saved-note actions while offline', 
       (button) => button.disabled,
     ),
   ).toBe(true);
-  await click('[aria-label="Remove Post-it"]');
+  await click('[aria-label="Make Post-it purple"]');
   expect(socket.execute).not.toHaveBeenCalled();
 });
 
