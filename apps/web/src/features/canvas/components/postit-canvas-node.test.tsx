@@ -2,7 +2,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { NodeProps } from '@xyflow/react';
+import { ReactFlowProvider, type NodeProps } from '@xyflow/react';
 import { PostitCanvasNode, type PostitNode } from './postit-canvas-node';
 
 const socket = vi.hoisted(() => ({
@@ -34,7 +34,13 @@ afterEach(async () => {
   container.remove();
 });
 const render = (nodeProps = props) =>
-  act(async () => root.render(<PostitCanvasNode {...nodeProps} />));
+  act(async () =>
+    root.render(
+      <ReactFlowProvider>
+        <PostitCanvasNode {...nodeProps} />
+      </ReactFlowProvider>,
+    ),
+  );
 const clickOutside = () =>
   act(async () => {
     document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));

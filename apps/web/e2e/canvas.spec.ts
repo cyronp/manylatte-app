@@ -493,3 +493,100 @@ test('group dragging persists every selected node', async ({
   await first.close();
   await second.close();
 });
+
+test('box selection and select-all delete groups across clients and reloads', async ({
+  browser,
+  request,
+}) => {
+  const response = await request.post('http://127.0.0.1:3000/lobbies', {
+    data: { name: 'Group deletion' },
+  });
+  const lobby = await response.json();
+  const publisher = io('http://127.0.0.1:3000', {
+    auth: { roomId: lobby.id, username: 'Seeder' },
+    autoConnect: false,
+  });
+  const owner = await browser.newPage();
+  const viewer = await browser.newPage();
+  try {
+    const ready = new Promise((resolve) =>
+      publisher.once('canvas:snapshot', resolve),
+    );
+    publisher.connect();
+    await ready;
+    for (const offset of [-200, 0, 200]) {
+      const result = await publisher
+        .timeout(3000)
+        .emitWithAck('canvas:command', {
+          id: crypto.randomUUID(),
+          body: {
+            type: 'mutation',
+            mutation: {
+              action: 'create',
+              node: {
+                id: crypto.randomUUID(),
+                type: 'emoji',
+                position: {
+                  x: CANVAS_WIDTH / 2 + offset,
+                  y: CANVAS_HEIGHT / 2,
+                },
+                data: { emoji: '☕', label: 'Coffee' },
+              },
+            },
+          },
+        });
+      expect(result.ok).toBe(true);
+    }
+    await join(owner, lobby.code, 'Alice');
+    await join(viewer, lobby.code, 'Bob');
+    const nodes = owner.locator('.react-flow__node-emoji');
+    const selected = owner.locator('.react-flow__node.selected');
+    const actions = owner.getByRole('group', { name: 'Selection actions' });
+    await expect(nodes).toHaveCount(3);
+    await owner.keyboard.press('Control+a');
+    await expect(selected).toHaveCount(3);
+    await expect(actions).toContainText('3 selected');
+    await owner
+      .locator('.react-flow__pane')
+      .click({ position: { x: 100, y: 100 } });
+    await expect(actions).toHaveCount(0);
+
+    const first = await nodes.nth(0).boundingBox();
+    const second = await nodes.nth(1).boundingBox();
+    if (!first || !second) throw new Error('Missing reaction bounds');
+    await owner.mouse.move(first.x - 15, first.y - 15);
+    await owner.mouse.down();
+    // Partial overlap includes the second node without reaching the third.
+    await owner.mouse.move(
+      second.x + second.width / 2,
+      second.y + second.height + 15,
+      { steps: 8 },
+    );
+    await owner.mouse.up();
+    await expect(selected).toHaveCount(2);
+    await expect(actions).toContainText('2 selected');
+    const toolbar = await actions.boundingBox();
+    expect(toolbar!.y + toolbar!.height).toBeLessThan(first.y);
+    expect(toolbar!.x + toolbar!.width / 2).toBeCloseTo(
+      (first.x + second.x + second.width) / 2,
+      0,
+    );
+    await owner.getByRole('button', { name: 'Delete selected items' }).click();
+    await expect(nodes).toHaveCount(1);
+    await expect(viewer.locator('.react-flow__node-emoji')).toHaveCount(1);
+    await expect(actions).toHaveCount(0);
+    await viewer.reload();
+    await expect(viewer.locator('.react-flow__node-emoji')).toHaveCount(1);
+
+    // The platform-independent select-all shortcut also supports Command.
+    await owner.keyboard.press('Meta+a');
+    await expect(selected).toHaveCount(1);
+    await owner.keyboard.press('Delete');
+    await expect(nodes).toHaveCount(0);
+    await expect(viewer.locator('.react-flow__node-emoji')).toHaveCount(0);
+  } finally {
+    publisher.disconnect();
+    await owner.close();
+    await viewer.close();
+  }
+});

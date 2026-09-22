@@ -3,7 +3,7 @@ import type {
   CanvasNodeMutation,
   CanvasPostitColor,
 } from '@app/shared';
-import type { Node, NodeProps } from '@xyflow/react';
+import { useStore, type Node, type NodeProps } from '@xyflow/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSocket } from '@/components/socket-provider';
 
@@ -21,6 +21,9 @@ export type PostitNode = Node<
 >;
 
 export const PostitCanvasNode = ({ id, data }: NodeProps<PostitNode>) => {
+  const multipleSelected = useStore(
+    (state) => state.nodes.filter((node) => node.selected).length > 1,
+  );
   const [draftColor, setDraftColor] = useState<CanvasPostitColor>();
   const [menuOpen, setMenuOpen] = useState(Boolean(data.draft));
   // Existing notes retain their original color until a color is chosen.
@@ -171,7 +174,7 @@ export const PostitCanvasNode = ({ id, data }: NodeProps<PostitNode>) => {
       }}
       className={`relative flex size-64 cursor-grab flex-col rounded-none ${POSTIT_COLORS[color]} text-black shadow-md active:cursor-grabbing`}
     >
-      {isOwner && menuOpen && (
+      {isOwner && menuOpen && !multipleSelected && (
         <PostitActions
           color={color}
           disabled={saving || (!data.draft && status !== 'connected')}
