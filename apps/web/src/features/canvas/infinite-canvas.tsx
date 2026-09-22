@@ -7,6 +7,7 @@ import {
 } from '@app/shared';
 import {
   ReactFlow,
+  SelectionMode,
   type CoordinateExtent,
   type ReactFlowInstance,
   type SnapGrid,
@@ -23,6 +24,7 @@ import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 
 import { CanvasContextMenu } from './components/canvas-context-menu';
 import { CanvasControls } from './components/canvas-controls';
+import { CanvasSelectionActions } from './components/canvas-selection-actions';
 import { CanvasSurface } from './components/canvas-surface';
 import { EmojiCanvasNode } from './components/emoji-canvas-node';
 import { EmojiPickerPortal } from './components/emoji-picker-portal';
@@ -235,6 +237,7 @@ export const InfiniteCanvas = () => {
               elementsSelectable
               maxZoom={MAX_ZOOM}
               minZoom={MIN_ZOOM}
+              multiSelectionKeyCode={['Control', 'Meta', 'Shift']}
               nodeExtent={CANVAS_EXTENT}
               nodeTypes={NODE_TYPES}
               nodes={screenNode ? [...nodes, screenNode] : nodes}
@@ -246,6 +249,8 @@ export const InfiniteCanvas = () => {
               panOnDrag={[1]}
               panOnScroll={mouseWheelBehavior === 'pan'}
               proOptions={{ hideAttribution: true }}
+              selectionOnDrag
+              selectionMode={SelectionMode.Partial}
               snapGrid={CANVAS_SNAP_GRID}
               snapToGrid={snapToGrid}
               translateExtent={CANVAS_EXTENT}
@@ -254,6 +259,7 @@ export const InfiniteCanvas = () => {
               zoomOnScroll={mouseWheelBehavior === 'zoom'}
             >
               <CanvasSurface showGrid={showGrid} />
+              <CanvasSelectionActions disabled={status !== 'connected'} />
             </ReactFlow>
             <CanvasControls />
           </div>
@@ -266,10 +272,11 @@ export const InfiniteCanvas = () => {
               event.preventDefault();
               const id = crypto.randomUUID();
               setNodes((current) => [
-                ...current,
+                ...current.map((node) => ({ ...node, selected: false })),
                 {
                   id,
                   type: 'postit',
+                  selected: true,
                   position: postitPosition,
                   origin: [0.5, 0],
                   draggable: false,

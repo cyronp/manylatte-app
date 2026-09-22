@@ -26,7 +26,7 @@ async function openCanvasMenu(page: Page) {
   });
 }
 
-test('Post-it actions appear above the note and sync colors and removal', async ({
+test('Post-it colors and shared canvas deletion sync across clients', async ({
   browser,
   request,
 }) => {
@@ -62,13 +62,43 @@ test('Post-it actions appear above the note and sync colors and removal', async 
     const bounds = await note.boundingBox();
     const menuBounds = await actions.boundingBox();
     expect(bounds!.width).toBeCloseTo(bounds!.height, 0);
-    expect(menuBounds!.y + menuBounds!.height).toBeLessThan(bounds!.y);
+    expect(menuBounds!.y).toBeGreaterThan(bounds!.y + bounds!.height);
+    const deleteBounds = await owner
+      .getByRole('group', { name: 'Selection actions' })
+      .boundingBox();
+    expect(deleteBounds!.y + deleteBounds!.height).toBeLessThan(bounds!.y);
+    await expect(
+      owner.getByRole('button', { name: 'Remove Post-it' }),
+    ).toHaveCount(0);
     await owner.getByRole('button', { name: 'Make Post-it blue' }).click();
     await expect(peerNote).toHaveClass(/bg-blue-200/);
     await owner.reload();
     await expect(note).toHaveClass(/bg-blue-200/);
     await note.click();
-    await owner.getByRole('button', { name: 'Remove Post-it' }).click();
+    await owner.getByRole('button', { name: 'Delete selected items' }).click();
+    await expect(note).toHaveCount(0);
+    await expect(peerNote).toHaveCount(0);
+    await owner.keyboard.press('Control+z');
+    await expect(note).toHaveClass(/bg-blue-200/);
+    await expect(peerNote).toContainText('A colorful note');
+    await owner.keyboard.press('Control+Shift+z');
+    await expect(note).toHaveCount(0);
+    await expect(peerNote).toHaveCount(0);
+
+    // Deleting an unfinished draft must not trigger an outside-click save.
+    await openCanvasMenu(owner);
+    await owner.getByRole('menuitem', { name: 'Post-it', exact: true }).click();
+    await owner
+      .getByRole('textbox', { name: 'Post-it text' })
+      .fill('Discard this draft');
+    await owner.getByRole('button', { name: 'Delete selected items' }).click();
+    await expect(note).toHaveCount(0);
+    await owner.reload();
+    await openCanvasMenu(owner);
+    await expect(
+      owner.getByRole('menuitem', { name: 'Post-it', exact: true }),
+    ).toBeEnabled();
+    await owner.keyboard.press('Escape');
     await expect(note).toHaveCount(0);
     await expect(peerNote).toHaveCount(0);
   } finally {
@@ -115,13 +145,13 @@ test('Ctrl+Z and Ctrl+Y undo and restore only this participant’s node insertio
     await expect(reactions(first)).toHaveCount(0);
     await expect(reactions(second)).toHaveCount(0);
     await expect(first.locator('[data-sonner-toast]')).toContainText(
-      'Node insertion undone',
+      'Canvas change undone',
     );
     await expect(second.locator('[data-sonner-toast]')).toHaveCount(0);
     await first.keyboard.press('Control+y');
     await expect(reactions(second)).toHaveCount(1);
     await expect(first.locator('[data-sonner-toast]')).toContainText(
-      'Node restored',
+      'Canvas change redone',
     );
     expect(
       await first
@@ -343,6 +373,20 @@ test('two clients keep saved messages and keyboard moves/deletes in sync through
   await node.press('Enter');
   await node.press('Delete');
   await expect(second.locator('.react-flow__node-message')).toHaveCount(0);
+  await first.keyboard.press('Control+z');
+  await expect(node).toHaveCount(1);
+  await expect(second.locator('.react-flow__node-message')).toHaveCount(1);
+  await second
+    .getByRole('button', { name: 'Open messages', exact: true })
+    .click();
+  await expect(
+    second.getByText('Atomic first message', { exact: true }).last(),
+  ).toBeVisible();
+  await expect(
+    second.getByText('Draft survives reconnect', { exact: true }).last(),
+  ).toBeVisible();
+  await first.keyboard.press('Control+y');
+  await expect(second.locator('.react-flow__node-message')).toHaveCount(0);
   await first.reload();
   await openCanvasMenu(first);
   await expect(first.getByRole('menuitem', { name: 'Message' })).toBeEnabled();
@@ -492,4 +536,111 @@ test('group dragging persists every selected node', async ({
     .toEqual(after);
   await first.close();
   await second.close();
+});
+
+test('box selection and select-all delete groups across clients and reloads', async ({
+  browser,
+  request,
+}) => {
+  const response = await request.post('http://127.0.0.1:3000/lobbies', {
+    data: { name: 'Group deletion' },
+  });
+  const lobby = await response.json();
+  const publisher = io('http://127.0.0.1:3000', {
+    auth: { roomId: lobby.id, username: 'Seeder' },
+    autoConnect: false,
+  });
+  const owner = await browser.newPage();
+  const viewer = await browser.newPage();
+  try {
+    const ready = new Promise((resolve) =>
+      publisher.once('canvas:snapshot', resolve),
+    );
+    publisher.connect();
+    await ready;
+    for (const offset of [-200, 0, 200]) {
+      const result = await publisher
+        .timeout(3000)
+        .emitWithAck('canvas:command', {
+          id: crypto.randomUUID(),
+          body: {
+            type: 'mutation',
+            mutation: {
+              action: 'create',
+              node: {
+                id: crypto.randomUUID(),
+                type: 'emoji',
+                position: {
+                  x: CANVAS_WIDTH / 2 + offset,
+                  y: CANVAS_HEIGHT / 2,
+                },
+                data: { emoji: '☕', label: 'Coffee' },
+              },
+            },
+          },
+        });
+      expect(result.ok).toBe(true);
+    }
+    await join(owner, lobby.code, 'Alice');
+    await join(viewer, lobby.code, 'Bob');
+    const nodes = owner.locator('.react-flow__node-emoji');
+    const selected = owner.locator('.react-flow__node.selected');
+    const actions = owner.getByRole('group', { name: 'Selection actions' });
+    await expect(nodes).toHaveCount(3);
+    await owner.keyboard.press('Control+a');
+    await expect(selected).toHaveCount(3);
+    await expect(actions).toContainText('3 selected');
+    await owner
+      .locator('.react-flow__pane')
+      .click({ position: { x: 100, y: 100 } });
+    await expect(actions).toHaveCount(0);
+
+    const first = await nodes.nth(0).boundingBox();
+    const second = await nodes.nth(1).boundingBox();
+    if (!first || !second) throw new Error('Missing reaction bounds');
+    await owner.mouse.move(first.x - 15, first.y - 15);
+    await owner.mouse.down();
+    // Partial overlap includes the second node without reaching the third.
+    await owner.mouse.move(
+      second.x + second.width / 2,
+      second.y + second.height + 15,
+      { steps: 8 },
+    );
+    await owner.mouse.up();
+    await expect(selected).toHaveCount(2);
+    await expect(actions).toContainText('2 selected');
+    const toolbar = await actions.boundingBox();
+    expect(toolbar!.y + toolbar!.height).toBeLessThan(first.y);
+    expect(toolbar!.x + toolbar!.width / 2).toBeCloseTo(
+      (first.x + second.x + second.width) / 2,
+      0,
+    );
+    await owner.getByRole('button', { name: 'Delete selected items' }).click();
+    await expect(nodes).toHaveCount(1);
+    await expect(viewer.locator('.react-flow__node-emoji')).toHaveCount(1);
+    await expect(actions).toHaveCount(0);
+    await viewer.reload();
+    await expect(viewer.locator('.react-flow__node-emoji')).toHaveCount(1);
+
+    await owner.keyboard.press('Control+z');
+    await expect(nodes).toHaveCount(3);
+    await expect(viewer.locator('.react-flow__node-emoji')).toHaveCount(3);
+    await owner.keyboard.press('Control+y');
+    await expect(nodes).toHaveCount(1);
+    await expect(viewer.locator('.react-flow__node-emoji')).toHaveCount(1);
+
+    // The platform-independent select-all shortcut also supports Command.
+    await owner.keyboard.press('Meta+a');
+    await expect(selected).toHaveCount(1);
+    await owner.keyboard.press('Delete');
+    await expect(nodes).toHaveCount(0);
+    await expect(viewer.locator('.react-flow__node-emoji')).toHaveCount(0);
+    await owner.keyboard.press('Meta+z');
+    await expect(nodes).toHaveCount(1);
+    await expect(viewer.locator('.react-flow__node-emoji')).toHaveCount(1);
+  } finally {
+    publisher.disconnect();
+    await owner.close();
+    await viewer.close();
+  }
 });

@@ -3,7 +3,6 @@ import {
   CANVAS_HISTORY_PAGE_SIZE,
   CANVAS_PREVIEW_MESSAGES,
   canvasCommandResultSchema,
-  canvasNodeSchema,
   canvasMessageSchema,
   type CanvasCommand,
   type CanvasCommandResult,
@@ -14,8 +13,18 @@ import {
   type CanvasNodeMutation,
   type CursorUser,
 } from '@app/shared';
+import { toCanvasNode } from './canvas-node-record.js';
+import {
+  readDeletionArchive,
+  restoreDeletionArchive,
+} from './canvas-deletion-archive.js';
 
 export interface CanvasPersistence {
+  deletedNode: (
+    roomId: string,
+    deletionId: string,
+    userId: string,
+  ) => Promise<CanvasNode | undefined>;
   load: (roomId: string) => Promise<CanvasNode[]>;
   mutate: (
     roomId: string,
@@ -152,6 +161,17 @@ async function append(
 export const createCanvasPersistence = (
   database: Database,
 ): CanvasPersistence => ({
+  async deletedNode(roomId, deletionId, userId) {
+    const archived = await readDeletionArchive(
+      database,
+      roomId,
+      deletionId,
+      userId,
+    );
+    return archived?.deletion
+      ? toCanvasNode(archived.deletion.node)
+      : undefined;
+  },
   async load(roomId) {
     const nodes = await database.canvasNode.findMany({
       where: { roomId },
@@ -164,41 +184,7 @@ export const createCanvasPersistence = (
       },
     });
     return nodes.map((node) =>
-      canvasNodeSchema.parse({
-        id: node.id,
-        type: node.type,
-        position: { x: node.x, y: node.y },
-        data:
-          node.type === 'postit'
-            ? {
-                text: node.postitText ?? '',
-                ...(node.postitColor ? { color: node.postitColor } : {}),
-                user: {
-                  userId: node.authorId,
-                  username: node.authorUsername,
-                  color: node.authorColor,
-                },
-              }
-            : node.type === 'emoji'
-              ? {
-                  emoji: node.emoji,
-                  label: node.label,
-                  ...(node.authorId && node.authorUsername && node.authorColor
-                    ? {
-                        user: {
-                          userId: node.authorId,
-                          username: node.authorUsername,
-                          color: node.authorColor,
-                        },
-                      }
-                    : {}),
-                }
-              : {
-                  messages: node.messages.reverse().map(toMessage),
-                  messageCount: node.messageCount,
-                  textBytes: node.textBytes,
-                },
-      }),
+      toCanvasNode({ ...node, messages: node.messages.reverse() }),
     );
   },
   mutate: (roomId, mutation, user) =>
@@ -256,8 +242,19 @@ export const createCanvasPersistence = (
   async commit(roomId, command, hash, user, result) {
     await database.$transaction(async (tx) => {
       const body = command.body;
+      const deleted =
+        result.ok &&
+        body.type === 'mutation' &&
+        body.mutation.action === 'delete'
+          ? await tx.canvasNode.findUnique({
+              where: { id: body.mutation.nodeId, roomId },
+              include: { messages: { orderBy: { sequence: 'asc' } } },
+            })
+          : undefined;
       if (!result.ok || !result.change) {
         /* Persist only the receipt for an already-applied message. */
+      } else if (body.type === 'restore') {
+        await restoreDeletionArchive(tx, roomId, body.deletionId, user.userId);
       } else if (body.type === 'mutation')
         await mutate(tx, roomId, body.mutation, user);
       else if (body.type === 'message')
@@ -285,7 +282,17 @@ export const createCanvasPersistence = (
         data: { lastActivityAt: new Date() },
       });
       await tx.canvasOperation.create({
-        data: { roomId, id: command.id, hash, result: JSON.stringify(result) },
+        data: {
+          roomId,
+          id: command.id,
+          hash,
+          result: JSON.stringify({
+            ...result,
+            ...(deleted
+              ? { deletion: { userId: user.userId, node: deleted } }
+              : {}),
+          }),
+        },
       });
     });
   },

@@ -3,7 +3,7 @@ import type {
   CanvasNodeMutation,
   CanvasPostitColor,
 } from '@app/shared';
-import type { Node, NodeProps } from '@xyflow/react';
+import { useStore, type Node, type NodeProps } from '@xyflow/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSocket } from '@/components/socket-provider';
 
@@ -21,6 +21,9 @@ export type PostitNode = Node<
 >;
 
 export const PostitCanvasNode = ({ id, data }: NodeProps<PostitNode>) => {
+  const multipleSelected = useStore(
+    (state) => state.nodes.filter((node) => node.selected).length > 1,
+  );
   const [draftColor, setDraftColor] = useState<CanvasPostitColor>();
   const [menuOpen, setMenuOpen] = useState(Boolean(data.draft));
   // Existing notes retain their original color until a color is chosen.
@@ -106,6 +109,12 @@ export const PostitCanvasNode = ({ id, data }: NodeProps<PostitNode>) => {
   useEffect(() => {
     if ((!editing && !menuOpen) || !isOwner) return;
     const outside = (event: Event) => {
+      // Deleting a selection must not save an unfinished note first.
+      if (
+        event.target instanceof Element &&
+        event.target.closest('[data-canvas-selection-actions]')
+      )
+        return;
       if (
         event.target instanceof window.Node &&
         !section.current?.contains(event.target)
@@ -171,7 +180,7 @@ export const PostitCanvasNode = ({ id, data }: NodeProps<PostitNode>) => {
       }}
       className={`relative flex size-64 cursor-grab flex-col rounded-none ${POSTIT_COLORS[color]} text-black shadow-md active:cursor-grabbing`}
     >
-      {isOwner && menuOpen && (
+      {isOwner && menuOpen && !multipleSelected && (
         <PostitActions
           color={color}
           disabled={saving || (!data.draft && status !== 'connected')}
@@ -183,10 +192,6 @@ export const PostitCanvasNode = ({ id, data }: NodeProps<PostitNode>) => {
                 nodeId: id,
                 color: nextColor,
               });
-          }}
-          onRemove={() => {
-            if (data.draft) data.draft.onCancel();
-            else void applyAction({ action: 'delete', nodeId: id });
           }}
         />
       )}

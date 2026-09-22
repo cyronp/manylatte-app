@@ -1,6 +1,7 @@
 import type {
   CanvasCommand,
   CanvasCommandResult,
+  CanvasNode,
   CursorUser,
 } from '@app/shared';
 import type {
@@ -43,10 +44,39 @@ export function prepareCommand(
   state: CanvasState,
   command: CanvasCommand,
   user: CursorUser,
+  deletedNode?: CanvasNode,
 ): CanvasCommandResult {
   const body = command.body;
+  if (body.type === 'restore') {
+    if (!deletedNode)
+      return {
+        ok: false,
+        operationId: command.id,
+        code: 'missing',
+        message: 'This deletion can no longer be undone.',
+      };
+    const restored = state.restoreNode(deletedNode, user);
+    if (restored.status === 'rejected')
+      return rejection(command.id, restored.reason);
+    if (restored.status !== 'applied')
+      throw new Error('Unexpected restore result');
+    return {
+      ok: true,
+      operationId: command.id,
+      change: { type: 'upsert', node: restored.node },
+    };
+  }
   let change: CanvasMutationResult | CanvasMessageResult;
   if (body.type === 'mutation') {
+    const existed =
+      body.mutation.action === 'delete' &&
+      state
+        .snapshot()
+        .some(
+          (node) =>
+            body.mutation.action === 'delete' &&
+            node.id === body.mutation.nodeId,
+        );
     change = state.applyMutation(body.mutation, user);
     if (change.status === 'rejected')
       return rejection(command.id, change.reason);
@@ -55,6 +85,7 @@ export function prepareCommand(
         ok: true,
         operationId: command.id,
         change: { type: 'remove', nodeId: change.nodeId },
+        undoableDeletion: existed,
       };
     return {
       ok: true,

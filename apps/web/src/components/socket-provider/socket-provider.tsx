@@ -42,6 +42,7 @@ interface SocketContextValue {
     operationId?: string,
   ) => Promise<CanvasCommandResult>;
   retryConnect: () => void;
+  deleteNodes: (ids: string[]) => Promise<CanvasCommandResult | undefined>;
   undoInsertion: () => Promise<CanvasCommandResult | undefined>;
   redoInsertion: () => Promise<CanvasCommandResult | undefined>;
   setUserColor: (color: string) => void;
@@ -258,6 +259,7 @@ export const SocketProvider = ({
       ownerId,
       error,
       execute,
+      deleteNodes: history.deleteNodes,
       undoInsertion: history.undo,
       redoInsertion: history.redo,
       retryConnect,
