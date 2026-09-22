@@ -211,6 +211,24 @@ export class CanvasState {
     return this.#nodes.get(nodeId)?.type === 'message';
   }
 
+  restoreNode(
+    node: CanvasNode,
+    user: CursorUser,
+  ): CanvasMutationResult | CanvasMessageResult {
+    const created = this.applyMutation({ action: 'create', node }, user);
+    if (created.status !== 'applied') return created;
+    if (node.type !== 'message') {
+      // Preserve the original author, including legacy anonymous reactions.
+      this.#nodes.set(node.id, node);
+      return { status: 'applied', node };
+    }
+    for (const message of node.data.messages) {
+      const result = this.appendMessage(node.id, message);
+      if (result.status === 'rejected') return result;
+    }
+    return { status: 'applied', node: this.#nodes.get(node.id)! };
+  }
+
   snapshot() {
     return Array.from(this.#nodes.values());
   }

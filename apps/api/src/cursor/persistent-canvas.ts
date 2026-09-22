@@ -116,7 +116,18 @@ export class PersistentCanvas {
           ));
         const result: CanvasCommandResult = alreadySent
           ? { ok: true, operationId: command.id }
-          : prepareCommand(candidate, command, user);
+          : prepareCommand(
+              candidate,
+              command,
+              user,
+              body.type === 'restore'
+                ? await this.persistence.deletedNode(
+                    this.roomId,
+                    body.deletionId,
+                    user.userId,
+                  )
+                : undefined,
+            );
         if (result.ok) {
           await this.persistence.commit(
             this.roomId,

@@ -10,6 +10,10 @@ import {
 
 export const canvasCommandBodySchema = z.discriminatedUnion('type', [
   z.strictObject({
+    type: z.literal('restore'),
+    deletionId: z.uuidv4(),
+  }),
+  z.strictObject({
     type: z.literal('mutation'),
     mutation: canvasNodeMutationSchema,
   }),
@@ -52,6 +56,7 @@ export const canvasCommandResultSchema = z.discriminatedUnion('ok', [
     ok: z.literal(true),
     operationId: z.string(),
     change: canvasChangeSchema.optional(),
+    undoableDeletion: z.boolean().optional(),
   }),
   z.object({
     ok: z.literal(false),
