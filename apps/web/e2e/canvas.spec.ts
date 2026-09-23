@@ -595,6 +595,23 @@ test('box selection and select-all delete groups across clients and reloads', as
       .click({ position: { x: 100, y: 100 } });
     await expect(actions).toHaveCount(0);
 
+    const viewport = owner.locator('.react-flow__viewport');
+    const initialTransform = await viewport.getAttribute('style');
+    await owner.mouse.move(100, 100);
+    await owner.mouse.down();
+    await owner.mouse.move(180, 140, { steps: 8 });
+    await expect(owner.locator('.react-flow__selection')).toBeVisible();
+    await owner.mouse.up();
+    await expect(viewport).toHaveAttribute('style', initialTransform!);
+
+    await owner.mouse.move(100, 100);
+    await owner.mouse.down({ button: 'middle' });
+    await owner.mouse.move(180, 140, { steps: 8 });
+    await owner.mouse.up({ button: 'middle' });
+    await expect(viewport).not.toHaveAttribute('style', initialTransform!);
+    await expect(selected).toHaveCount(0);
+    const pannedTransform = await viewport.getAttribute('style');
+
     const first = await nodes.nth(0).boundingBox();
     const second = await nodes.nth(1).boundingBox();
     if (!first || !second) throw new Error('Missing reaction bounds');
@@ -607,6 +624,7 @@ test('box selection and select-all delete groups across clients and reloads', as
       { steps: 8 },
     );
     await owner.mouse.up();
+    await expect(viewport).toHaveAttribute('style', pannedTransform!);
     await expect(selected).toHaveCount(2);
     await expect(actions).toContainText('2 selected');
     const toolbar = await actions.boundingBox();
