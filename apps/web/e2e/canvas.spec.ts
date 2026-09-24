@@ -10,10 +10,10 @@ async function join(page: Page, code: string, username: string) {
   await page.goto(`/?lobby=${code}`);
   await expect(
     page.getByRole('button', { name: 'Add message', exact: true }),
-  ).toHaveCount(0);
+  ).toBeEnabled();
   await expect(
     page.getByRole('button', { name: 'Add reaction', exact: true }),
-  ).toHaveCount(0);
+  ).toBeEnabled();
   await openCanvasMenu(page);
   await expect(page.getByRole('menuitem', { name: 'Message' })).toBeEnabled();
   await page.keyboard.press('Escape');
@@ -405,7 +405,158 @@ test('bottom dock switches between cursor selection and navigation without movin
   if (!dock || !zoom) throw new Error('Missing canvas controls');
   expect(dock.x + dock.width / 2).toBeCloseTo(160, 0);
   expect(dock.y + dock.height).toBeCloseTo(684, 0);
-  expect(dock.x + dock.width).toBeLessThan(zoom.x);
+  expect(dock.x).toBeGreaterThanOrEqual(0);
+  expect(dock.x + dock.width).toBeLessThanOrEqual(320);
+  expect(zoom.y + zoom.height).toBeLessThan(dock.y);
+});
+
+test('dock previews notes, reactions, and messages at the pointer before placing them', async ({
+  page,
+  request,
+}) => {
+  const response = await request.post('http://127.0.0.1:3000/lobbies', {
+    data: { name: 'Dock actions' },
+  });
+  const lobby = await response.json();
+  await join(page, lobby.code, 'Dock user');
+  await page
+    .getByRole('button', { name: 'Navigation mode', exact: true })
+    .click();
+  await page.mouse.move(100, 100);
+  await page.mouse.down();
+  await page.mouse.move(250, 200, { steps: 8 });
+  await page.mouse.up();
+
+  await page.getByRole('button', { name: 'Add Post-it', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Add Post-it', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  const preview = page.locator('[data-canvas-placement-preview]');
+  await expect(page.locator('.react-flow__node-postit')).toHaveCount(0);
+  await page.mouse.move(400, 250);
+  await expect(preview).toHaveAttribute(
+    'data-canvas-placement-preview',
+    'postit',
+  );
+  await expect(preview).toHaveCSS('opacity', '0.5');
+  const initialPreview = await preview.boundingBox();
+  if (!initialPreview) throw new Error('Missing placement preview');
+  await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+  await page.mouse.move(520, 260);
+  // Finish the zoom animation before measuring a newly placed item's position.
+  await expect
+    .poll(async () => (await preview.boundingBox())?.width)
+    .toBeCloseTo(initialPreview.width * 1.2, 2);
+  await expect
+    .poll(async () => (await preview.boundingBox())?.y)
+    .toBeCloseTo(260, 0);
+  const movedPreview = await preview.boundingBox();
+  if (!movedPreview) throw new Error('Missing placement preview');
+  expect(movedPreview.width).toBeGreaterThan(initialPreview.width);
+  expect(movedPreview.x + movedPreview.width / 2).toBeCloseTo(520, 0);
+  await expect(page.locator('.react-flow__node-postit')).toHaveCount(0);
+  await page.mouse.click(520, 260);
+  await expect(preview).toHaveCount(0);
+  const text = page.getByRole('textbox', { name: 'Post-it text' });
+  await expect(text).toBeVisible();
+  await expect(text).toBeFocused();
+  const note = page.locator('.react-flow__node-postit');
+  const bounds = await note.boundingBox();
+  if (!bounds) throw new Error('Missing canvas bounds');
+  expect(bounds.x + bounds.width / 2).toBeCloseTo(520, 0);
+  expect(bounds.y).toBeCloseTo(260, 0);
+  await text.fill('Created from the dock');
+  await page
+    .locator('.react-flow__pane')
+    .click({ position: { x: 100, y: 100 } });
+  await expect(note).toContainText('Created from the dock');
+
+  await page.getByRole('button', { name: 'Add reaction', exact: true }).click();
+  await expect(
+    page.getByRole('dialog', { name: 'Choose a reaction' }),
+  ).toBeVisible();
+  await page.locator('.EmojiPickerReact button.epr-emoji').first().click();
+  await expect(page.locator('.react-flow__node-emoji')).toHaveCount(0);
+  await expect(
+    page.getByRole('dialog', { name: 'Choose a reaction' }),
+  ).toHaveCount(0);
+  await page.mouse.move(800, 300);
+  await expect(preview).toHaveAttribute(
+    'data-canvas-placement-preview',
+    'reaction',
+  );
+  await expect(preview).not.toBeEmpty();
+  await page.mouse.click(800, 300);
+  const reaction = page.locator('.react-flow__node-emoji');
+  await expect(reaction).toHaveCount(1);
+  const reactionBounds = await reaction.boundingBox();
+  if (!reactionBounds) throw new Error('Missing reaction bounds');
+  expect(reactionBounds.x + reactionBounds.width / 2).toBeCloseTo(800, 0);
+  expect(reactionBounds.y + reactionBounds.height / 2).toBeCloseTo(300, 0);
+
+  await page.getByRole('button', { name: 'Add message', exact: true }).click();
+  await expect(page.locator('.react-flow__node-messageDraft')).toHaveCount(0);
+  // Placement over an existing item must not select or drag that item.
+  await page.mouse.move(800, 300);
+  await expect(preview).toHaveAttribute(
+    'data-canvas-placement-preview',
+    'message',
+  );
+  await page.mouse.click(800, 300);
+  const message = page.getByRole('textbox', {
+    name: 'First message',
+    exact: true,
+  });
+  await expect(message).toBeFocused();
+  await message.fill('A message from the dock');
+  await page
+    .getByRole('button', { name: 'Create message', exact: true })
+    .click();
+  await expect(page.locator('.react-flow__node-message')).toHaveCount(1);
+  await page.reload();
+  await expect(note).toContainText('Created from the dock');
+  await expect(page.locator('.react-flow__node-emoji')).toHaveCount(1);
+  await expect(page.locator('.react-flow__node-message')).toHaveCount(1);
+});
+
+test('placement can be cancelled or changed without inserting anything', async ({
+  page,
+  request,
+}) => {
+  const response = await request.post('http://127.0.0.1:3000/lobbies', {
+    data: { name: 'Cancel placement' },
+  });
+  const lobby = await response.json();
+  await join(page, lobby.code, 'Placement user');
+  const preview = page.locator('[data-canvas-placement-preview]');
+  await page.getByRole('button', { name: 'Add Post-it', exact: true }).click();
+  await page.mouse.move(400, 250);
+  await expect(preview).toBeVisible();
+  await page.mouse.down();
+  await page.mouse.move(500, 350, { steps: 8 });
+  await page.mouse.up();
+  await expect(page.locator('.react-flow__node')).toHaveCount(0);
+  await expect(preview).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(preview).toHaveCount(0);
+  await page.getByRole('button', { name: 'Add Post-it', exact: true }).click();
+  await page.getByRole('button', { name: 'Add message', exact: true }).click();
+  await page.mouse.move(400, 250);
+  await expect(preview).toHaveAttribute(
+    'data-canvas-placement-preview',
+    'message',
+  );
+  await page
+    .getByRole('button', { name: 'Navigation mode', exact: true })
+    .click();
+  await expect(preview).toHaveCount(0);
+  await page.mouse.click(400, 250);
+  await expect(page.locator('.react-flow__node')).toHaveCount(0);
+  await page.reload();
+  await expect(
+    page.getByRole('button', { name: 'Add Post-it', exact: true }),
+  ).toBeEnabled();
+  await expect(page.locator('.react-flow__node')).toHaveCount(0);
 });
 
 test('two clients keep saved messages and keyboard moves/deletes in sync through restart', async ({

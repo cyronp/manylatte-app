@@ -1,26 +1,54 @@
-import { CursorIcon, HandIcon } from '@phosphor-icons/react';
+import {
+  ChatIcon,
+  CursorIcon,
+  HandIcon,
+  MonitorIcon,
+  NoteBlankIcon,
+  SmileyStickerIcon,
+} from '@phosphor-icons/react';
 
 import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import type { XYPosition } from '@xyflow/react';
 
 export type CanvasMode = 'cursor' | 'navigation';
+export type CanvasAction = 'screen-share' | 'postit' | 'reaction' | 'message';
+
+const ACTIONS = [
+  { action: 'screen-share', label: 'Share screen', icon: MonitorIcon },
+  { action: 'postit', label: 'Add Post-it', icon: NoteBlankIcon },
+  { action: 'reaction', label: 'Add reaction', icon: SmileyStickerIcon },
+  { action: 'message', label: 'Add message', icon: ChatIcon },
+] as const;
 
 interface CanvasDockProps {
   mode: CanvasMode;
   onModeChange: (mode: CanvasMode) => void;
+  onAction: (action: CanvasAction, anchor: XYPosition) => void;
+  activeAction?: CanvasAction;
+  disabled: boolean;
+  screenShareDisabled: boolean;
 }
 
-export function CanvasDock({ mode, onModeChange }: CanvasDockProps) {
+export function CanvasDock({
+  mode,
+  onModeChange,
+  onAction,
+  activeAction,
+  disabled,
+  screenShareDisabled,
+}: CanvasDockProps) {
   return (
     <div
       aria-label="Canvas tools"
       role="group"
-      className="absolute bottom-4 left-1/2 z-60 flex -translate-x-1/2 items-center gap-1 rounded-full border border-border bg-popover/95 p-1 text-popover-foreground shadow-lg backdrop-blur-sm"
+      className="absolute bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1 rounded-full border border-border bg-popover/95 p-1 text-popover-foreground shadow-lg backdrop-blur-sm"
     >
       <Button
         aria-label="Cursor mode"
-        aria-pressed={mode === 'cursor'}
+        aria-pressed={mode === 'cursor' && !activeAction}
         title="Cursor mode: select and move items"
-        variant={mode === 'cursor' ? 'default' : 'ghost'}
+        variant={mode === 'cursor' && !activeAction ? 'default' : 'ghost'}
         size="icon-lg"
         onClick={() => onModeChange('cursor')}
       >
@@ -36,6 +64,25 @@ export function CanvasDock({ mode, onModeChange }: CanvasDockProps) {
       >
         <HandIcon aria-hidden="true" />
       </Button>
+      <Separator orientation="vertical" className="mx-1 my-2" />
+      {ACTIONS.map(({ action, label, icon: Icon }) => (
+        <Button
+          key={action}
+          aria-label={label}
+          title={label}
+          variant={activeAction === action ? 'default' : 'ghost'}
+          aria-pressed={activeAction === action}
+          size="icon-lg"
+          disabled={
+            disabled || (action === 'screen-share' && screenShareDisabled)
+          }
+          onClick={(event) =>
+            onAction(action, { x: event.clientX, y: event.clientY })
+          }
+        >
+          <Icon aria-hidden="true" />
+        </Button>
+      ))}
     </div>
   );
 }
