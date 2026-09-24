@@ -3,7 +3,6 @@ import {
   CursorIcon,
   HandIcon,
   MonitorIcon,
-  NoteBlankIcon,
   SmileyStickerIcon,
 } from '@phosphor-icons/react';
 
@@ -14,9 +13,20 @@ import type { XYPosition } from '@xyflow/react';
 export type CanvasMode = 'cursor' | 'navigation';
 export type CanvasAction = 'screen-share' | 'postit' | 'reaction' | 'message';
 
+function PostitDockIcon() {
+  return (
+    <span
+      aria-hidden="true"
+      className="pointer-events-none relative size-7 rounded-xs rounded-br-lg bg-yellow-200 shadow-sm shadow-black/20 transition-[translate,rotate,box-shadow] duration-350 ease-in-out group-hover/button:shadow-md group-hover/button:shadow-black/20 motion-safe:group-hover/button:-translate-y-1.5 motion-safe:group-hover/button:-rotate-6 motion-safe:group-focus-visible/button:-translate-y-1.5 motion-safe:group-focus-visible/button:-rotate-6"
+    >
+      <span className="absolute right-0 bottom-0 size-2 rounded-tl-xs rounded-br-lg bg-yellow-300" />
+    </span>
+  );
+}
+
 const ACTIONS = [
+  { action: 'postit', label: 'Add Post-it', icon: PostitDockIcon },
   { action: 'screen-share', label: 'Share screen', icon: MonitorIcon },
-  { action: 'postit', label: 'Add Post-it', icon: NoteBlankIcon },
   { action: 'reaction', label: 'Add reaction', icon: SmileyStickerIcon },
   { action: 'message', label: 'Add message', icon: ChatIcon },
 ] as const;
