@@ -292,6 +292,122 @@ test('starts centered and provides canvas zoom controls', async ({
   );
 });
 
+test('bottom dock switches between cursor selection and navigation without moving items', async ({
+  page,
+  request,
+}) => {
+  const response = await request.post('http://127.0.0.1:3000/lobbies', {
+    data: { name: 'Canvas modes' },
+  });
+  const lobby = await response.json();
+  await join(page, lobby.code, 'Dock user');
+  await openCanvasMenu(page);
+  await page.getByRole('menuitem', { name: 'Reaction' }).click();
+  await page.locator('.EmojiPickerReact button.epr-emoji').first().click();
+
+  const node = page.locator('.react-flow__node-emoji');
+  await expect(node).toHaveCount(1);
+  const selectionBounds = await node.boundingBox();
+  if (!selectionBounds) throw new Error('Missing reaction bounds');
+  await page.mouse.move(selectionBounds.x - 20, selectionBounds.y - 20);
+  await page.mouse.down();
+  await page.mouse.move(
+    selectionBounds.x + selectionBounds.width + 20,
+    selectionBounds.y + selectionBounds.height + 20,
+    { steps: 8 },
+  );
+  await page.mouse.up();
+  await expect(node).toHaveClass(/selected/);
+  const position = await node.evaluate((element) => element.style.transform);
+  const viewport = page.locator('.react-flow__viewport');
+  const initialTransform = await viewport.getAttribute('style');
+  const cursor = page.getByRole('button', { name: 'Cursor mode', exact: true });
+  const navigation = page.getByRole('button', {
+    name: 'Navigation mode',
+    exact: true,
+  });
+  await expect(cursor).toHaveAttribute('aria-pressed', 'true');
+  await navigation.click();
+  await expect(navigation).toHaveAttribute('aria-pressed', 'true');
+  await expect(cursor).toHaveAttribute('aria-pressed', 'false');
+  await expect(
+    page.getByRole('group', { name: 'Selection actions' }),
+  ).toHaveCount(0);
+
+  await page.mouse.move(100, 100);
+  await page.mouse.down();
+  await expect(page.locator('.react-flow__pane')).toHaveCSS(
+    'cursor',
+    'grabbing',
+  );
+  await page.mouse.move(180, 140, { steps: 8 });
+  await page.mouse.up();
+  await expect(viewport).not.toHaveAttribute('style', initialTransform!);
+  await expect(page.locator('.react-flow__selection')).toHaveCount(0);
+
+  // A drag starting over an item must also pan, leaving its saved position alone.
+  const pannedTransform = await viewport.getAttribute('style');
+  const bounds = await node.boundingBox();
+  if (!bounds) throw new Error('Missing reaction bounds');
+  await page.mouse.move(
+    bounds.x + bounds.width / 2,
+    bounds.y + bounds.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    bounds.x + bounds.width / 2 + 80,
+    bounds.y + bounds.height / 2 + 40,
+    { steps: 8 },
+  );
+  await page.mouse.up();
+  await expect(viewport).not.toHaveAttribute('style', pannedTransform!);
+  expect(await node.evaluate((element) => element.style.transform)).toBe(
+    position,
+  );
+
+  await cursor.click();
+  await expect(cursor).toHaveAttribute('aria-pressed', 'true');
+  const beforeSelection = await viewport.getAttribute('style');
+  await page.mouse.move(100, 100);
+  await page.mouse.down();
+  await page.mouse.move(180, 140, { steps: 8 });
+  await expect(page.locator('.react-flow__selection')).toBeVisible();
+  await page.mouse.up();
+  await expect(viewport).toHaveAttribute('style', beforeSelection!);
+  await node.click();
+  await expect(node).toHaveClass(/selected/);
+  const movableBounds = await node.boundingBox();
+  if (!movableBounds) throw new Error('Missing reaction bounds');
+  await page.mouse.move(
+    movableBounds.x + movableBounds.width / 2,
+    movableBounds.y + movableBounds.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    movableBounds.x + movableBounds.width / 2 + 80,
+    movableBounds.y + movableBounds.height / 2 + 40,
+    { steps: 8 },
+  );
+  await page.mouse.up();
+  await expect
+    .poll(() => node.evaluate((element) => element.style.transform))
+    .not.toBe(position);
+  await expect(viewport).toHaveAttribute('style', beforeSelection!);
+
+  // The dock stays centered and clear of the zoom controls on a narrow screen.
+  await page.setViewportSize({ width: 320, height: 700 });
+  const dock = await page
+    .getByRole('group', { name: 'Canvas tools' })
+    .boundingBox();
+  const zoom = await page
+    .getByRole('toolbar', { name: 'Canvas controls' })
+    .boundingBox();
+  if (!dock || !zoom) throw new Error('Missing canvas controls');
+  expect(dock.x + dock.width / 2).toBeCloseTo(160, 0);
+  expect(dock.y + dock.height).toBeCloseTo(684, 0);
+  expect(dock.x + dock.width).toBeLessThan(zoom.x);
+});
+
 test('two clients keep saved messages and keyboard moves/deletes in sync through restart', async ({
   browser,
   request,

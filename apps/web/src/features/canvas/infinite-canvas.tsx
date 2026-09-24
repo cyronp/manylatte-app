@@ -24,6 +24,7 @@ import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 
 import { CanvasContextMenu } from './components/canvas-context-menu';
 import { CanvasControls } from './components/canvas-controls';
+import { CanvasDock, type CanvasMode } from './components/canvas-dock';
 import { CanvasSelectionActions } from './components/canvas-selection-actions';
 import { CanvasSurface } from './components/canvas-surface';
 import { EmojiCanvasNode } from './components/emoji-canvas-node';
@@ -72,11 +73,13 @@ export const InfiniteCanvas = () => {
   const { mouseWheelBehavior, showGrid, snapToGrid } = useUserPreferences();
   const { screenToFlowPosition } = useReactFlow();
   const { nodes, setNodes, onNodesChange } = useCanvasSync();
+  const [mode, setMode] = useState<CanvasMode>('cursor');
+  const isCursorMode = mode === 'cursor';
   const {
     screen,
     node: screenNode,
     onChanges: onScreenChanges,
-  } = useScreenShareNode(status === 'connected');
+  } = useScreenShareNode(status === 'connected' && isCursorMode);
   useEffect(() => {
     if (!screen.starting) return;
     const toastId = toast.loading('Choose a screen, window, or tab to share…', {
@@ -232,9 +235,10 @@ export const InfiniteCanvas = () => {
           >
             <ReactFlow
               aria-label="ManyLatte canvas"
-              className="bg-canvas-surround"
-              deleteKeyCode={['Backspace', 'Delete']}
-              elementsSelectable
+              className={`bg-canvas-surround${isCursorMode ? '' : ' canvas-navigation-mode'}`}
+              deleteKeyCode={isCursorMode ? ['Backspace', 'Delete'] : null}
+              disableKeyboardA11y={!isCursorMode}
+              elementsSelectable={isCursorMode}
               maxZoom={MAX_ZOOM}
               minZoom={MIN_ZOOM}
               multiSelectionKeyCode={['Control', 'Meta', 'Shift']}
@@ -242,14 +246,16 @@ export const InfiniteCanvas = () => {
               nodeTypes={NODE_TYPES}
               nodes={screenNode ? [...nodes, screenNode] : nodes}
               nodesConnectable={false}
-              nodesDraggable={status === 'connected'}
+              nodesDraggable={status === 'connected' && isCursorMode}
+              nodesFocusable={isCursorMode}
               onInit={handleInit}
               onNodesChange={handleNodesChange}
               panActivationKeyCode="Space"
-              panOnDrag={[1]}
+              panOnDrag={isCursorMode ? [1] : [0, 1]}
               panOnScroll={mouseWheelBehavior === 'pan'}
               proOptions={{ hideAttribution: true }}
-              selectionOnDrag
+              selectionOnDrag={isCursorMode}
+              selectionKeyCode={isCursorMode ? 'Shift' : null}
               selectionMode={SelectionMode.Partial}
               snapGrid={CANVAS_SNAP_GRID}
               snapToGrid={snapToGrid}
@@ -259,7 +265,9 @@ export const InfiniteCanvas = () => {
               zoomOnScroll={mouseWheelBehavior === 'zoom'}
             >
               <CanvasSurface showGrid={showGrid} />
-              <CanvasSelectionActions disabled={status !== 'connected'} />
+              {isCursorMode && (
+                <CanvasSelectionActions disabled={status !== 'connected'} />
+              )}
             </ReactFlow>
             <CanvasControls />
           </div>
@@ -341,6 +349,8 @@ export const InfiniteCanvas = () => {
           onReactionSelect={handleReactionSelect}
         />
       </ContextMenu>
+
+      <CanvasDock mode={mode} onModeChange={setMode} />
 
       {emojiPickerOpen && contextMenuPosition && (
         <EmojiPickerPortal

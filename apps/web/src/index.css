@@ -151,6 +151,14 @@
   }
 }
 
+/* Let navigation gestures pass through canvas items to the pan surface. */
+.canvas-navigation-mode .react-flow__node,
+.canvas-navigation-mode .react-flow__node *,
+.canvas-navigation-mode .react-flow__nodesselection,
+.canvas-navigation-mode .react-flow__nodesselection * {
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
