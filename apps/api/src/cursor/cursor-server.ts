@@ -170,7 +170,6 @@ export const registerCursorServer = (
     const room = getRoom(roomId);
     const connectedAt = now();
     const participant: Participant = {
-      clickLimiter: new TokenBucket(3, 8, connectedAt),
       color: selectCursorColor(
         Array.from(room.participants.values(), ({ color }) => color),
       ),

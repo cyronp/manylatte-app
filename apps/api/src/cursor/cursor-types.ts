@@ -40,7 +40,6 @@ export interface CursorLogger {
 }
 
 export interface Participant {
-  clickLimiter: TokenBucket;
   color: HexColor;
   colorLimiter: TokenBucket;
   lastActivityAt: number;

@@ -13,7 +13,6 @@ import {
   type CursorBatch,
   type CursorRemoval,
   type CursorSession,
-  type CursorUpdate,
   type CursorUser,
   type HexColor,
   type ServerToClientEvents,
@@ -79,14 +78,6 @@ const waitForBatch = (socket: TestSocket) =>
       socket.once(CURSOR_EVENTS.batch, resolve);
     }),
     CURSOR_EVENTS.batch,
-  );
-
-const waitForClick = (socket: TestSocket) =>
-  withTimeout(
-    new Promise<CursorUpdate>((resolve) => {
-      socket.once(CURSOR_EVENTS.click, resolve);
-    }),
-    CURSOR_EVENTS.click,
   );
 
 const waitForPresence = (socket: TestSocket) =>
@@ -322,7 +313,7 @@ describe('cursor socket server', () => {
     });
   });
 
-  it('batches movement, snapshots presence, relays clicks, and removes users', async () => {
+  it('batches movement, snapshots presence, and removes users', async () => {
     const url = await startServer();
     const first = await connect(url);
     const secondPresence = waitForPresence(first.socket);
@@ -362,37 +353,21 @@ describe('cursor socket server', () => {
       username: first.session.self.username,
     });
 
-    const clickPromise = waitForClick(second.socket);
-    first.socket.emit(CURSOR_EVENTS.click, {
-      sequence: 1,
-      x: 0.3,
-      y: 0.7,
-    });
-    const click = await clickPromise;
-    expect(click).toMatchObject({
-      color: changedColor,
-      sequence: 1,
-      userId: first.session.self.userId,
-      x: 0.3,
-      y: 0.7,
-    });
-    expect(click).not.toHaveProperty('username');
-
     const validBatch = waitForBatch(second.socket);
     first.socket.emit(CURSOR_EVENTS.move, {
-      sequence: 2,
+      sequence: 1,
       x: CANVAS_WIDTH + 1,
       y: 0.5,
     });
     first.socket.emit(CURSOR_EVENTS.move, {
-      sequence: 2,
+      sequence: 1,
       x: 0.4,
       y: 0.6,
     });
     expect(await validBatch).toMatchObject({
       cursors: [
         expect.objectContaining({
-          sequence: 2,
+          sequence: 1,
           userId: first.session.self.userId,
           x: 0.4,
           y: 0.6,

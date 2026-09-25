@@ -2,7 +2,6 @@ import { hexColorSchema, type HexColor } from '../schemas/color.js';
 
 export const CURSOR_MOVE_FPS = 30;
 export const CURSOR_MOVE_INTERVAL_MS = 1000 / CURSOR_MOVE_FPS;
-export const CURSOR_CLICK_DURATION_MS = 200;
 export const CURSOR_IDLE_TIMEOUT_MS = 15_000;
 export const CURSOR_CONNECTION_IDLE_TIMEOUT_MS = 5 * 60_000;
 
@@ -23,7 +22,6 @@ export const CURSOR_PALETTE: readonly HexColor[] = cursorPalette.map((color) =>
 
 export const CURSOR_EVENTS = {
   batch: 'cursor:batch',
-  click: 'cursor:click',
   color: 'cursor:color',
   disconnect: 'cursor:disconnect',
   move: 'cursor:move',

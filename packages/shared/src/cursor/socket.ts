@@ -72,7 +72,6 @@ export interface ClientToServerEvents {
   'canvas:message-send': (input: CanvasMessageInput) => void;
   'canvas:mutation': (mutation: CanvasNodeMutation) => void;
   'canvas:typing': (input: CanvasTypingInput) => void;
-  'cursor:click': (input: CursorInput) => void;
   'cursor:color': (input: CursorColorInput) => void;
   'cursor:move': (input: CursorInput) => void;
 }
@@ -90,7 +89,6 @@ export interface ServerToClientEvents {
   'canvas:snapshot': (snapshot: CanvasSnapshot) => void;
   'canvas:typing': (update: CanvasTypingUpdate) => void;
   'cursor:batch': (batch: CursorBatch) => void;
-  'cursor:click': (cursor: CursorUpdate) => void;
   'cursor:disconnect': (notice: CursorDisconnectNotice) => void;
   'cursor:presence': (user: CursorUser) => void;
   'cursor:remove': (removal: CursorRemoval) => void;

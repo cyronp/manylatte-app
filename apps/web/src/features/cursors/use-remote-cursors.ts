@@ -1,5 +1,4 @@
 import {
-  CURSOR_CLICK_DURATION_MS,
   CURSOR_EVENTS,
   CURSOR_IDLE_TIMEOUT_MS,
   CURSOR_MOVE_INTERVAL_MS,
@@ -22,7 +21,6 @@ type ProjectCursorPosition = (
 ) => CursorPosition | undefined;
 
 export type RemoteCursorView = RemoteCursor & {
-  isClicking: boolean;
   isInactive: boolean;
 };
 
@@ -40,7 +38,6 @@ export const useRemoteCursors = (
   useEffect(() => {
     const cursorMap = new Map<string, RemoteCursorView>();
     const userMap = new Map<string, CursorUser>();
-    const clickTimers = new Map<string, number>();
     let renderFrame: number | undefined;
     let selfUserId: string | undefined;
 
@@ -56,22 +53,12 @@ export const useRemoteCursors = (
     };
 
     const clearCursor = (userId: string) => {
-      const clickTimer = clickTimers.get(userId);
-
-      if (clickTimer !== undefined) {
-        window.clearTimeout(clickTimer);
-        clickTimers.delete(userId);
-      }
-
       if (cursorMap.delete(userId)) {
         scheduleRender();
       }
     };
 
-    const applyCursor = (
-      cursor: CursorUpdate | RemoteCursor,
-      isClicking = false,
-    ) => {
+    const applyCursor = (cursor: CursorUpdate | RemoteCursor) => {
       if (cursor.userId === selfUserId) {
         return;
       }
@@ -91,7 +78,6 @@ export const useRemoteCursors = (
 
       cursorMap.set(cursor.userId, {
         ...cursor,
-        isClicking: isClicking || currentCursor?.isClicking === true,
         isInactive: false,
         username,
       });
@@ -102,8 +88,6 @@ export const useRemoteCursors = (
       session,
     ) => {
       selfUserId = session.self.userId;
-      clickTimers.forEach((timer) => window.clearTimeout(timer));
-      clickTimers.clear();
       cursorMap.clear();
       userMap.clear();
       session.users.forEach((user) => userMap.set(user.userId, user));
@@ -135,35 +119,6 @@ export const useRemoteCursors = (
       batch.cursors.forEach((cursor) => applyCursor(cursor));
     };
 
-    const handleClick: Parameters<typeof socket.on<'cursor:click'>>[1] = (
-      cursor,
-    ) => {
-      const activeTimer = clickTimers.get(cursor.userId);
-
-      if (activeTimer !== undefined) {
-        window.clearTimeout(activeTimer);
-      }
-
-      applyCursor(cursor, true);
-      clickTimers.set(
-        cursor.userId,
-        window.setTimeout(() => {
-          clickTimers.delete(cursor.userId);
-          const currentCursor = cursorMap.get(cursor.userId);
-
-          if (!currentCursor) {
-            return;
-          }
-
-          cursorMap.set(cursor.userId, {
-            ...currentCursor,
-            isClicking: false,
-          });
-          scheduleRender();
-        }, CURSOR_CLICK_DURATION_MS),
-      );
-    };
-
     const handleRemoval: Parameters<typeof socket.on<'cursor:remove'>>[1] = ({
       reason,
       userId,
@@ -176,8 +131,6 @@ export const useRemoteCursors = (
 
     const resetCursors = () => {
       selfUserId = undefined;
-      clickTimers.forEach((timer) => window.clearTimeout(timer));
-      clickTimers.clear();
       cursorMap.clear();
       userMap.clear();
       scheduleRender();
@@ -206,7 +159,6 @@ export const useRemoteCursors = (
 
     socket.on(CURSOR_EVENTS.session, handleSession);
     socket.on(CURSOR_EVENTS.batch, handleBatch);
-    socket.on(CURSOR_EVENTS.click, handleClick);
     socket.on(CURSOR_EVENTS.presence, handlePresence);
     socket.on(CURSOR_EVENTS.remove, handleRemoval);
     socket.on('disconnect', resetCursors);
@@ -214,11 +166,9 @@ export const useRemoteCursors = (
     return () => {
       socket.off(CURSOR_EVENTS.session, handleSession);
       socket.off(CURSOR_EVENTS.batch, handleBatch);
-      socket.off(CURSOR_EVENTS.click, handleClick);
       socket.off(CURSOR_EVENTS.presence, handlePresence);
       socket.off(CURSOR_EVENTS.remove, handleRemoval);
       socket.off('disconnect', resetCursors);
-      clickTimers.forEach((timer) => window.clearTimeout(timer));
       window.clearInterval(activityTimer);
 
       if (renderFrame !== undefined) {
@@ -278,33 +228,12 @@ export const useRemoteCursors = (
       }
     };
 
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!event.isPrimary || event.button !== 0 || !socket.connected) {
-        return;
-      }
-
-      const position = getPosition(event);
-
-      if (!position) {
-        return;
-      }
-
-      socket.volatile.emit(CURSOR_EVENTS.click, {
-        ...position,
-        sequence: nextSequence(),
-      });
-    };
-
     surface.addEventListener('pointermove', handlePointerMove, {
-      passive: true,
-    });
-    surface.addEventListener('pointerdown', handlePointerDown, {
       passive: true,
     });
 
     return () => {
       surface.removeEventListener('pointermove', handlePointerMove);
-      surface.removeEventListener('pointerdown', handlePointerDown);
 
       if (moveTimer !== undefined) {
         window.clearTimeout(moveTimer);
