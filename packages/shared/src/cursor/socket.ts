@@ -19,7 +19,6 @@ import type {
   CursorInput,
   CursorRemoval,
   CursorSession,
-  CursorUpdate,
   CursorUser,
 } from './schemas.js';
 import type {
