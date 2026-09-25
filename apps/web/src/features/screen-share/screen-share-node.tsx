@@ -73,7 +73,7 @@ export function ScreenShareCanvasNode({ data }: NodeProps<ScreenShareNode>) {
             disabled={fullscreen}
             onClick={() => setExpanded(!expanded)}
           >
-            {expanded ? <MinimizeIcon /> : <MaximizeIcon />}
+            {expanded ? <ShrinkIcon /> : <ExpandIcon />}
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
