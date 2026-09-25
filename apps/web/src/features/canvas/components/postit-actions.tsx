@@ -1,5 +1,5 @@
 import type { CanvasPostitColor } from '@app/shared';
-import { CheckIcon } from '@phosphor-icons/react';
+import { CheckIcon } from 'lucide-react';
 
 export const POSTIT_COLORS = {
   yellow: 'bg-yellow-200',

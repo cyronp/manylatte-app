@@ -114,31 +114,4 @@ export function registerPresence(
     socket.data.cursorLastPosition = cursor;
     room.pendingMoves.set(participant.userId, update);
   });
-
-  socket.on(CURSOR_EVENTS.click, (input) => {
-    const acceptedInput = acceptCursorInput(
-      input,
-      participant.clickLimiter,
-      CURSOR_EVENTS.click,
-    );
-
-    if (!acceptedInput) {
-      return;
-    }
-
-    const update: CursorUpdate = {
-      ...acceptedInput,
-      color: participant.color,
-      updatedAt: now(),
-      userId: participant.userId,
-    };
-    const cursor: RemoteCursor = {
-      ...update,
-      username: participant.username,
-    };
-    participant.lastCursor = cursor;
-    socket.data.cursorLastPosition = cursor;
-    room.pendingMoves.delete(participant.userId);
-    socket.to(roomId).volatile.emit(CURSOR_EVENTS.click, update);
-  });
 }

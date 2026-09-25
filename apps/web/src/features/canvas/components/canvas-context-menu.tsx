@@ -1,9 +1,9 @@
 import {
-  ChatIcon,
-  SmileyStickerIcon,
+  MessageCircleIcon,
+  SmilePlusIcon,
   MonitorIcon,
-  NoteBlankIcon,
-} from '@phosphor-icons/react';
+  StickyNoteIcon,
+} from 'lucide-react';
 import type { ComponentProps } from 'react';
 
 import {
@@ -41,15 +41,15 @@ export const CanvasContextMenu = ({
       Share screen
     </ContextMenuItem>
     <ContextMenuItem disabled={disabled} onSelect={onPostitSelect}>
-      <NoteBlankIcon />
+      <StickyNoteIcon />
       Post-it
     </ContextMenuItem>
     <ContextMenuItem disabled={disabled} onSelect={onReactionSelect}>
-      <SmileyStickerIcon />
+      <SmilePlusIcon />
       Reaction
     </ContextMenuItem>
     <ContextMenuItem disabled={disabled} onSelect={onMessageSelect}>
-      <ChatIcon />
+      <MessageCircleIcon />
       Message
     </ContextMenuItem>
   </ContextMenuContent>

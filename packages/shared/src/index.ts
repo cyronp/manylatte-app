@@ -43,7 +43,6 @@ export {
   type CanvasTypingUpdate,
 } from './canvas/index.js';
 export {
-  CURSOR_CLICK_DURATION_MS,
   CURSOR_CONNECTION_IDLE_TIMEOUT_MS,
   CURSOR_EVENTS,
   CURSOR_IDLE_TIMEOUT_MS,

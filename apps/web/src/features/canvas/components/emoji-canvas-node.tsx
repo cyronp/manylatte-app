@@ -10,11 +10,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { type CursorUser } from '@app/shared';
-import {
-  DotsThreeIcon,
-  SmileyMeltingIcon,
-  SmileySadIcon,
-} from '@phosphor-icons/react';
+import { EllipsisIcon, SmileIcon, FrownIcon } from 'lucide-react';
 import type { Node, NodeProps } from '@xyflow/react';
 import { useRef, useState } from 'react';
 
@@ -77,7 +73,7 @@ export const EmojiCanvasNode = ({ id, data }: NodeProps<EmojiNode>) => {
             className="nodrag nopan absolute -right-3 -top-2 rounded-full bg-white p-1 text-slate-900 shadow focus-visible:outline-2 focus-visible:outline-ring"
             onKeyDown={(event) => event.stopPropagation()}
           >
-            <DotsThreeIcon size={20} />
+            <EllipsisIcon size={20} />
           </button>
         </DropdownMenuTrigger>
 
@@ -97,7 +93,7 @@ export const EmojiCanvasNode = ({ id, data }: NodeProps<EmojiNode>) => {
               pendingPickerRef.current = true;
             }}
           >
-            <SmileyMeltingIcon />
+            <SmileIcon />
             Change reaction
           </DropdownMenuItem>
 
@@ -114,7 +110,7 @@ export const EmojiCanvasNode = ({ id, data }: NodeProps<EmojiNode>) => {
               });
             }}
           >
-            <SmileySadIcon />
+            <FrownIcon />
             Remove reaction
           </DropdownMenuItem>
         </DropdownMenuContent>

@@ -1,14 +1,14 @@
 import {
-  CaretDownIcon,
-  CircleNotchIcon,
+  ChevronDownIcon,
+  LoaderCircleIcon,
   DoorOpenIcon,
-  GearIcon,
+  SettingsIcon,
   LinkIcon,
-  PaintBrushIcon,
+  PaintbrushIcon,
   PlusIcon,
   UserIcon,
   UsersIcon,
-} from '@phosphor-icons/react';
+} from 'lucide-react';
 import { lazy, Suspense, useState, type ComponentProps } from 'react';
 import { Link } from '@tanstack/react-router';
 import type { CursorUser, Lobby } from '@app/shared';
@@ -129,9 +129,9 @@ function UserMenuTrigger({
         )}
       </span>
       {loading ? (
-        <CircleNotchIcon aria-hidden="true" className="animate-spin" />
+        <LoaderCircleIcon aria-hidden="true" className="animate-spin" />
       ) : (
-        <CaretDownIcon />
+        <ChevronDownIcon />
       )}
     </Button>
   );
@@ -204,7 +204,7 @@ export default function UserMenu({
             </DropdownMenuItem>
             <DropdownMenuSub>
               <DropdownMenuSubTrigger disabled={!user}>
-                <PaintBrushIcon />
+                <PaintbrushIcon />
                 Change Color
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="p-4">
@@ -219,7 +219,7 @@ export default function UserMenu({
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={() => setActiveDialog('settings')}>
-              <GearIcon />
+              <SettingsIcon />
               Settings
             </DropdownMenuItem>
             <DropdownMenuItem asChild variant="destructive">

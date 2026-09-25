@@ -1,10 +1,7 @@
 import { createElement, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useSocket } from '@/components/socket-provider';
-import {
-  ArrowClockwiseIcon,
-  ArrowCounterClockwiseIcon,
-} from '@phosphor-icons/react';
+import { RotateCwIcon, RotateCcwIcon } from 'lucide-react';
 
 export function useInsertionShortcuts() {
   const { status, undoInsertion, redoInsertion } = useSocket();
@@ -22,9 +19,7 @@ export function useInsertionShortcuts() {
           {
             id: 'canvas-insertion-history',
             icon: createElement(
-              direction === 'undo'
-                ? ArrowCounterClockwiseIcon
-                : ArrowClockwiseIcon,
+              direction === 'undo' ? RotateCcwIcon : RotateCwIcon,
               { size: 16 },
             ),
           },

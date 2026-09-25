@@ -20,7 +20,11 @@ export type PostitNode = Node<
   'postit'
 >;
 
-export const PostitCanvasNode = ({ id, data }: NodeProps<PostitNode>) => {
+export const PostitCanvasNode = ({
+  id,
+  data,
+  width,
+}: NodeProps<PostitNode>) => {
   const multipleSelected = useStore(
     (state) => state.nodes.filter((node) => node.selected).length > 1,
   );
@@ -38,9 +42,15 @@ export const PostitCanvasNode = ({ id, data }: NodeProps<PostitNode>) => {
   const [error, setError] = useState<string>();
   const [editing, setEditing] = useState(Boolean(data.draft));
   const section = useRef<HTMLElement>(null);
+  const editor = useRef<HTMLTextAreaElement>(null);
   const pending = useRef(false);
   const isOwner = user?.userId === data.user.userId;
   const text = draft ?? data.text;
+
+  // New nodes are hidden until React Flow measures them; focus once visible.
+  useEffect(() => {
+    if (editing) editor.current?.focus();
+  }, [editing, width]);
 
   const finish = useCallback(async () => {
     if (pending.current || !isOwner) return;
@@ -214,8 +224,8 @@ export const PostitCanvasNode = ({ id, data }: NodeProps<PostitNode>) => {
               {text + ' '}
             </div>
             <textarea
+              ref={editor}
               aria-label="Post-it text"
-              autoFocus
               className="absolute inset-0 h-full w-full resize-none overflow-hidden bg-transparent p-0 text-sm leading-relaxed outline-none placeholder:text-black"
               maxLength={1000}
               placeholder="Write a note…"

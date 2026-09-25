@@ -16,11 +16,7 @@ import {
 import { Marker, MarkerContent } from '@/components/ui/marker';
 import { useSocket } from '@/components/socket-provider';
 import { cn } from '@/lib/utils';
-import {
-  ArrowUpIcon,
-  CircleDashedIcon,
-  MinusIcon,
-} from '@phosphor-icons/react';
+import { ArrowUpIcon, CircleDashedIcon, MinusIcon } from 'lucide-react';
 import { Popover as PopoverPrimitive } from 'radix-ui';
 import {
   CANVAS_EVENTS,

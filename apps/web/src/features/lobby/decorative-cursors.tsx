@@ -1,4 +1,4 @@
-import { CursorIcon } from '@phosphor-icons/react';
+import { MousePointer2Icon } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
 const COFFEE_CURSORS = [
@@ -91,7 +91,7 @@ export function DecorativeCursors() {
               color: cursor.color,
             }}
           >
-            <CursorIcon size={28} weight="duotone" />
+            <MousePointer2Icon fill={cursor.color} size={28} />
             <span
               className="mt-0.5 block w-max rounded-full px-1.5 text-xs font-medium text-white"
               style={{ backgroundColor: cursor.color }}

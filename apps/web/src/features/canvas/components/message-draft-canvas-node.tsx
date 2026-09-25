@@ -6,7 +6,7 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from '@/components/ui/input-group';
-import { ArrowUpIcon, ChatIcon } from '@phosphor-icons/react';
+import { ArrowUpIcon, MessageCircleIcon } from 'lucide-react';
 import { type Node, type NodeProps, useStore } from '@xyflow/react';
 import { cn } from 'cn';
 import { Popover as PopoverPrimitive } from 'radix-ui';
@@ -96,7 +96,7 @@ export const MessageDraftCanvasNode = ({
               type="button"
               variant="ghost"
             >
-              <ChatIcon className="size-5" />
+              <MessageCircleIcon className="size-5" />
             </Button>
           </PopoverPrimitive.Trigger>
         </div>

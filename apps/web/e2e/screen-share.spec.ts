@@ -49,16 +49,32 @@ async function captureFixture(page: Page) {
   });
 }
 
-async function startSharing(page: Page) {
-  await page
-    .locator('.react-flow__pane')
-    .click({ button: 'right', position: { x: 400, y: 250 } });
-  await page
-    .getByRole('menuitem', { name: 'Share screen', exact: true })
-    .click();
+async function startSharing(page: Page, fromDock = false) {
+  if (fromDock) {
+    await page
+      .getByRole('button', { name: 'Share screen', exact: true })
+      .click();
+    await expect(page.locator('.react-flow__node-screenShare')).toHaveCount(0);
+    await page.mouse.move(400, 250);
+    await expect(
+      page.locator('[data-canvas-placement-preview="screen-share"]'),
+    ).toBeVisible();
+    expect(await page.evaluate(() => 'testScreenStream' in window)).toBe(false);
+    await page.mouse.click(400, 250);
+  } else {
+    await page
+      .locator('.react-flow__pane')
+      .click({ button: 'right', position: { x: 400, y: 250 } });
+    await page
+      .getByRole('menuitem', { name: 'Share screen', exact: true })
+      .click();
+  }
   await expect(
     page.getByRole('button', { name: 'Screen share controls', exact: true }),
   ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Share screen', exact: true }),
+  ).toBeDisabled();
 }
 
 async function control(page: Page, name: string) {
@@ -98,7 +114,7 @@ test('streams real WebRTC video to late viewers, retries, moves the node, and cl
   try {
     await captureFixture(presenter);
     await join(presenter, code, 'Presenter');
-    await startSharing(presenter);
+    await startSharing(presenter, true);
     await join(viewer, code, 'Viewer');
     await viewer
       .getByRole('button', { name: 'Watch screen', exact: true })

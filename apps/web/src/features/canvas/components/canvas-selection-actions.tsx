@@ -1,4 +1,4 @@
-import { TrashIcon } from '@phosphor-icons/react';
+import { Trash2Icon } from 'lucide-react';
 import { NodeToolbar, useNodes, useReactFlow } from '@xyflow/react';
 import { useEffect } from 'react';
 
@@ -71,7 +71,7 @@ export function CanvasSelectionActions({ disabled }: { disabled: boolean }) {
         }
         onClick={() => void deleteElements({ nodes: selected })}
       >
-        <TrashIcon aria-hidden="true" />
+        <Trash2Icon aria-hidden="true" />
       </Button>
     </NodeToolbar>
   );

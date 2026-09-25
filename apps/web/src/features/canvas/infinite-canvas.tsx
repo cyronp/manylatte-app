@@ -24,7 +24,16 @@ import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 
 import { CanvasContextMenu } from './components/canvas-context-menu';
 import { CanvasControls } from './components/canvas-controls';
+import {
+  CanvasDock,
+  type CanvasAction,
+  type CanvasMode,
+} from './components/canvas-dock';
 import { CanvasSelectionActions } from './components/canvas-selection-actions';
+import {
+  CanvasPlacementLayer,
+  type CanvasPlacement,
+} from './components/canvas-placement-layer';
 import { CanvasSurface } from './components/canvas-surface';
 import { EmojiCanvasNode } from './components/emoji-canvas-node';
 import { EmojiPickerPortal } from './components/emoji-picker-portal';
@@ -72,11 +81,15 @@ export const InfiniteCanvas = () => {
   const { mouseWheelBehavior, showGrid, snapToGrid } = useUserPreferences();
   const { screenToFlowPosition } = useReactFlow();
   const { nodes, setNodes, onNodesChange } = useCanvasSync();
+  const [mode, setMode] = useState<CanvasMode>('cursor');
+  const [placement, setPlacement] = useState<CanvasPlacement>();
+  const isCursorMode = mode === 'cursor' && !placement;
+  const cancelPlacement = useCallback(() => setPlacement(undefined), []);
   const {
     screen,
     node: screenNode,
     onChanges: onScreenChanges,
-  } = useScreenShareNode(status === 'connected');
+  } = useScreenShareNode(status === 'connected' && isCursorMode);
   useEffect(() => {
     if (!screen.starting) return;
     const toastId = toast.loading('Choose a screen, window, or tab to share…', {
@@ -104,7 +117,10 @@ export const InfiniteCanvas = () => {
   };
   const [contextMenuOpen, setContextMenuOpen] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState<XYPosition>();
-  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+  const [emojiPicker, setEmojiPicker] = useState<{
+    anchor: XYPosition;
+    placeOnClick: boolean;
+  }>();
   const pendingMessageDraftPositionRef = useRef<XYPosition>(undefined);
   const pendingPostitPositionRef = useRef<XYPosition>(undefined);
 
@@ -117,12 +133,15 @@ export const InfiniteCanvas = () => {
 
   const handleEmojiSelect = useCallback(
     (emoji: string, label: string) => {
-      if (!contextMenuPosition) {
+      if (!emojiPicker) return;
+      if (emojiPicker.placeOnClick) {
+        setPlacement({ action: 'reaction', emoji, label });
+        setEmojiPicker(undefined);
         return;
       }
 
       const position = constrainCursorPosition(
-        screenToFlowPosition(contextMenuPosition, {
+        screenToFlowPosition(emojiPicker.anchor, {
           snapGrid: CANVAS_SNAP_GRID,
           snapToGrid,
         }),
@@ -143,21 +162,22 @@ export const InfiniteCanvas = () => {
           node: { ...node, data: { emoji, label } },
         },
       });
-      setEmojiPickerOpen(false);
+      setEmojiPicker(undefined);
     },
-    [contextMenuPosition, screenToFlowPosition, execute, snapToGrid],
+    [emojiPicker, screenToFlowPosition, execute, snapToGrid],
   );
 
   const handleReactionSelect = useCallback(() => {
     setContextMenuOpen(false);
 
     if (contextMenuPosition) {
-      setEmojiPickerOpen(true);
+      setEmojiPicker({ anchor: contextMenuPosition, placeOnClick: false });
     }
   }, [contextMenuPosition]);
 
   const createMessageDraft = useCallback(
     (position: XYPosition) => {
+      setMode('cursor');
       const nodeId = crypto.randomUUID();
       const node: MessageDraftNode = {
         data: {
@@ -201,8 +221,94 @@ export const InfiniteCanvas = () => {
   }, [contextMenuPosition, screenToFlowPosition, snapToGrid]);
 
   const handleEmojiPickerClose = useCallback(() => {
-    setEmojiPickerOpen(false);
+    setEmojiPicker(undefined);
   }, []);
+
+  const createPostitDraft = (position: XYPosition) => {
+    if (!user) return;
+    setMode('cursor');
+    const id = crypto.randomUUID();
+    setNodes((current) => [
+      ...current.map((node) => ({ ...node, selected: false })),
+      {
+        id,
+        type: 'postit',
+        selected: true,
+        position,
+        origin: [0.5, 0],
+        draggable: false,
+        data: {
+          text: '',
+          user,
+          draft: {
+            position,
+            onCancel: () =>
+              setNodes((nodes) =>
+                nodes.filter(
+                  (node) =>
+                    node.id !== id ||
+                    node.type !== 'postit' ||
+                    !node.data.draft,
+                ),
+              ),
+          },
+        },
+      },
+    ]);
+  };
+
+  const screenShareDisabled =
+    !screen.ready || screen.starting || Boolean(screen.share);
+
+  useEffect(() => {
+    if (
+      status !== 'connected' ||
+      (placement?.action === 'screen-share' && screenShareDisabled)
+    ) {
+      setPlacement(undefined);
+    }
+  }, [status, placement?.action, screenShareDisabled]);
+
+  const handleDockAction = (action: CanvasAction, anchor: XYPosition) => {
+    if (status !== 'connected') return;
+    setMode('cursor');
+    if (action === 'reaction') {
+      setPlacement(undefined);
+      setEmojiPicker({ anchor, placeOnClick: true });
+    } else {
+      setPlacement({ action });
+    }
+  };
+
+  const handlePlacement = (position: XYPosition) => {
+    if (!placement || status !== 'connected') return;
+    setPlacement(undefined);
+    switch (placement.action) {
+      case 'screen-share':
+        if (!screenShareDisabled) screen.start(position);
+        break;
+      case 'postit':
+        createPostitDraft(position);
+        break;
+      case 'reaction':
+        void execute({
+          type: 'mutation',
+          mutation: {
+            action: 'create',
+            node: {
+              id: crypto.randomUUID(),
+              type: 'emoji',
+              position,
+              data: { emoji: placement.emoji, label: placement.label },
+            },
+          },
+        });
+        break;
+      case 'message':
+        createMessageDraft(position);
+        break;
+    }
+  };
 
   return (
     <>
@@ -227,14 +333,16 @@ export const InfiniteCanvas = () => {
           <div
             className="h-full w-full"
             onContextMenu={(event) => {
+              cancelPlacement();
               setContextMenuPosition({ x: event.clientX, y: event.clientY });
             }}
           >
             <ReactFlow
               aria-label="ManyLatte canvas"
-              className="bg-canvas-surround"
-              deleteKeyCode={['Backspace', 'Delete']}
-              elementsSelectable
+              className={`bg-canvas-surround${isCursorMode ? '' : ' canvas-navigation-mode'}`}
+              deleteKeyCode={isCursorMode ? ['Backspace', 'Delete'] : null}
+              disableKeyboardA11y={!isCursorMode}
+              elementsSelectable={isCursorMode}
               maxZoom={MAX_ZOOM}
               minZoom={MIN_ZOOM}
               multiSelectionKeyCode={['Control', 'Meta', 'Shift']}
@@ -242,14 +350,16 @@ export const InfiniteCanvas = () => {
               nodeTypes={NODE_TYPES}
               nodes={screenNode ? [...nodes, screenNode] : nodes}
               nodesConnectable={false}
-              nodesDraggable={status === 'connected'}
+              nodesDraggable={status === 'connected' && isCursorMode}
+              nodesFocusable={isCursorMode}
               onInit={handleInit}
               onNodesChange={handleNodesChange}
               panActivationKeyCode="Space"
-              panOnDrag={[1]}
+              panOnDrag={isCursorMode ? [1] : [0, 1]}
               panOnScroll={mouseWheelBehavior === 'pan'}
               proOptions={{ hideAttribution: true }}
-              selectionOnDrag
+              selectionOnDrag={isCursorMode}
+              selectionKeyCode={isCursorMode ? 'Shift' : null}
               selectionMode={SelectionMode.Partial}
               snapGrid={CANVAS_SNAP_GRID}
               snapToGrid={snapToGrid}
@@ -259,7 +369,17 @@ export const InfiniteCanvas = () => {
               zoomOnScroll={mouseWheelBehavior === 'zoom'}
             >
               <CanvasSurface showGrid={showGrid} />
-              <CanvasSelectionActions disabled={status !== 'connected'} />
+              {placement && status === 'connected' && (
+                <CanvasPlacementLayer
+                  placement={placement}
+                  snapToGrid={snapToGrid}
+                  onPlace={handlePlacement}
+                  onCancel={cancelPlacement}
+                />
+              )}
+              {isCursorMode && (
+                <CanvasSelectionActions disabled={status !== 'connected'} />
+              )}
             </ReactFlow>
             <CanvasControls />
           </div>
@@ -270,34 +390,7 @@ export const InfiniteCanvas = () => {
             if (postitPosition && user) {
               pendingPostitPositionRef.current = undefined;
               event.preventDefault();
-              const id = crypto.randomUUID();
-              setNodes((current) => [
-                ...current.map((node) => ({ ...node, selected: false })),
-                {
-                  id,
-                  type: 'postit',
-                  selected: true,
-                  position: postitPosition,
-                  origin: [0.5, 0],
-                  draggable: false,
-                  data: {
-                    text: '',
-                    user,
-                    draft: {
-                      position: postitPosition,
-                      onCancel: () =>
-                        setNodes((nodes) =>
-                          nodes.filter(
-                            (node) =>
-                              node.id !== id ||
-                              node.type !== 'postit' ||
-                              !node.data.draft,
-                          ),
-                        ),
-                    },
-                  },
-                },
-              ]);
+              createPostitDraft(postitPosition);
               return;
             }
             const draftPosition = pendingMessageDraftPositionRef.current;
@@ -311,9 +404,7 @@ export const InfiniteCanvas = () => {
             createMessageDraft(draftPosition);
           }}
           disabled={status !== 'connected'}
-          screenShareDisabled={
-            !screen.ready || screen.starting || Boolean(screen.share)
-          }
+          screenShareDisabled={screenShareDisabled}
           onScreenShareSelect={() => {
             if (!contextMenuPosition) return;
             const position = constrainCursorPosition(
@@ -342,9 +433,24 @@ export const InfiniteCanvas = () => {
         />
       </ContextMenu>
 
-      {emojiPickerOpen && contextMenuPosition && (
+      <CanvasDock
+        mode={mode}
+        onModeChange={(nextMode) => {
+          cancelPlacement();
+          setMode(nextMode);
+        }}
+        activeAction={
+          placement?.action ??
+          (emojiPicker?.placeOnClick ? 'reaction' : undefined)
+        }
+        onAction={handleDockAction}
+        disabled={status !== 'connected'}
+        screenShareDisabled={screenShareDisabled}
+      />
+
+      {emojiPicker && (
         <EmojiPickerPortal
-          anchorPosition={contextMenuPosition}
+          anchorPosition={emojiPicker.anchor}
           onClose={handleEmojiPickerClose}
           onEmojiSelect={handleEmojiSelect}
         />

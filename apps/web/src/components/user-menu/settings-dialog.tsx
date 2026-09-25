@@ -1,5 +1,10 @@
-import { CursorIcon, GearIcon, GridFourIcon } from '@phosphor-icons/react';
-import { useState, type ComponentType } from 'react';
+import {
+  Grid2X2Icon,
+  MousePointer2Icon,
+  SettingsIcon,
+  type LucideIcon,
+} from 'lucide-react';
+import { useState } from 'react';
 
 import { useAppearance } from '@/components/appearance-provider';
 import { useUserPreferences } from '@/components/user-preferences-provider';
@@ -70,7 +75,7 @@ export function SettingsDialog({ onOpenChange, open }: SettingsDialogProps) {
               >
                 <section.icon
                   className="size-4"
-                  weight={activeSection === section.id ? 'fill' : 'regular'}
+                  strokeWidth={activeSection === section.id ? 2.5 : 2}
                 />
                 {section.label}
               </button>
@@ -200,18 +205,15 @@ export function SettingsDialog({ onOpenChange, open }: SettingsDialogProps) {
 type SettingsSection = 'general' | 'canvas' | 'presence';
 
 interface SettingsSectionDefinition {
-  icon: ComponentType<{
-    className?: string;
-    weight?: 'fill' | 'regular';
-  }>;
+  icon: LucideIcon;
   id: SettingsSection;
   label: string;
 }
 
 const SETTINGS_SECTIONS: SettingsSectionDefinition[] = [
-  { icon: GearIcon, id: 'general', label: 'General' },
-  { icon: GridFourIcon, id: 'canvas', label: 'Canvas' },
-  { icon: CursorIcon, id: 'presence', label: 'Presence' },
+  { icon: SettingsIcon, id: 'general', label: 'General' },
+  { icon: Grid2X2Icon, id: 'canvas', label: 'Canvas' },
+  { icon: MousePointer2Icon, id: 'presence', label: 'Presence' },
 ];
 
 interface SettingsSectionContentProps {

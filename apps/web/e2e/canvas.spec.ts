@@ -10,10 +10,10 @@ async function join(page: Page, code: string, username: string) {
   await page.goto(`/?lobby=${code}`);
   await expect(
     page.getByRole('button', { name: 'Add message', exact: true }),
-  ).toHaveCount(0);
+  ).toBeEnabled();
   await expect(
     page.getByRole('button', { name: 'Add reaction', exact: true }),
-  ).toHaveCount(0);
+  ).toBeEnabled();
   await openCanvasMenu(page);
   await expect(page.getByRole('menuitem', { name: 'Message' })).toBeEnabled();
   await page.keyboard.press('Escape');
@@ -290,6 +290,273 @@ test('starts centered and provides canvas zoom controls', async ({
   await expect(page.getByRole('button', { name: 'Center canvas' })).toHaveCount(
     0,
   );
+});
+
+test('bottom dock switches between cursor selection and navigation without moving items', async ({
+  page,
+  request,
+}) => {
+  const response = await request.post('http://127.0.0.1:3000/lobbies', {
+    data: { name: 'Canvas modes' },
+  });
+  const lobby = await response.json();
+  await join(page, lobby.code, 'Dock user');
+  await openCanvasMenu(page);
+  await page.getByRole('menuitem', { name: 'Reaction' }).click();
+  await page.locator('.EmojiPickerReact button.epr-emoji').first().click();
+
+  const node = page.locator('.react-flow__node-emoji');
+  await expect(node).toHaveCount(1);
+  const selectionBounds = await node.boundingBox();
+  if (!selectionBounds) throw new Error('Missing reaction bounds');
+  await page.mouse.move(selectionBounds.x - 20, selectionBounds.y - 20);
+  await page.mouse.down();
+  await page.mouse.move(
+    selectionBounds.x + selectionBounds.width + 20,
+    selectionBounds.y + selectionBounds.height + 20,
+    { steps: 8 },
+  );
+  await page.mouse.up();
+  await expect(node).toHaveClass(/selected/);
+  const position = await node.evaluate((element) => element.style.transform);
+  const viewport = page.locator('.react-flow__viewport');
+  const initialTransform = await viewport.getAttribute('style');
+  const cursor = page.getByRole('button', { name: 'Cursor mode', exact: true });
+  const navigation = page.getByRole('button', {
+    name: 'Navigation mode',
+    exact: true,
+  });
+  await expect(cursor).toHaveAttribute('aria-pressed', 'true');
+  await navigation.click();
+  await expect(navigation).toHaveAttribute('aria-pressed', 'true');
+  await expect(cursor).toHaveAttribute('aria-pressed', 'false');
+  await expect(
+    page.getByRole('group', { name: 'Selection actions' }),
+  ).toHaveCount(0);
+
+  await page.mouse.move(100, 100);
+  await page.mouse.down();
+  await expect(page.locator('.react-flow__pane')).toHaveCSS(
+    'cursor',
+    'grabbing',
+  );
+  await page.mouse.move(180, 140, { steps: 8 });
+  await page.mouse.up();
+  await expect(viewport).not.toHaveAttribute('style', initialTransform!);
+  await expect(page.locator('.react-flow__selection')).toHaveCount(0);
+
+  // A drag starting over an item must also pan, leaving its saved position alone.
+  const pannedTransform = await viewport.getAttribute('style');
+  const bounds = await node.boundingBox();
+  if (!bounds) throw new Error('Missing reaction bounds');
+  await page.mouse.move(
+    bounds.x + bounds.width / 2,
+    bounds.y + bounds.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    bounds.x + bounds.width / 2 + 80,
+    bounds.y + bounds.height / 2 + 40,
+    { steps: 8 },
+  );
+  await page.mouse.up();
+  await expect(viewport).not.toHaveAttribute('style', pannedTransform!);
+  expect(await node.evaluate((element) => element.style.transform)).toBe(
+    position,
+  );
+
+  await cursor.click();
+  await expect(cursor).toHaveAttribute('aria-pressed', 'true');
+  const beforeSelection = await viewport.getAttribute('style');
+  await page.mouse.move(100, 100);
+  await page.mouse.down();
+  await page.mouse.move(180, 140, { steps: 8 });
+  await expect(page.locator('.react-flow__selection')).toBeVisible();
+  await page.mouse.up();
+  await expect(viewport).toHaveAttribute('style', beforeSelection!);
+  await node.click();
+  await expect(node).toHaveClass(/selected/);
+  const movableBounds = await node.boundingBox();
+  if (!movableBounds) throw new Error('Missing reaction bounds');
+  await page.mouse.move(
+    movableBounds.x + movableBounds.width / 2,
+    movableBounds.y + movableBounds.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    movableBounds.x + movableBounds.width / 2 + 80,
+    movableBounds.y + movableBounds.height / 2 + 40,
+    { steps: 8 },
+  );
+  await page.mouse.up();
+  await expect
+    .poll(() => node.evaluate((element) => element.style.transform))
+    .not.toBe(position);
+  await expect(viewport).toHaveAttribute('style', beforeSelection!);
+
+  // The dock stays centered and clear of the zoom controls on a narrow screen.
+  await page.setViewportSize({ width: 320, height: 700 });
+  const dock = await page
+    .getByRole('group', { name: 'Canvas tools' })
+    .boundingBox();
+  const zoom = await page
+    .getByRole('toolbar', { name: 'Canvas controls' })
+    .boundingBox();
+  if (!dock || !zoom) throw new Error('Missing canvas controls');
+  expect(dock.x + dock.width / 2).toBeCloseTo(160, 0);
+  expect(dock.y + dock.height).toBeCloseTo(684, 0);
+  expect(dock.x).toBeGreaterThanOrEqual(0);
+  expect(dock.x + dock.width).toBeLessThanOrEqual(320);
+  expect(zoom.y + zoom.height).toBeLessThan(dock.y);
+});
+
+test('dock previews notes, reactions, and messages at the pointer before placing them', async ({
+  page,
+  request,
+}) => {
+  const response = await request.post('http://127.0.0.1:3000/lobbies', {
+    data: { name: 'Dock actions' },
+  });
+  const lobby = await response.json();
+  await join(page, lobby.code, 'Dock user');
+  await page
+    .getByRole('button', { name: 'Navigation mode', exact: true })
+    .click();
+  await page.mouse.move(100, 100);
+  await page.mouse.down();
+  await page.mouse.move(250, 200, { steps: 8 });
+  await page.mouse.up();
+
+  await page.getByRole('button', { name: 'Add Post-it', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Add Post-it', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  const preview = page.locator('[data-canvas-placement-preview]');
+  await expect(page.locator('.react-flow__node-postit')).toHaveCount(0);
+  await page.mouse.move(400, 250);
+  await expect(preview).toHaveAttribute(
+    'data-canvas-placement-preview',
+    'postit',
+  );
+  await expect(preview).toHaveCSS('opacity', '0.5');
+  const initialPreview = await preview.boundingBox();
+  if (!initialPreview) throw new Error('Missing placement preview');
+  await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+  await page.mouse.move(520, 260);
+  // Finish the zoom animation before measuring a newly placed item's position.
+  await expect
+    .poll(async () => (await preview.boundingBox())?.width)
+    .toBeCloseTo(initialPreview.width * 1.2, 2);
+  await expect
+    .poll(async () => (await preview.boundingBox())?.y)
+    .toBeCloseTo(260, 0);
+  const movedPreview = await preview.boundingBox();
+  if (!movedPreview) throw new Error('Missing placement preview');
+  expect(movedPreview.width).toBeGreaterThan(initialPreview.width);
+  expect(movedPreview.x + movedPreview.width / 2).toBeCloseTo(520, 0);
+  await expect(page.locator('.react-flow__node-postit')).toHaveCount(0);
+  await page.mouse.click(520, 260);
+  await expect(preview).toHaveCount(0);
+  const text = page.getByRole('textbox', { name: 'Post-it text' });
+  await expect(text).toBeVisible();
+  await expect(text).toBeFocused();
+  const note = page.locator('.react-flow__node-postit');
+  const bounds = await note.boundingBox();
+  if (!bounds) throw new Error('Missing canvas bounds');
+  expect(bounds.x + bounds.width / 2).toBeCloseTo(520, 0);
+  expect(bounds.y).toBeCloseTo(260, 0);
+  await text.fill('Created from the dock');
+  await page
+    .locator('.react-flow__pane')
+    .click({ position: { x: 100, y: 100 } });
+  await expect(note).toContainText('Created from the dock');
+
+  await page.getByRole('button', { name: 'Add reaction', exact: true }).click();
+  await expect(
+    page.getByRole('dialog', { name: 'Choose a reaction' }),
+  ).toBeVisible();
+  await page.locator('.EmojiPickerReact button.epr-emoji').first().click();
+  await expect(page.locator('.react-flow__node-emoji')).toHaveCount(0);
+  await expect(
+    page.getByRole('dialog', { name: 'Choose a reaction' }),
+  ).toHaveCount(0);
+  await page.mouse.move(800, 300);
+  await expect(preview).toHaveAttribute(
+    'data-canvas-placement-preview',
+    'reaction',
+  );
+  await expect(preview).not.toBeEmpty();
+  await page.mouse.click(800, 300);
+  const reaction = page.locator('.react-flow__node-emoji');
+  await expect(reaction).toHaveCount(1);
+  const reactionBounds = await reaction.boundingBox();
+  if (!reactionBounds) throw new Error('Missing reaction bounds');
+  expect(reactionBounds.x + reactionBounds.width / 2).toBeCloseTo(800, 0);
+  expect(reactionBounds.y + reactionBounds.height / 2).toBeCloseTo(300, 0);
+
+  await page.getByRole('button', { name: 'Add message', exact: true }).click();
+  await expect(page.locator('.react-flow__node-messageDraft')).toHaveCount(0);
+  // Placement over an existing item must not select or drag that item.
+  await page.mouse.move(800, 300);
+  await expect(preview).toHaveAttribute(
+    'data-canvas-placement-preview',
+    'message',
+  );
+  await page.mouse.click(800, 300);
+  const message = page.getByRole('textbox', {
+    name: 'First message',
+    exact: true,
+  });
+  await expect(message).toBeFocused();
+  await message.fill('A message from the dock');
+  await page
+    .getByRole('button', { name: 'Create message', exact: true })
+    .click();
+  await expect(page.locator('.react-flow__node-message')).toHaveCount(1);
+  await page.reload();
+  await expect(note).toContainText('Created from the dock');
+  await expect(page.locator('.react-flow__node-emoji')).toHaveCount(1);
+  await expect(page.locator('.react-flow__node-message')).toHaveCount(1);
+});
+
+test('placement can be cancelled or changed without inserting anything', async ({
+  page,
+  request,
+}) => {
+  const response = await request.post('http://127.0.0.1:3000/lobbies', {
+    data: { name: 'Cancel placement' },
+  });
+  const lobby = await response.json();
+  await join(page, lobby.code, 'Placement user');
+  const preview = page.locator('[data-canvas-placement-preview]');
+  await page.getByRole('button', { name: 'Add Post-it', exact: true }).click();
+  await page.mouse.move(400, 250);
+  await expect(preview).toBeVisible();
+  await page.mouse.down();
+  await page.mouse.move(500, 350, { steps: 8 });
+  await page.mouse.up();
+  await expect(page.locator('.react-flow__node')).toHaveCount(0);
+  await expect(preview).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(preview).toHaveCount(0);
+  await page.getByRole('button', { name: 'Add Post-it', exact: true }).click();
+  await page.getByRole('button', { name: 'Add message', exact: true }).click();
+  await page.mouse.move(400, 250);
+  await expect(preview).toHaveAttribute(
+    'data-canvas-placement-preview',
+    'message',
+  );
+  await page
+    .getByRole('button', { name: 'Navigation mode', exact: true })
+    .click();
+  await expect(preview).toHaveCount(0);
+  await page.mouse.click(400, 250);
+  await expect(page.locator('.react-flow__node')).toHaveCount(0);
+  await page.reload();
+  await expect(
+    page.getByRole('button', { name: 'Add Post-it', exact: true }),
+  ).toBeEnabled();
+  await expect(page.locator('.react-flow__node')).toHaveCount(0);
 });
 
 test('two clients keep saved messages and keyboard moves/deletes in sync through restart', async ({

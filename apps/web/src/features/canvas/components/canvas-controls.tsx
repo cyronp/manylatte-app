@@ -1,4 +1,4 @@
-import { MinusIcon, PlusIcon } from '@phosphor-icons/react';
+import { MinusIcon, PlusIcon } from 'lucide-react';
 import { useReactFlow } from '@xyflow/react';
 
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,7 @@ export const CanvasControls = () => {
   return (
     <div
       aria-label="Canvas controls"
-      className="absolute right-4 bottom-4 z-60 flex items-stretch overflow-hidden rounded-full border border-border bg-popover/95 text-popover-foreground shadow-lg backdrop-blur-sm"
+      className="absolute right-4 bottom-20 z-40 flex items-stretch overflow-hidden rounded-full border border-border bg-popover/95 text-popover-foreground shadow-lg backdrop-blur-sm sm:bottom-4"
       role="toolbar"
     >
       <Button

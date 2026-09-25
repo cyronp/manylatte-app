@@ -1,10 +1,10 @@
 import {
-  CheckCircleIcon,
+  CircleCheckIcon,
   InfoIcon,
-  SpinnerIcon,
-  WarningIcon,
-  XCircleIcon,
-} from '@phosphor-icons/react';
+  LoaderCircleIcon,
+  TriangleAlertIcon,
+  CircleXIcon,
+} from 'lucide-react';
 import { cn } from 'cn';
 import type { CSSProperties } from 'react';
 import { Toaster as Sonner, type ToasterProps } from 'sonner';
@@ -29,11 +29,11 @@ const Toaster = ({
         className,
       )}
       icons={{
-        success: <CheckCircleIcon className="size-5" />,
+        success: <CircleCheckIcon className="size-5" />,
         info: <InfoIcon className="size-5" />,
-        warning: <WarningIcon className="size-5" />,
-        error: <XCircleIcon className="size-5" />,
-        loading: <SpinnerIcon className="size-5 animate-spin" />,
+        warning: <TriangleAlertIcon className="size-5" />,
+        error: <CircleXIcon className="size-5" />,
+        loading: <LoaderCircleIcon className="size-5 animate-spin" />,
         ...icons,
       }}
       style={
