@@ -122,7 +122,7 @@ export const RemoteCursor = memo(function RemoteCursor({
         transform: `translate3d(${currentPositionRef.current.x}px, ${currentPositionRef.current.y}px, 0)`,
       }}
     >
-      <MousePointer2Icon color={cursor.color} size={28} />
+      <MousePointer2Icon color={cursor.color} fill={cursor.color} size={28} />
       <div
         ref={labelRef}
         className="absolute left-0 top-0 flex h-fit max-w-48 justify-center truncate rounded-full px-2 py-0.5 shadow-sm ring-1 ring-black/10 will-change-transform"

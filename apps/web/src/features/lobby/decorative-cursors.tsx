@@ -91,7 +91,7 @@ export function DecorativeCursors() {
               color: cursor.color,
             }}
           >
-            <MousePointer2Icon size={28} />
+            <MousePointer2Icon fill={cursor.color} size={28} />
             <span
               className="mt-0.5 block w-max rounded-full px-1.5 text-xs font-medium text-white"
               style={{ backgroundColor: cursor.color }}
