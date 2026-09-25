@@ -1,4 +1,4 @@
-import { MinusIcon, PlusIcon } from '@phosphor-icons/react';
+import { MinusIcon, PlusIcon } from 'lucide-react';
 import { useReactFlow } from '@xyflow/react';
 
 import { Button } from '@/components/ui/button';

@@ -5,16 +5,16 @@ import { useScreenSharePlayback } from './use-screen-share-playback';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
-  ArrowsInIcon,
-  ArrowsInSimpleIcon,
-  ArrowsOutIcon,
-  ArrowsOutSimpleIcon,
-  DotsThreeIcon,
+  ShrinkIcon,
+  MinimizeIcon,
+  ExpandIcon,
+  MaximizeIcon,
+  EllipsisIcon,
   MonitorIcon,
   PlayIcon,
-  ScreencastIcon,
-  StopIcon,
-} from '@phosphor-icons/react';
+  ScreenShareIcon,
+  SquareIcon,
+} from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -73,7 +73,7 @@ export function ScreenShareCanvasNode({ data }: NodeProps<ScreenShareNode>) {
             disabled={fullscreen}
             onClick={() => setExpanded(!expanded)}
           >
-            {expanded ? <ArrowsInSimpleIcon /> : <ArrowsOutSimpleIcon />}
+            {expanded ? <MinimizeIcon /> : <MaximizeIcon />}
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -83,7 +83,7 @@ export function ScreenShareCanvasNode({ data }: NodeProps<ScreenShareNode>) {
                 aria-label="Screen share controls"
                 title="More options"
               >
-                <DotsThreeIcon className="size-5" weight="bold" />
+                <EllipsisIcon className="size-5" strokeWidth={2.5} />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
@@ -102,7 +102,7 @@ export function ScreenShareCanvasNode({ data }: NodeProps<ScreenShareNode>) {
                 disabled={fullscreen}
                 onSelect={() => setExpanded(!expanded)}
               >
-                {expanded ? <ArrowsInIcon /> : <ArrowsOutIcon />}
+                {expanded ? <ShrinkIcon /> : <ExpandIcon />}
                 {expanded ? 'Shrink' : 'Expand'}
               </DropdownMenuItem>
               {data.stream && (
@@ -117,23 +117,19 @@ export function ScreenShareCanvasNode({ data }: NodeProps<ScreenShareNode>) {
                     else setExpanded(true);
                   }}
                 >
-                  {fullscreen ? (
-                    <ArrowsInSimpleIcon />
-                  ) : (
-                    <ArrowsOutSimpleIcon />
-                  )}
+                  {fullscreen ? <MinimizeIcon /> : <MaximizeIcon />}
                   {fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
                 </DropdownMenuItem>
               )}
               {(data.local || data.watching) && <DropdownMenuSeparator />}
               {data.local ? (
                 <DropdownMenuItem variant="destructive" onSelect={data.stop}>
-                  <StopIcon /> Stop sharing
+                  <SquareIcon /> Stop sharing
                 </DropdownMenuItem>
               ) : (
                 data.watching && (
                   <DropdownMenuItem onSelect={data.unwatch}>
-                    <StopIcon /> Stop watching
+                    <SquareIcon /> Stop watching
                   </DropdownMenuItem>
                 )
               )}
@@ -160,7 +156,7 @@ export function ScreenShareCanvasNode({ data }: NodeProps<ScreenShareNode>) {
         {waiting && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-muted/50 p-6 text-center">
             <span className="flex size-10 items-center justify-center rounded-2xl border bg-background text-muted-foreground">
-              <ScreencastIcon className="size-5" />
+              <ScreenShareIcon className="size-5" />
             </span>
             <div role="status">
               <p className="text-sm font-medium">
@@ -178,7 +174,7 @@ export function ScreenShareCanvasNode({ data }: NodeProps<ScreenShareNode>) {
             </div>
             {!data.local && !data.watching && (
               <Button size="sm" onClick={data.watch}>
-                <PlayIcon weight="fill" className="size-3" />
+                <PlayIcon fill="currentColor" className="size-3" />
                 {data.status === 'failed' ? 'Retry connection' : 'Watch screen'}
               </Button>
             )}
@@ -192,7 +188,7 @@ export function ScreenShareCanvasNode({ data }: NodeProps<ScreenShareNode>) {
             className="absolute inset-0 flex cursor-pointer flex-col items-center justify-center gap-3 bg-black/30 text-white outline-none transition-colors hover:bg-black/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"
           >
             <span className="flex size-12 items-center justify-center rounded-full border border-white/20 bg-popover text-popover-foreground shadow-sm">
-              <PlayIcon weight="fill" className="size-5" />
+              <PlayIcon fill="currentColor" className="size-5" />
             </span>
             <span className="text-xs font-medium">Resume screen</span>
           </button>

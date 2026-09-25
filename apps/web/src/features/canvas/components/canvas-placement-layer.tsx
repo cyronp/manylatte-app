@@ -1,4 +1,4 @@
-import { ChatIcon, MonitorIcon } from '@phosphor-icons/react';
+import { MessageCircleIcon, MonitorIcon } from 'lucide-react';
 import {
   ViewportPortal,
   useReactFlow,
@@ -101,7 +101,7 @@ export function CanvasPlacementLayer({
             )}
             {placement.action === 'message' && (
               <div className="flex size-9 items-center justify-center rounded-[18px] rounded-bl-none border-2 border-background bg-background text-foreground shadow">
-                <ChatIcon className="size-5" />
+                <MessageCircleIcon className="size-5" />
               </div>
             )}
             {placement.action === 'screen-share' && (

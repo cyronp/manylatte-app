@@ -8,7 +8,7 @@ import { useUserPreferences } from '../components/user-preferences-provider';
 import { InfiniteCanvas } from '../features/canvas/infinite-canvas';
 import { constrainCursorPosition } from '../features/cursors/cursor-position';
 import { useRemoteCursors } from '../features/cursors/use-remote-cursors';
-import { CircleNotchIcon } from '@phosphor-icons/react';
+import { LoaderCircleIcon } from 'lucide-react';
 
 export const Route = createFileRoute('/')({
   component: HomePage,
@@ -61,9 +61,9 @@ function CanvasPage() {
           className="absolute right-4 bottom-16 z-60 flex flex-row items-center gap-2 rounded-full bg-primary px-3 py-1.5 text-sm text-primary-foreground"
           title={error}
         >
-          <CircleNotchIcon
+          <LoaderCircleIcon
             className="animate-spin animation-duration-[2.5s]"
-            weight="bold"
+            strokeWidth={2.5}
             size={18}
           />
           {error ?? (status === 'connecting' ? 'Connecting…' : 'Reconnecting…')}

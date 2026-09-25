@@ -1,10 +1,10 @@
 import {
-  ChatIcon,
-  CursorIcon,
+  MessageCircleIcon,
+  MousePointer2Icon,
   HandIcon,
   MonitorIcon,
-  SmileyStickerIcon,
-} from '@phosphor-icons/react';
+  SmilePlusIcon,
+} from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -27,8 +27,8 @@ function PostitDockIcon() {
 const ACTIONS = [
   { action: 'postit', label: 'Add Post-it', icon: PostitDockIcon },
   { action: 'screen-share', label: 'Share screen', icon: MonitorIcon },
-  { action: 'reaction', label: 'Add reaction', icon: SmileyStickerIcon },
-  { action: 'message', label: 'Add message', icon: ChatIcon },
+  { action: 'reaction', label: 'Add reaction', icon: SmilePlusIcon },
+  { action: 'message', label: 'Add message', icon: MessageCircleIcon },
 ] as const;
 
 interface CanvasDockProps {
@@ -62,7 +62,7 @@ export function CanvasDock({
         size="icon-lg"
         onClick={() => onModeChange('cursor')}
       >
-        <CursorIcon aria-hidden="true" />
+        <MousePointer2Icon aria-hidden="true" />
       </Button>
       <Button
         aria-label="Navigation mode"

@@ -1,4 +1,4 @@
-import { CursorClickIcon, CursorIcon } from '@phosphor-icons/react';
+import { MousePointerClickIcon, MousePointer2Icon } from 'lucide-react';
 import type { XYPosition } from '@xyflow/react';
 import { memo, useLayoutEffect, useRef } from 'react';
 import { cn } from 'cn';
@@ -111,7 +111,7 @@ export const RemoteCursor = memo(function RemoteCursor({
     surfaceSize.width,
   ]);
 
-  const Icon = cursor.isClicking ? CursorClickIcon : CursorIcon;
+  const Icon = cursor.isClicking ? MousePointerClickIcon : MousePointer2Icon;
 
   return (
     <div
@@ -124,7 +124,7 @@ export const RemoteCursor = memo(function RemoteCursor({
         transform: `translate3d(${currentPositionRef.current.x}px, ${currentPositionRef.current.y}px, 0)`,
       }}
     >
-      <Icon color={cursor.color} size={28} weight="duotone" />
+      <Icon color={cursor.color} size={28} />
       <div
         ref={labelRef}
         className="absolute left-0 top-0 flex h-fit max-w-48 justify-center truncate rounded-full px-2 py-0.5 shadow-sm ring-1 ring-black/10 will-change-transform"

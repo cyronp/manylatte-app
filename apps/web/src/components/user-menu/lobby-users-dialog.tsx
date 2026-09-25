@@ -1,4 +1,4 @@
-import { CrownIcon, GavelIcon } from '@phosphor-icons/react';
+import { CrownIcon, GavelIcon } from 'lucide-react';
 import { LatteUserIcon } from '../icons/user-icon';
 import { Button } from '../ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';

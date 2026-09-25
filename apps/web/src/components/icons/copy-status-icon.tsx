@@ -1,4 +1,4 @@
-import { CheckIcon, SpinnerIcon, XIcon } from '@phosphor-icons/react';
+import { CheckIcon, LoaderCircleIcon, XIcon } from 'lucide-react';
 import { cn } from 'cn';
 import type { CopyStatus } from '@/lib/use-copy-to-clipboard';
 
@@ -25,24 +25,24 @@ export function CopyStatusIcon({
       data-status={status}
     >
       {status === 'copying' ? (
-        <SpinnerIcon
+        <LoaderCircleIcon
           className="animate-spin"
           style={{ animationDuration: `${spinnerDurationMs}ms` }}
-          weight="bold"
+          strokeWidth={2.5}
         />
       ) : null}
       {status === 'copied' ? (
         <CheckIcon
           className="animate-in fade-in zoom-in-50"
           style={{ animationDuration: `${entranceDurationMs}ms` }}
-          weight="bold"
+          strokeWidth={2.5}
         />
       ) : null}
       {status === 'error' ? (
         <XIcon
           className="animate-in fade-in zoom-in-50"
           style={{ animationDuration: `${entranceDurationMs}ms` }}
-          weight="bold"
+          strokeWidth={2.5}
         />
       ) : null}
     </span>
