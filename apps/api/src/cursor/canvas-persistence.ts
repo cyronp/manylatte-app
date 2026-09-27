@@ -13,7 +13,7 @@ import {
   type CanvasNodeMutation,
   type CursorUser,
 } from '@app/shared';
-import { toCanvasNode } from './canvas-node-record.js';
+import { toCanvasNode, type CanvasNodeRecord } from './canvas-node-record.js';
 import {
   readDeletionArchive,
   restoreDeletionArchive,
@@ -176,15 +176,30 @@ export const createCanvasPersistence = (
     const nodes = await database.canvasNode.findMany({
       where: { roomId },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      include: {
-        messages: {
-          orderBy: { sequence: 'desc' },
-          take: CANVAS_PREVIEW_MESSAGES,
-        },
-      },
     });
+    if (nodes.length === 0) return [];
+    // Prisma's nested `take` fetches every message before trimming per node.
+    // Use the (nodeId, sequence) index to limit previews inside SQLite instead.
+    const messages = await database.$queryRaw<CanvasNodeRecord['messages']>`
+      SELECT message.*
+      FROM CanvasNode AS node
+      JOIN CanvasMessage AS message ON message.sequence IN (
+        SELECT preview.sequence FROM CanvasMessage AS preview
+        WHERE preview.nodeId = node.id
+        ORDER BY preview.sequence DESC
+        LIMIT ${CANVAS_PREVIEW_MESSAGES}
+      )
+      WHERE node.roomId = ${roomId}
+      ORDER BY message.sequence ASC
+    `;
+    const messagesByNode = new Map<string, CanvasNodeRecord['messages']>();
+    for (const message of messages) {
+      const preview = messagesByNode.get(message.nodeId);
+      if (preview) preview.push(message);
+      else messagesByNode.set(message.nodeId, [message]);
+    }
     return nodes.map((node) =>
-      toCanvasNode({ ...node, messages: node.messages.reverse() }),
+      toCanvasNode({ ...node, messages: messagesByNode.get(node.id) ?? [] }),
     );
   },
   mutate: (roomId, mutation, user) =>

@@ -69,14 +69,7 @@ export function prepareCommand(
   let change: CanvasMutationResult | CanvasMessageResult;
   if (body.type === 'mutation') {
     const existed =
-      body.mutation.action === 'delete' &&
-      state
-        .snapshot()
-        .some(
-          (node) =>
-            body.mutation.action === 'delete' &&
-            node.id === body.mutation.nodeId,
-        );
+      body.mutation.action === 'delete' && state.hasNode(body.mutation.nodeId);
     change = state.applyMutation(body.mutation, user);
     if (change.status === 'rejected')
       return rejection(command.id, change.reason);

@@ -50,11 +50,27 @@ const createCanvasNode = (
   return { ...node, data: { ...node.data, user } };
 };
 
+const messageCount = (node: CanvasNode) =>
+  node.type === 'message'
+    ? (node.data.messageCount ?? node.data.messages.length)
+    : 0;
+
+const textBytes = (node: CanvasNode) =>
+  node.type === 'message'
+    ? (node.data.textBytes ??
+      node.data.messages.reduce(
+        (total, message) => total + Buffer.byteLength(message.text),
+        0,
+      ))
+    : 0;
+
 export class CanvasState {
   readonly #maxMessagesPerNode: number;
   readonly #maxNodes: number;
   readonly #retainedMessages: number;
-  readonly #nodes = new Map<string, CanvasNode>();
+  #nodes = new Map<string, CanvasNode>();
+  #messageCount = 0;
+  #textBytes = 0;
 
   constructor({
     nodes = [],
@@ -66,15 +82,23 @@ export class CanvasState {
     this.#maxNodes = maxNodes;
     this.#retainedMessages = retainedMessages;
     for (const node of nodes) this.#nodes.set(node.id, node);
+    for (const node of this.#nodes.values()) {
+      this.#messageCount += messageCount(node);
+      this.#textBytes += textBytes(node);
+    }
   }
 
   fork() {
-    return new CanvasState({
-      nodes: this.snapshot(),
+    const candidate = new CanvasState({
       maxMessagesPerNode: this.#maxMessagesPerNode,
       maxNodes: this.#maxNodes,
       retainedMessages: this.#retainedMessages,
     });
+    // Mutations replace nodes, so a shallow map copy isolates pending writes.
+    candidate.#nodes = new Map(this.#nodes);
+    candidate.#messageCount = this.#messageCount;
+    candidate.#textBytes = this.#textBytes;
+    return candidate;
   }
 
   applyMutation(
@@ -100,8 +124,8 @@ export class CanvasState {
       return { node: nextNode, status: 'applied' };
     }
     if (mutation.action === 'delete') {
+      const node = this.#nodes.get(mutation.nodeId);
       if (mutation.expectedMessageId) {
-        const node = this.#nodes.get(mutation.nodeId);
         if (
           node &&
           (node.type !== 'message' ||
@@ -109,6 +133,10 @@ export class CanvasState {
             node.data.messages[0]?.id !== mutation.expectedMessageId)
         )
           return { reason: 'thread-changed', status: 'rejected' };
+      }
+      if (node) {
+        this.#messageCount -= messageCount(node);
+        this.#textBytes -= textBytes(node);
       }
       this.#nodes.delete(mutation.nodeId);
       return { nodeId: mutation.nodeId, status: 'deleted' };
@@ -159,33 +187,15 @@ export class CanvasState {
       return { status: 'ignored' };
     }
 
-    const messageCount = node.data.messageCount ?? node.data.messages.length;
-    if (messageCount >= this.#maxMessagesPerNode) {
+    const count = messageCount(node);
+    if (count >= this.#maxMessagesPerNode) {
       return { reason: 'message-limit', status: 'rejected' };
     }
 
-    const totals = this.snapshot().reduce(
-      (total, item) =>
-        item.type === 'message'
-          ? {
-              count:
-                total.count +
-                (item.data.messageCount ?? item.data.messages.length),
-              bytes:
-                total.bytes +
-                (item.data.textBytes ??
-                  item.data.messages.reduce(
-                    (bytes, entry) => bytes + Buffer.byteLength(entry.text),
-                    0,
-                  )),
-            }
-          : total,
-      { count: 0, bytes: 0 },
-    );
     const bytes = Buffer.byteLength(message.text);
     if (
-      totals.count >= MAX_CANVAS_ROOM_MESSAGES ||
-      totals.bytes + bytes > MAX_CANVAS_ROOM_TEXT_BYTES
+      this.#messageCount >= MAX_CANVAS_ROOM_MESSAGES ||
+      this.#textBytes + bytes > MAX_CANVAS_ROOM_TEXT_BYTES
     )
       return { status: 'rejected', reason: 'room-limit' };
     const nextNode: CanvasNode = {
@@ -194,17 +204,18 @@ export class CanvasState {
         messages: [...node.data.messages, message].slice(
           -this.#retainedMessages,
         ),
-        messageCount: messageCount + 1,
-        textBytes:
-          (node.data.textBytes ??
-            node.data.messages.reduce(
-              (total, item) => total + Buffer.byteLength(item.text),
-              0,
-            )) + bytes,
+        messageCount: count + 1,
+        textBytes: textBytes(node) + bytes,
       },
     };
     this.#nodes.set(nextNode.id, nextNode);
+    this.#messageCount++;
+    this.#textBytes += bytes;
     return { node: nextNode, status: 'applied' };
+  }
+
+  hasNode(nodeId: string) {
+    return this.#nodes.has(nodeId);
   }
 
   hasMessageNode(nodeId: string) {
